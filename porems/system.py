@@ -147,7 +147,7 @@ class PoreKit():
         self._box = self._block.get_box()
         self._centroid = self._block.centroid()
 
-    def build(self, bonds=[0.155-1e-2, 0.155+1e-2]):
+    def build(self, bonds=None):
         """Process provided structure to build connectivity matrix.
 
         Parameters
@@ -155,6 +155,8 @@ class PoreKit():
         bonds : list, optional
             Minimal ans maximal bond length range for Si-O bonds
         """
+        bonds = [0.155-1e-2, 0.155+1e-2] if bonds is None else bonds
+
         # Dice up block
         dice = pms.Dice(self._block, 0.4, True)
         self._matrix = pms.Matrix(dice.find(None, ["Si", "O"], bonds))
@@ -217,7 +219,7 @@ class PoreKit():
         shape.append(ranges)
         self._shapes.append(shape)
 
-    def shape_cylinder(self, diam, length=0, centroid=[], central=[0, 0, 1]):
+    def shape_cylinder(self, diam, length=0, centroid=None, central=None):
         """Add cylindrical shape
 
         Parameters
@@ -227,15 +229,17 @@ class PoreKit():
         length : float, optional
             length of cylindrical shape leave zero for full length
         centroid : list, optional
-            Cylinder centroid - leave zero for system centroid
+            Cylinder centroid. Leave empty for the system centroid.
         central : list, optional
-            Central axis for cylinder
+            Central axis for cylinder. Defaults to the z-axis.
 
         Returns
         -------
         shape : list
             Shape type (pos 0) and shape (pos 1)
         """
+        central = [0, 0, 1] if central is None else central
+
         # Process user input
         centroid = centroid if centroid else self.centroid()
         length = length if length else self._box[2]
@@ -245,7 +249,7 @@ class PoreKit():
 
         return ["CYLINDER", cylinder]
 
-    def shape_slit(self, height, length=0, centroid=[], central=[0, 0, 1]):
+    def shape_slit(self, height, length=0, centroid=None, central=None):
         """Add slit shape
 
         Parameters
@@ -255,15 +259,17 @@ class PoreKit():
         length : float, optional
             length of cylindrical shape
         centroid : list, optional
-            Cylinder centroid - leave zero for system centroid
+            Slit centroid. Leave empty for the system centroid.
         central : list, optional
-            Central axis for cylinder
+            Central axis for the slit. Defaults to the z-axis.
 
         Returns
         -------
         shape : list
             Shape type (pos 0) and shape (pos 1)
         """
+        central = [0, 0, 1] if central is None else central
+
         # Process user input
         centroid = centroid if centroid else self.centroid()
         length = length if length else self._box[2]
@@ -273,7 +279,7 @@ class PoreKit():
 
         return ["SLIT", cuboid]
 
-    def shape_sphere(self, diameter, centroid=[], central=[0, 0, 1]):
+    def shape_sphere(self, diameter, centroid=None, central=None):
         """Add sphere shape
 
         Parameters
@@ -281,15 +287,17 @@ class PoreKit():
         diameter : float
             Sphere diameter
         centroid : list, optional
-            Sphere centroid - leave zero for system centroid
+            Sphere centroid. Leave empty for the system centroid.
         central : list, optional
-            Central axis for Sphere
+            Central axis for sphere orientation. Defaults to the z-axis.
 
         Returns
         -------
         shape : list
             Shape type (pos 0) and shape (pos 1)
         """
+        central = [0, 0, 1] if central is None else central
+
         # Process user input
         centroid = centroid if centroid else self.centroid()
 
@@ -298,7 +306,7 @@ class PoreKit():
 
         return ["SPHERE", sphere]
 
-    def shape_cone(self, diam_1, diam_2, length=0, centroid=[], central=[0, 0, 1]):
+    def shape_cone(self, diam_1, diam_2, length=0, centroid=None, central=None):
         """Add cone shape
 
         Parameters
@@ -310,15 +318,17 @@ class PoreKit():
         length : float, optional
             length of cylindrical shape leave zero for full length
         centroid : list, optional
-            Cone centroid - leave zero for system centroid
+            Cone centroid. Leave empty for the system centroid.
         central : list, optional
-            Central axis for cone
+            Central axis for cone. Defaults to the z-axis.
 
         Returns
         -------
         shape : list
             Shape type (pos 0) and shape (pos 1)
         """
+        central = [0, 0, 1] if central is None else central
+
         # Process user input
         centroid = centroid if centroid else self.centroid()
         length = length if length else self._box[2]
@@ -793,7 +803,7 @@ class PoreKit():
             if attached_mol.get_short() not in self._sort_list:
                 self._sort_list.append(attached_mol.get_short())
 
-    def _siloxane(self, site_type, slx_dist=[0.507-1e-2, 0.507+1e-2]):
+    def _siloxane(self, site_type, slx_dist=None):
         """Attach siloxane bridges using function
         :func:`porems.pore.Pore.siloxane`.
 
@@ -804,6 +814,8 @@ class PoreKit():
         slx_dist : list, optional
             Silicon atom distance to search for partners in proximity
         """
+        slx_dist = [0.507-1e-2, 0.507+1e-2] if slx_dist is None else slx_dist
+
         # Initialize
         site_list = self._pore.get_sites()
         sites = self._site_in if site_type=="in" else self._site_ex
@@ -1084,7 +1096,7 @@ class PoreKit():
         else:
             self._pore.set_box(self._box)
 
-    def store(self, link="./", sort_list=[]):
+    def store(self, link="./", sort_list=None):
         """Store pore system and all necessary files for simulation at given
         link.
 
@@ -1092,7 +1104,12 @@ class PoreKit():
         ----------
         link : string, optional
             Folder link for output
+        sort_list : list, optional
+            Sorting list for output structure files. Defaults to the internal
+            builder ordering.
         """
+        sort_list = [] if sort_list is None else sort_list
+
         # Process input
         link = link if link[-1] == "/" else link+"/"
 

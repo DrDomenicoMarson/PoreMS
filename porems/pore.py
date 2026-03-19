@@ -80,7 +80,7 @@ class Pore():
                 if count >= 3:
                     self._matrix.strip(si)
 
-    def amorph(self, dist=0.05, accept=[0.1, 0.2], trials=100):
+    def amorph(self, dist=0.05, accept=None, trials=100):
         """Make Structure amorphous.
 
         Parameters
@@ -92,6 +92,8 @@ class Pore():
         trials : integer, optional
             Allowed number of trials per atom
         """
+        accept = [0.1, 0.2] if accept is None else accept
+
         # Get connectivity matrix
         connect = self._matrix.get_matrix()
 
@@ -411,7 +413,7 @@ class Pore():
                             mol_list.extend(self.attach(generic.silanol(), 0, [0, 1], proxi_list, len(proxi_list), site_type=site_type, is_proxi=False, is_random=False))
         return mol_list
 
-    def siloxane(self, sites, amount, slx_dist=[0.507-1e-2, 0.507+1e-2], trials=1000, site_type="in"):
+    def siloxane(self, sites, amount, slx_dist=None, trials=1000, site_type="in"):
         """Attach siloxane bridges on the surface similar to Krishna et al.
         (2009). Here silicon atoms of silanol groups wich are at least 0.31 nm
         near each other can be converted to siloxan bridges, by removing one
@@ -438,6 +440,7 @@ class Pore():
             Raised when the requested site type is not supported.
         """
         self._validate_site_type(site_type)
+        slx_dist = [0.507-1e-2, 0.507+1e-2] if slx_dist is None else slx_dist
 
         # Create siloxane molecule
         mol = Molecule("siloxane", "SLX")
