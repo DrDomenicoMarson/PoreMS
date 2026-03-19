@@ -23,6 +23,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.11,<3.15',
-    install_requires=['pandas', 'seaborn', 'pyyaml'],
+    install_requires=['numpy', 'matplotlib', 'pandas', 'seaborn', 'pyyaml'],
     include_package_data=True,
 )

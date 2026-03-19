@@ -63,7 +63,7 @@ class Shape():
 
         return data
 
-    def plot(self, inp=0, num=100, vec=[]):
+    def plot(self, inp=0, num=100, vec=None):
         """Plot surface and rim.
 
         Parameters
@@ -993,7 +993,6 @@ class Cone(Shape):
         d_Phi_z = self.d_Phi_z(r, phi, z)
 
         # Calculate normal vector
-        return geometry.rotate(d_Phi_phi, self._inp["central"], -90, True)
         return geometry.cross_product(d_Phi_phi, d_Phi_z)
 
     def is_in(self, pos):

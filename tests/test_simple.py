@@ -596,7 +596,7 @@ class UserModelCase(unittest.TestCase):
 
         # Normal
         self.assertEqual([round(x, 4) for x in cone.convert([0, 0, 0], False)], [3.0147, 3.0572, 0.0569])
-        self.assertEqual([round(x, 4) for x in cone.normal(vec)], [0.2250, 1.5814, 1.2632])
+        self.assertEqual([round(x, 4) for x in cone.normal(vec)], [0.3182, 2.0114, 0.6109])
 
         # Positioning
         del_list = [atom_id for atom_id, atom in enumerate(block.get_atom_list()) if cone.is_in(atom.get_pos())]
@@ -933,8 +933,8 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual([round(x, 4) for x in pore.centroid()], [3.0147, 3.0572, 3.0569])
         self.assertEqual(round(pore.roughness()["in"][0], 1), 0.1)
         self.assertEqual(round(pore.roughness()["ex"], 1), 0.0)
-        self.assertEqual(round(pore.volume()), 114)
-        self.assertEqual(round(pore.surface()["in"]), 75)
+        self.assertEqual(round(pore.volume()), 112)
+        self.assertEqual(round(pore.surface()["in"]), 74)
 
     def test_pore_capsule(self):
         # self.skipTest("Temporary")
@@ -969,12 +969,12 @@ class UserModelCase(unittest.TestCase):
         print(pore.table())
 
         # Properties
-        self.assertEqual([round(x, 4) for x in pore.diameter()], [4.2317, 4.3751, 4.3749, 4.2449])
+        self.assertEqual([round(x, 4) for x in pore.diameter()], [4.234, 4.4864, 4.5656, 4.214])
         self.assertEqual([round(x, 4) for x in pore.centroid()], [3.0147, 3.0572, 4.9169])
-        self.assertEqual([round(x, 4) for x in pore.roughness()["in"]], [0.1223, 0.0432, 0.0566, 0.125])
+        self.assertEqual([round(x, 4) for x in pore.roughness()["in"]], [0.1287, 0.1065, 0.1439, 0.1226])
         self.assertEqual(round(pore.roughness()["ex"], 1), 0.0)
-        self.assertEqual(round(pore.volume()), 144) # not correct volume because sphere and cyclinder merged correct is 100
-        self.assertEqual({key: round(item) for key, item in pore.surface().items()}, {'in': 174, 'ex': 45}) # not correct because whole sphere surface is take in to account, correct is 113
+        self.assertEqual(round(pore.volume()), 153) # not correct volume because sphere and cyclinder merged correct is 100
+        self.assertEqual({key: round(item) for key, item in pore.surface().items()}, {'in': 182, 'ex': 44}) # not correct because whole sphere surface is take in to account, correct is 113
 
     def test_pore_cylinder_amorph(self):
         # self.skipTest("Temporary")
@@ -1014,8 +1014,8 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual([round(x, 4) for x in pore.centroid()], [4.7958, 4.7978, 4.807])
         self.assertEqual(round(pore.roughness()["in"][0], 1), 0.1)
         self.assertEqual(round(pore.roughness()["ex"], 1), 0.3)
-        self.assertEqual(round(pore.volume()), 121)
-        self.assertEqual({key: round(item) for key, item in pore.surface().items()}, {'in': 121, 'ex': 159})
+        self.assertEqual(round(pore.volume()), 119)
+        self.assertEqual({key: round(item) for key, item in pore.surface().items()}, {'in': 120, 'ex': 160})
 
 
 if __name__ == '__main__':
