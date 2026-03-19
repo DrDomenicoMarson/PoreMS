@@ -978,13 +978,20 @@ class UserModelCase(unittest.TestCase):
         print(pore.table())
 
         ## Properties
+        roughness = pore.roughness()
+        surface = pore.surface()
+        allocation = pore.allocation()
+        self.assertIsInstance(roughness, pms.RoughnessProfile)
+        self.assertIsInstance(surface, pms.SurfaceAreaSummary)
+        self.assertIsInstance(allocation["Hydro"], pms.AllocationSummary)
+        self.assertIsInstance(allocation["Hydro"].interior, pms.SurfaceAllocationStats)
         self.assertEqual(round(pore.diameter()[0]), 4)
         self.assertEqual([round(x, 4) for x in pore.centroid()], [3.0147, 3.0572, 3.0569])
-        self.assertEqual(round(pore.roughness()["in"][0], 1), 0.1)
-        self.assertEqual(round(pore.roughness()["ex"], 1), 0.0)
+        self.assertEqual(round(roughness.interior[0], 1), 0.1)
+        self.assertEqual(round(roughness.exterior, 1), 0.0)
         self.assertAlmostEqual(pore.volume(), 77.8, delta=1.0)
-        self.assertAlmostEqual(pore.surface()["in"], 78.0, delta=1.0)
-        self.assertAlmostEqual(pore.surface()["ex"], 49.0, delta=1.0)
+        self.assertAlmostEqual(surface.interior, 78.0, delta=1.0)
+        self.assertAlmostEqual(surface.exterior, 49.0, delta=1.0)
 
     def test_pore_slit(self):
         # self.skipTest("Temporary")
@@ -1022,12 +1029,14 @@ class UserModelCase(unittest.TestCase):
         print(pore.table())
 
         ## Properties
+        roughness = pore.roughness()
+        surface = pore.surface()
         self.assertEqual(round(pore.diameter()[0]), 3)
         self.assertEqual([round(x, 4) for x in pore.centroid()], [3.0147, 3.0572, 3.0569])
-        self.assertEqual(round(pore.roughness()["in"][0], 1), 0.1)
-        self.assertEqual(round(pore.roughness()["ex"], 1), 0.0)
+        self.assertEqual(round(roughness.interior[0], 1), 0.1)
+        self.assertEqual(round(roughness.exterior, 1), 0.0)
         self.assertAlmostEqual(pore.volume(), 112.4, delta=1.0)
-        self.assertAlmostEqual(pore.surface()["in"], 74.3, delta=1.0)
+        self.assertAlmostEqual(surface.interior, 74.3, delta=1.0)
 
     def test_pore_capsule(self):
         # self.skipTest("Temporary")
@@ -1066,15 +1075,17 @@ class UserModelCase(unittest.TestCase):
         print(pore.table())
 
         # Properties
+        roughness = pore.roughness()
+        surface = pore.surface()
         for actual, expected in zip(pore.diameter(), [4.234, 4.4864, 4.5656, 4.214]):
             self.assertAlmostEqual(actual, expected, delta=0.05)
         self.assertEqual([round(x, 4) for x in pore.centroid()], [3.0147, 3.0572, 4.9169])
-        for actual, expected in zip(pore.roughness()["in"], [0.1287, 0.1065, 0.1439, 0.1226]):
+        for actual, expected in zip(roughness.interior, [0.1287, 0.1065, 0.1439, 0.1226]):
             self.assertAlmostEqual(actual, expected, delta=0.05)
-        self.assertEqual(round(pore.roughness()["ex"], 1), 0.0)
+        self.assertEqual(round(roughness.exterior, 1), 0.0)
         self.assertAlmostEqual(pore.volume(), 153.2, delta=1.0) # not correct volume because sphere and cyclinder merged correct is 100
-        self.assertAlmostEqual(pore.surface()["in"], 182.0, delta=1.0) # not correct because whole sphere surface is take in to account, correct is 113
-        self.assertAlmostEqual(pore.surface()["ex"], 44.3, delta=1.0)
+        self.assertAlmostEqual(surface.interior, 182.0, delta=1.0) # not correct because whole sphere surface is take in to account, correct is 113
+        self.assertAlmostEqual(surface.exterior, 44.3, delta=1.0)
 
     def test_pore_cylinder_amorph(self):
         # self.skipTest("Temporary")
@@ -1116,13 +1127,15 @@ class UserModelCase(unittest.TestCase):
         print(pore.table())
 
         ## Properties
+        roughness = pore.roughness()
+        surface = pore.surface()
         self.assertEqual(round(pore.diameter()[0]), 4)
         self.assertEqual([round(x, 4) for x in pore.centroid()], [4.7958, 4.7978, 4.807])
-        self.assertEqual(round(pore.roughness()["in"][0], 1), 0.1)
-        self.assertEqual(round(pore.roughness()["ex"], 1), 0.3)
+        self.assertEqual(round(roughness.interior[0], 1), 0.1)
+        self.assertEqual(round(roughness.exterior, 1), 0.3)
         self.assertAlmostEqual(pore.volume(), 119.6, delta=1.0)
-        self.assertAlmostEqual(pore.surface()["in"], 120.1, delta=1.0)
-        self.assertAlmostEqual(pore.surface()["ex"], 159.8, delta=1.0)
+        self.assertAlmostEqual(surface.interior, 120.1, delta=1.0)
+        self.assertAlmostEqual(surface.exterior, 159.8, delta=1.0)
 
 
 if __name__ == '__main__':

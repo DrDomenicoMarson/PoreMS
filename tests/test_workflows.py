@@ -116,6 +116,10 @@ class BareAmorphousSlitWorkflowCase(unittest.TestCase):
         self.assertIsInstance(self.result, pms.SlitBuildResult)
         self.assertIsInstance(self.report, pms.SlitBuildReport)
         self.assertIsInstance(self.report.final_surface, pms.SurfaceComposition)
+        self.assertTrue(hasattr(pms, "RoughnessProfile"))
+        self.assertTrue(hasattr(pms, "SurfaceAreaSummary"))
+        self.assertTrue(hasattr(pms, "SurfaceAllocationStats"))
+        self.assertTrue(hasattr(pms, "AllocationSummary"))
 
 
 if __name__ == "__main__":

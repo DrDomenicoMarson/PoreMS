@@ -125,6 +125,173 @@ class _ShapeAnalysis:
         return None
 
 
+def _normalize_site_type(site_type):
+    """Map public surface identifiers to dataclass attribute names."""
+    if site_type == "in":
+        return "interior"
+    if site_type == "ex":
+        return "exterior"
+    raise ValueError(f"Unsupported site_type '{site_type}'.")
+
+
+@dataclass(frozen=True)
+class RoughnessProfile:
+    """Surface roughness values for interior and exterior pore surfaces.
+
+    Parameters
+    ----------
+    interior : list[float]
+        Roughness values for each configured interior shape.
+    exterior : float
+        Roughness value for the exterior surface.
+    """
+
+    interior: list[float]
+    exterior: float
+
+    def for_site_type(self, site_type):
+        """Return the roughness values for one surface family.
+
+        Parameters
+        ----------
+        site_type : str
+            Surface identifier, ``"in"`` or ``"ex"``.
+
+        Returns
+        -------
+        values : list[float] or float
+            Interior roughness values for ``"in"`` or the exterior roughness
+            value for ``"ex"``.
+        """
+        return getattr(self, _normalize_site_type(site_type))
+
+    def to_dict(self):
+        """Return a serializable mapping representation.
+
+        Returns
+        -------
+        payload : dict
+            Mapping with legacy ``"in"`` and ``"ex"`` keys.
+        """
+        return {"in": list(self.interior), "ex": self.exterior}
+
+
+@dataclass(frozen=True)
+class SurfaceAreaSummary:
+    """Surface areas for interior and exterior pore surfaces.
+
+    Parameters
+    ----------
+    interior : float or list[float]
+        Total interior surface area or per-shape areas.
+    exterior : float or list[float]
+        Total exterior surface area or per-endcap areas.
+    """
+
+    interior: float | list[float]
+    exterior: float | list[float]
+
+    def for_site_type(self, site_type):
+        """Return the surface areas for one surface family.
+
+        Parameters
+        ----------
+        site_type : str
+            Surface identifier, ``"in"`` or ``"ex"``.
+
+        Returns
+        -------
+        values : float or list[float]
+            Interior or exterior surface areas.
+        """
+        return getattr(self, _normalize_site_type(site_type))
+
+    def to_dict(self):
+        """Return a serializable mapping representation.
+
+        Returns
+        -------
+        payload : dict
+            Mapping with legacy ``"in"`` and ``"ex"`` keys.
+        """
+        interior = list(self.interior) if isinstance(self.interior, list) else self.interior
+        exterior = list(self.exterior) if isinstance(self.exterior, list) else self.exterior
+        return {"in": interior, "ex": exterior}
+
+
+@dataclass(frozen=True)
+class SurfaceAllocationStats:
+    """Allocation statistics for one surface family.
+
+    Parameters
+    ----------
+    count : int
+        Number of attached molecules or sites.
+    density_nm2 : float
+        Number density per square nanometer.
+    density_mumol_m2 : float
+        Surface density in :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`.
+    """
+
+    count: int
+    density_nm2: float
+    density_mumol_m2: float
+
+    def to_list(self):
+        """Return the historical list representation.
+
+        Returns
+        -------
+        values : list[float]
+            ``[count, density_nm2, density_mumol_m2]`` representation.
+        """
+        return [self.count, self.density_nm2, self.density_mumol_m2]
+
+
+@dataclass(frozen=True)
+class AllocationSummary:
+    """Allocation statistics for interior and exterior surfaces.
+
+    Parameters
+    ----------
+    interior : SurfaceAllocationStats
+        Statistics for the interior surface family.
+    exterior : SurfaceAllocationStats
+        Statistics for the exterior surface family.
+    """
+
+    interior: SurfaceAllocationStats
+    exterior: SurfaceAllocationStats
+
+    def for_site_type(self, site_type):
+        """Return allocation statistics for one surface family.
+
+        Parameters
+        ----------
+        site_type : str
+            Surface identifier, ``"in"`` or ``"ex"``.
+
+        Returns
+        -------
+        stats : SurfaceAllocationStats
+            Allocation statistics for the requested surface family.
+        """
+        return getattr(self, _normalize_site_type(site_type))
+
+    def to_dict(self):
+        """Return a serializable mapping representation.
+
+        Returns
+        -------
+        payload : dict
+            Mapping with legacy ``"in"`` and ``"ex"`` keys.
+        """
+        return {
+            "in": self.interior.to_list(),
+            "ex": self.exterior.to_list(),
+        }
+
+
 class PoreKit():
     """Composable builder for pore systems carved from silica blocks.
 
@@ -963,7 +1130,7 @@ class PoreKit():
             ]
             for hydro_value, surface, (_, shape_sites) in zip(
                 hydro,
-                self.surface(is_sum=False)[site_type],
+                self.surface(is_sum=False).for_site_type(site_type),
                 interior_shape_items,
             ):
                 oh = len(sum([site_list[site]["o"] for site in shape_sites], []))
@@ -990,7 +1157,7 @@ class PoreKit():
         else:
              # Amount - Connect two oxygen to one siloxane
             oh = len(sum([site_list[site]["o"] for site in sites], []))
-            oh_goal = pms.utils.mumol_m2_to_mols(hydro, self.surface()[site_type])
+            oh_goal = pms.utils.mumol_m2_to_mols(hydro, self.surface().for_site_type(site_type))
             amount = round((oh-oh_goal)/2)
 
             # Fill siloxane
@@ -1062,7 +1229,7 @@ class PoreKit():
                     amount = int(
                         pms.utils.mumol_m2_to_mols(
                             amount,
-                            self.surface(is_sum=False)[site_type][int(shape[-1])],
+                            self.surface(is_sum=False).for_site_type(site_type)[int(shape[-1])],
                         )
                     )
                 elif site_type == "in" and shape == "all":
@@ -1070,11 +1237,11 @@ class PoreKit():
                         amount_list[sites_shape_idx] = int(
                             pms.utils.mumol_m2_to_mols(
                                 amount,
-                                self.surface(is_sum=False)[site_type][sites_shape_idx],
+                                self.surface(is_sum=False).for_site_type(site_type)[sites_shape_idx],
                             )
                         )
                 elif site_type == "ex":
-                    amount = int(pms.utils.mumol_m2_to_mols(amount, self.surface()[site_type]))
+                    amount = int(pms.utils.mumol_m2_to_mols(amount, self.surface().for_site_type(site_type)))
 
             elif inp == "percent":
                 if site_type == "in" and shape != "all":
@@ -1267,7 +1434,7 @@ class PoreKit():
         self._yml["system"]["centroid"] = self.centroid()
         self._yml["system"]["reservoir"] = self.reservoir()
         self._yml["system"]["volume"] = self.volume()
-        self._yml["system"]["surface"] = self.surface()
+        self._yml["system"]["surface"] = self.surface().to_dict()
 
         # Calculate properties
         diameter = self.diameter()
@@ -1286,9 +1453,9 @@ class PoreKit():
             elif shape_spec.shape_type=="SLIT":
                 self._yml[shape_id]["parameter"]["height"] += 0.5
             self._yml[shape_id]["diameter"] = diameter[i]
-            self._yml[shape_id]["roughness"] = roughness["in"][i]
+            self._yml[shape_id]["roughness"] = roughness.interior[i]
             self._yml[shape_id]["volume"] = volume[i]
-            self._yml[shape_id]["surface"] = surface["in"][i]
+            self._yml[shape_id]["surface"] = surface.interior[i]
 
         # Export
         yaml.Dumper.ignore_aliases = lambda *args : True
@@ -1348,9 +1515,8 @@ class PoreKit():
 
         Returns
         -------
-        roughness : dict
-            Dictionary with interior roughness values by shape and one exterior
-            roughness value.
+        roughness : RoughnessProfile
+            Roughness values for the interior shapes and exterior surface.
         """
         radii_in = self._collect_shape_radii()
 
@@ -1376,7 +1542,7 @@ class PoreKit():
         r_q_ex =  math.sqrt(sum([(r_i-r_bar_ex)**2 for r_i in r_ex])/len(r_ex)) if len(r_ex)>0 else 0
 
         # Calculate square root roughness
-        return {"in": r_q_in, "ex": r_q_ex}
+        return RoughnessProfile(interior=r_q_in, exterior=r_q_ex)
 
     def volume(self, is_sum=True):
         """Return the pore volume derived from the prepared geometry.
@@ -1472,8 +1638,8 @@ class PoreKit():
 
         Returns
         -------
-        surface : dict
-            Dictionary containing interior and exterior surface areas.
+        surface : SurfaceAreaSummary
+            Interior and exterior surface areas.
         """
         # Get diameters
         diam = self.diameter()
@@ -1551,7 +1717,10 @@ class PoreKit():
             if self._shapes[section].shape_type=="CONE":
                 surf_ex.append(0)
 
-        return {"in": sum(surf_in) if is_sum else surf_in,"ex": sum(surf_ex) if is_sum else surf_ex}
+        return SurfaceAreaSummary(
+            interior=sum(surf_in) if is_sum else surf_in,
+            exterior=sum(surf_ex) if is_sum else surf_ex,
+        )
 
     def allocation(self):
         """Return surface allocation statistics for all attached molecules.
@@ -1562,7 +1731,7 @@ class PoreKit():
 
         Returns
         -------
-        alloc : dict
+        alloc : dict[str, AllocationSummary]
             Surface allocation statistics grouped by molecule short name.
         """
         # Get surfaces
@@ -1575,39 +1744,64 @@ class PoreKit():
             for site_type in ["in", "ex"]:
                 if mol in site_dict[site_type]:
                     if not mol in alloc:
-                        alloc[mol] = {"in": [0, 0, 0], "ex": [0, 0, 0]}
+                        alloc[mol] = AllocationSummary(
+                            interior=SurfaceAllocationStats(0, 0.0, 0.0),
+                            exterior=SurfaceAllocationStats(0, 0.0, 0.0),
+                        )
                     # Number of molecules
-                    alloc[mol][site_type][0] = len(site_dict[site_type][mol])
-
-                    # Molecules per nano meter
-                    alloc[mol][site_type][1] = len(site_dict[site_type][mol])/surf[site_type] if surf[site_type]>0 else 0
-
-                    # Micromolar per meter
-                    alloc[mol][site_type][2] = pms.utils.mols_to_mumol_m2(len(site_dict[site_type][mol]), surf[site_type]) if surf[site_type]>0 else 0
+                    count = len(site_dict[site_type][mol])
+                    surface_value = surf.for_site_type(site_type)
+                    stats = SurfaceAllocationStats(
+                        count=count,
+                        density_nm2=count/surface_value if surface_value > 0 else 0,
+                        density_mumol_m2=pms.utils.mols_to_mumol_m2(count, surface_value) if surface_value > 0 else 0,
+                    )
+                    if site_type == "in":
+                        alloc[mol] = AllocationSummary(interior=stats, exterior=alloc[mol].exterior)
+                    else:
+                        alloc[mol] = AllocationSummary(interior=alloc[mol].interior, exterior=stats)
 
         # OH allocation
-        alloc["OH"] = {"in": [0, 0, 0], "ex": [0, 0, 0]}
+        alloc["OH"] = AllocationSummary(
+            interior=SurfaceAllocationStats(0, 0.0, 0.0),
+            exterior=SurfaceAllocationStats(0, 0.0, 0.0),
+        )
         for site_type in ["in", "ex"]:
             num_oh = len(sum([x["o"] for x in self._pore.get_sites().values() if x["type"]==site_type], []))
             for mol in site_dict[site_type].keys():
                 num_oh -= len(site_dict[site_type][mol]) if mol not in ["SL", "SLG", "SLX"] else 0
 
             # num_oh = num_oh-num_in_ex if site_type=="ex" else num_oh+num_in_ex
-
-            alloc["OH"][site_type][0] = num_oh
-            alloc["OH"][site_type][1] = num_oh/surf[site_type] if surf[site_type]>0 else 0
-            alloc["OH"][site_type][2] = pms.utils.mols_to_mumol_m2(num_oh, surf[site_type]) if surf[site_type]>0 else 0
+            surface_value = surf.for_site_type(site_type)
+            stats = SurfaceAllocationStats(
+                count=num_oh,
+                density_nm2=num_oh/surface_value if surface_value > 0 else 0,
+                density_mumol_m2=pms.utils.mols_to_mumol_m2(num_oh, surface_value) if surface_value > 0 else 0,
+            )
+            if site_type == "in":
+                alloc["OH"] = AllocationSummary(interior=stats, exterior=alloc["OH"].exterior)
+            else:
+                alloc["OH"] = AllocationSummary(interior=alloc["OH"].interior, exterior=stats)
 
         # Hydroxylation - Total number of binding sites
-        alloc["Hydro"] = {"in": [0, 0, 0], "ex": [0, 0, 0]}
+        alloc["Hydro"] = AllocationSummary(
+            interior=SurfaceAllocationStats(0, 0.0, 0.0),
+            exterior=SurfaceAllocationStats(0, 0.0, 0.0),
+        )
         for site_type in ["in", "ex"]:
             num_tot = len(sum([x["o"] for x in self._pore.get_sites().values() if x["type"]==site_type], []))
 
             # num_tot = num_tot-num_in_ex if site_type=="ex" else num_tot+num_in_ex
-
-            alloc["Hydro"][site_type][0] = num_tot
-            alloc["Hydro"][site_type][1] = num_tot/surf[site_type] if surf[site_type]>0 else 0
-            alloc["Hydro"][site_type][2] = pms.utils.mols_to_mumol_m2(num_tot, surf[site_type]) if surf[site_type]>0 else 0
+            surface_value = surf.for_site_type(site_type)
+            stats = SurfaceAllocationStats(
+                count=num_tot,
+                density_nm2=num_tot/surface_value if surface_value > 0 else 0,
+                density_mumol_m2=pms.utils.mols_to_mumol_m2(num_tot, surface_value) if surface_value > 0 else 0,
+            )
+            if site_type == "in":
+                alloc["Hydro"] = AllocationSummary(interior=stats, exterior=alloc["Hydro"].exterior)
+            else:
+                alloc["Hydro"] = AllocationSummary(interior=alloc["Hydro"].interior, exterior=stats)
 
         return alloc
 
@@ -1677,7 +1871,7 @@ class PoreKit():
 
         # Get properties
         surf = self.surface()
-        surface_in_by_shape = self.surface(is_sum=False)["in"]
+        surface_in_by_shape = self.surface(is_sum=False).interior
         roughness = self.roughness()
 
         # Save data
@@ -1687,8 +1881,8 @@ class PoreKit():
         data["Exterior"]["Silica block xyz-dimensions (nm)"] = "["+form%self.box()[0]+", "+form%self.box()[1]+", "+form%(self.box()[2]-2*self.reservoir())+"]"
         data["Interior"]["Simulation box xyz-dimensions (nm)"] = " "
         data["Exterior"]["Simulation box xyz-dimensions (nm)"] = "["+form%self.box()[0]+", "+form%self.box()[1]+", "+form%self.box()[2]+"]"
-        data["Interior"]["Surface roughness (nm)"] = [form%val for val in roughness["in"]] if "in" in roughness else form%0
-        data["Exterior"]["Surface roughness (nm)"] = form%roughness["ex"] if "ex" in roughness else form%0
+        data["Interior"]["Surface roughness (nm)"] = [form%val for val in roughness.interior]
+        data["Exterior"]["Surface roughness (nm)"] = form%roughness.exterior
         for i, val in enumerate(self.diameter()):
             data["Interior"]["Pore "+ str(i+1) +" diameter (nm)"] = form%val
             data["Exterior"]["Pore "+ str(i+1) +" diameter (nm)"] = " "
@@ -1701,11 +1895,11 @@ class PoreKit():
         data["Exterior"]["Pore volume (nm^3)"] = " "
         data["Interior"]["Solvent reservoir volume (nm^3)"] = " "
         data["Exterior"]["Solvent reservoir volume (nm^3)"] = "2 * "+form%(self.box()[0]*self.box()[1]*self.reservoir())
-        for i,val in enumerate(self.surface(is_sum=False)["in"]):
+        for i,val in enumerate(self.surface(is_sum=False).interior):
             data["Interior"]["Surface "+ str(i+1) +" area (nm^2)"] = form%val
             data["Exterior"]["Surface "+ str(i+1) +" area (nm^2)"] = " "
-        data["Interior"]["Surface area (nm^2)"] = form%surf["in"]
-        data["Exterior"]["Surface area (nm^2)"] = "2 * "+form%(surf["ex"]/2)
+        data["Interior"]["Surface area (nm^2)"] = form%surf.interior
+        data["Exterior"]["Surface area (nm^2)"] = "2 * "+form%(surf.exterior/2)
 
         data["Interior"]["Surface chemistry - Before Functionalization"] = " "
         data["Exterior"]["Surface chemistry - Before Functionalization"] = " "
@@ -1713,12 +1907,12 @@ class PoreKit():
         data["Exterior"]["    Number of single silanol groups"] = "%i"%sum([1 for x in self._pore.get_sites().values() if len(x["o"])==1 and x["type"]=="ex"])
         data["Interior"]["    Number of geminal silanol groups"] = "%i"%sum([1 for x in self._pore.get_sites().values() if len(x["o"])==2 and x["type"]=="in"])
         data["Exterior"]["    Number of geminal silanol groups"] = "%i"%sum([1 for x in self._pore.get_sites().values() if len(x["o"])==2 and x["type"]=="ex"])
-        data["Interior"]["    Number of siloxane bridges"] = "%i"%allocation["SLX"]["in"][0] if "SLX" in allocation else "0"
-        data["Exterior"]["    Number of siloxane bridges"] = "%i"%allocation["SLX"]["ex"][0] if "SLX" in allocation else "0"
-        data["Interior"]["    Total number of OH groups"] = "%i"%allocation["Hydro"]["in"][0]
-        data["Exterior"]["    Total number of OH groups"] = "%i"%allocation["Hydro"]["ex"][0]
-        data["Interior"]["    Overall hydroxylation (mumol/m^2)"] = form%allocation["Hydro"]["in"][2]
-        data["Exterior"]["    Overall hydroxylation (mumol/m^2)"] = form%allocation["Hydro"]["ex"][2]
+        data["Interior"]["    Number of siloxane bridges"] = "%i"%allocation["SLX"].interior.count if "SLX" in allocation else "0"
+        data["Exterior"]["    Number of siloxane bridges"] = "%i"%allocation["SLX"].exterior.count if "SLX" in allocation else "0"
+        data["Interior"]["    Total number of OH groups"] = "%i"%allocation["Hydro"].interior.count
+        data["Exterior"]["    Total number of OH groups"] = "%i"%allocation["Hydro"].exterior.count
+        data["Interior"]["    Overall hydroxylation (mumol/m^2)"] = form%allocation["Hydro"].interior.density_mumol_m2
+        data["Exterior"]["    Overall hydroxylation (mumol/m^2)"] = form%allocation["Hydro"].exterior.density_mumol_m2
 
         sites_attach_mol = getattr(self._pore, "sites_attach_mol", None)
         if sites_attach_mol is not None:
@@ -1755,16 +1949,16 @@ class PoreKit():
         data["Exterior"]["Surface chemistry - After Functionalization"] = " "
         for mol in allocation.keys():
             if mol not in ["SL", "SLG", "SLX", "Hydro", "OH"]:
-                data["Interior"]["    Number of "+mol+" groups"] = "%i"%allocation[mol]["in"][0]
-                data["Exterior"]["    Number of "+mol+" groups"] = "%i"%allocation[mol]["ex"][0]
-                data["Interior"]["    "+mol+" density (mumol/m^2)"] = form%allocation[mol]["in"][2]
-                data["Exterior"]["    "+mol+" density (mumol/m^2)"] = form%allocation[mol]["ex"][2]
-        data["Interior"]["    Bonded-phase density (mumol/m^2)"] = form%(allocation["Hydro"]["in"][2]-allocation["OH"]["in"][2])
-        data["Exterior"]["    Bonded-phase density (mumol/m^2)"] = form%(allocation["Hydro"]["ex"][2]-allocation["OH"]["ex"][2])
-        data["Interior"]["    Number of residual OH groups"] = "%i"%allocation["OH"]["in"][0]
-        data["Exterior"]["    Number of residual OH groups"] = "%i"%allocation["OH"]["ex"][0]
-        data["Interior"]["    Residual hydroxylation (mumol/m^2)"] = form%allocation["OH"]["in"][2]
-        data["Exterior"]["    Residual hydroxylation (mumol/m^2)"] = form%allocation["OH"]["ex"][2]
+                data["Interior"]["    Number of "+mol+" groups"] = "%i"%allocation[mol].interior.count
+                data["Exterior"]["    Number of "+mol+" groups"] = "%i"%allocation[mol].exterior.count
+                data["Interior"]["    "+mol+" density (mumol/m^2)"] = form%allocation[mol].interior.density_mumol_m2
+                data["Exterior"]["    "+mol+" density (mumol/m^2)"] = form%allocation[mol].exterior.density_mumol_m2
+        data["Interior"]["    Bonded-phase density (mumol/m^2)"] = form%(allocation["Hydro"].interior.density_mumol_m2-allocation["OH"].interior.density_mumol_m2)
+        data["Exterior"]["    Bonded-phase density (mumol/m^2)"] = form%(allocation["Hydro"].exterior.density_mumol_m2-allocation["OH"].exterior.density_mumol_m2)
+        data["Interior"]["    Number of residual OH groups"] = "%i"%allocation["OH"].interior.count
+        data["Exterior"]["    Number of residual OH groups"] = "%i"%allocation["OH"].exterior.count
+        data["Interior"]["    Residual hydroxylation (mumol/m^2)"] = form%allocation["OH"].interior.density_mumol_m2
+        data["Exterior"]["    Residual hydroxylation (mumol/m^2)"] = form%allocation["OH"].exterior.density_mumol_m2
 
         if sites_attach_mol is not None:
             for i in sites_attach_mol:

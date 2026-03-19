@@ -28,6 +28,10 @@ Pore
     :toctree: generated/
 
     pore.Pore
+    system.RoughnessProfile
+    system.SurfaceAreaSummary
+    system.SurfaceAllocationStats
+    system.AllocationSummary
     system.PoreKit
     system.PoreCylinder
     system.PoreSlit

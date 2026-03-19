@@ -5,7 +5,17 @@ from .matrix import Matrix
 from .molecule import Molecule
 from .pattern import BetaCristobalit, AlphaCristobalit
 from .pore import Pore
-from .system import PoreKit, PoreCylinder, PoreSlit, PoreCapsule, PoreAmorphCylinder
+from .system import (
+    RoughnessProfile,
+    SurfaceAreaSummary,
+    SurfaceAllocationStats,
+    AllocationSummary,
+    PoreKit,
+    PoreCylinder,
+    PoreSlit,
+    PoreCapsule,
+    PoreAmorphCylinder,
+)
 from .shape import (
     ShapeConfig,
     CylinderConfig,
@@ -40,7 +50,8 @@ __all__ = [
     "Atom", "Molecule", "Store",
     "Dice", "SearchExecution", "SearchPolicy", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
-    "Pore", "PoreKit", "PoreCylinder", "PoreSlit", "PoreCapsule", "PoreAmorphCylinder",
+    "Pore", "RoughnessProfile", "SurfaceAreaSummary", "SurfaceAllocationStats", "AllocationSummary",
+    "PoreKit", "PoreCylinder", "PoreSlit", "PoreCapsule", "PoreAmorphCylinder",
     "ShapeConfig", "CylinderConfig", "SphereConfig", "CuboidConfig", "ConeConfig",
     "ShapeSection", "ShapeSpec",
     "Cylinder", "Sphere", "Cuboid", "Cone",
