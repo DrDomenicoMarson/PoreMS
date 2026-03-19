@@ -25,14 +25,6 @@ import sphinx_bootstrap_theme
 
 # sys.path.append(os.path.abspath('../'))
 
-# # Install package
-# if sys.platform == "win32":
-#     # os.system("pip install ../.")
-#     os.system("..\tests\venv\Scripts\activate")
-# else:
-#     # os.system("pip install ../. &> /dev/null")
-#     os.system("source ../tests/venv/bin/activate")
-
 
 # -- General configuration ------------------------------------------------
 
@@ -208,6 +200,5 @@ texinfo_documents = [
 
 # Add the 'copybutton' javascript, to hide/show the prompt in code
 # examples, originally taken from scikit-learn's doc/conf.py
-
 
 

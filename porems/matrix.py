@@ -139,6 +139,12 @@ class Matrix:
         -------
         atoms : list
             List of atom ids with the number of specified bonds
+
+        Raises
+        ------
+        ValueError
+            Raised when ``logic`` is not one of ``"eq"``, ``"lt"``, or
+            ``"gt"``.
         """
         if logic=="eq":
             return [atom for atom in self._matrix if len(self._matrix[atom]["atoms"])==num_bonds]
@@ -146,9 +152,8 @@ class Matrix:
             return [atom for atom in self._matrix if len(self._matrix[atom]["atoms"])<num_bonds]
         elif logic=="gt":
             return [atom for atom in self._matrix if len(self._matrix[atom]["atoms"])>num_bonds]
-        else:
-            print("Matrix: Wrong logic statement...")
-            return
+
+        raise ValueError("Matrix: Wrong logic statement...")
 
 
     ##################

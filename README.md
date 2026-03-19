@@ -2,7 +2,6 @@
 
 --------------------------------------
 
-[![PyPI Version](https://img.shields.io/badge/PyPI-0.4.0-orange)](https://pypi.org/project/porems/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://github.com/PoreMS/PoreMS/blob/main/LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14028652.svg)](https://doi.org/10.5281/zenodo.14028652)
 [![Build Status](https://github.com/PoreMS/PoreMS/actions/workflows/workflow.yml/badge.svg)](https://github.com/PoreMS/PoreMS/actions/workflows/workflow.yml)
@@ -48,24 +47,19 @@ If you explicitly request `SearchExecution.PROCESSES`, run PoreMS from a file-ba
 
 ## Installation
 
-The latest stable release (and older versions) can be installed from PyPI:
+Clone the repository and install it from the repository root in editable mode:
 
-    pip install porems
+    pip install -r requirements.txt
+    pip install -e .
 
-You may instead want to use the development version from Github:
-
-    pip install git+https://github.com/porems/porems.git#egg=porems
-
-    pip install git+https://github.com/porems/porems.git@develop#egg=porems
-
-Or download the repository and install in the top directory via:
-
-    pip install .
+Use the repository directly in editable mode for local work.
 
 
 ## Testing
 
-To test porems, run the test in the test directory.
+Run the test suite from the repository root after the editable install:
+
+    python -m pytest tests/ -q
 
 
 ## Development

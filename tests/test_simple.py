@@ -471,7 +471,8 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual(connect[17]["atoms"], [19, 0])
 
         print()
-        self.assertIsNone(matrix.bound(4, "test"))
+        with self.assertRaisesRegex(ValueError, "Wrong logic statement"):
+            matrix.bound(4, "test")
 
 
     #########
