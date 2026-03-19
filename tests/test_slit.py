@@ -220,14 +220,21 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         expected_files = [
             "grid.itp",
             "test_bare_amorphous_slit.gro",
-            "test_bare_amorphous_slit.obj",
             "test_bare_amorphous_slit.top",
             "test_bare_amorphous_slit.yml",
             "test_bare_amorphous_slit_report.json",
-            "test_bare_amorphous_slit_system.obj",
         ]
         for file_name in expected_files:
             self.assertTrue(os.path.isfile(os.path.join(self.output_dir, file_name)))
+
+        self.assertFalse(
+            os.path.exists(os.path.join(self.output_dir, "test_bare_amorphous_slit.obj"))
+        )
+        self.assertFalse(
+            os.path.exists(
+                os.path.join(self.output_dir, "test_bare_amorphous_slit_system.obj")
+            )
+        )
 
         report_path = os.path.join(
             self.output_dir,
@@ -255,6 +262,35 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertFalse(
             os.path.exists(
                 os.path.join(self.output_dir, "test_bare_amorphous_slit_next_steps.md")
+            )
+        )
+
+    def test_bare_slit_object_files_are_opt_in(self):
+        output_dir = os.path.join(
+            os.path.dirname(__file__),
+            "output",
+            "bare_amorphous_slit_preparation_with_objects",
+        )
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
+        pms.write_bare_amorphous_slit(
+            output_dir,
+            config=pms.AmorphousSlitConfig(name="test_bare_amorphous_slit_with_objects"),
+            write_object_files=True,
+        )
+
+        self.assertTrue(
+            os.path.isfile(
+                os.path.join(output_dir, "test_bare_amorphous_slit_with_objects.obj")
+            )
+        )
+        self.assertTrue(
+            os.path.isfile(
+                os.path.join(
+                    output_dir,
+                    "test_bare_amorphous_slit_with_objects_system.obj",
+                )
             )
         )
 

@@ -69,7 +69,8 @@ pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
 containing an attach-ready `PoreKit` system and a structured
 `SlitPreparationReport`.
 `write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
-together with a JSON report in the selected output directory.
+together with a JSON report in the selected output directory. Object backups are
+written only when `write_object_files=True` is requested explicitly.
 
 
 ## Installation

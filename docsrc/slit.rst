@@ -41,7 +41,8 @@ slit together with a structured surface report.
 ``SlitPreparationResult`` containing an attach-ready ``PoreKit`` system and a
 ``SlitPreparationReport`` with the prepared surface composition and siloxane
 summary. ``write_bare_amorphous_slit(...)`` finalizes the prepared slit and
-stores the main structure files together with a JSON report.
+stores the main structure files together with a JSON report. Object backups are
+written only when ``write_object_files=True`` is requested explicitly.
 
 The slit-preparation API is designed for the periodic bare-silica slit builder:
 
@@ -143,10 +144,10 @@ surface group.
  :width: 50%
  :name: fig2
 
-Once the generation is done, store the structure and preferably the object for
-future analysis. Furthermore, a master topology with the number of residues and
-a topology containing grid molecule parameters should be created. This is all
-handled by the store function
+Once the generation is done, store the structure. If you also want Python-side
+backup objects for later inspection, request them explicitly. The same helper
+also writes a master topology with the number of residues and a topology
+containing grid molecule parameters.
 
 .. code-block:: python
 
@@ -160,8 +161,10 @@ companion files needed to keep the silica model reproducible:
 
 * structure files such as ``.gro`` for coordinates and periodic box lengths
 * topology helpers such as ``.top`` and ``grid.itp`` for the silica scaffold
-* serialized ``.obj`` backups for later inspection in Python
 * YAML or JSON metadata summaries for the generated geometry and surface state
+
+Serialized ``.obj`` backups remain available as an explicit opt-in through
+``write_object_files=True`` when calling the storage helpers.
 
 PoreMS intentionally stops at generating the silica model and its companion
 build artifacts. Any downstream simulation setup should be defined separately

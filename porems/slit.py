@@ -987,7 +987,7 @@ def prepare_amorphous_slit_surface(config=None):
     return SlitPreparationResult(system=system, report=report)
 
 
-def write_bare_amorphous_slit(output_dir, config=None):
+def write_bare_amorphous_slit(output_dir, config=None, write_object_files=False):
     """Prepare, finalize, and store a bare amorphous silica slit.
 
     Parameters
@@ -996,6 +996,10 @@ def write_bare_amorphous_slit(output_dir, config=None):
         Output directory for the generated slit files and JSON report.
     config : AmorphousSlitConfig, optional
         Slit preparation configuration.
+    write_object_files : bool, optional
+        When ``True``, also serialize the finalized pore structure and full
+        :class:`porems.system.PoreKit` state as ``.obj`` files. The default is
+        ``False`` so object exports remain an explicit opt-in.
 
     Returns
     -------
@@ -1013,7 +1017,7 @@ def write_bare_amorphous_slit(output_dir, config=None):
     pms.utils.mkdirp(output_dir)
 
     result.system.finalize()
-    result.system.store(output_dir)
+    result.system.store(output_dir, write_object_files=write_object_files)
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
     with open(report_path, "w") as file_out:

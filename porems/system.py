@@ -1499,7 +1499,7 @@ class PoreKit():
         else:
             self._pore.set_box(self._box)
 
-    def store(self, link="./", sort_list=None):
+    def store(self, link="./", sort_list=None, write_object_files=False):
         """Write the finalized pore system and companion simulation files.
 
         Parameters
@@ -1509,6 +1509,10 @@ class PoreKit():
         sort_list : list, optional
             Sorting list for output structure files. Defaults to the internal
             builder ordering.
+        write_object_files : bool, optional
+            When ``True``, also serialize the pore structure and full
+            :class:`PoreKit` state as ``.obj`` files. The default keeps object
+            serialization disabled unless the caller explicitly requests it.
         """
         sort_list = [] if sort_list is None else sort_list
 
@@ -1523,10 +1527,11 @@ class PoreKit():
 
         # Save files
         store.gro(use_atom_names=True)
-        store.obj()
         store.top()
         store.grid()
-        pms.utils.save(self, link+self._pore.get_name()+"_system.obj")
+        if write_object_files:
+            store.obj()
+            pms.utils.save(self, link+self._pore.get_name()+"_system.obj")
         self.yml(link)
 
     def yml(self, link="./"):
