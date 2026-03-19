@@ -1,27 +1,16 @@
-# PoreMS Repository Inspection
+# PoreMS Cleanup & Finalization
 
-## Phase 1: Research
-- [x] Read all core source modules
-- [x] Read all test files
-- [x] Identify all bugs, errors, and bad patterns
+## Phase 1: Implementation (9 remaining issues)
+- [ ] Fix `if` vs `elif` for `CONE` in `volume()`/`surface()` ([system.py](file:///Users/dm/dev/PoreMS/porems/system.py))
+- [ ] Initialize `length` to `None` to prevent leak across SPHERE ([system.py](file:///Users/dm/dev/PoreMS/porems/system.py))
+- [ ] Rename `r(z)` shadowing in `Cone` methods ([shape.py](file:///Users/dm/dev/PoreMS/porems/shape.py))
+- [ ] Define `_UNASSIGNED_SHAPE_KEY = 20` constant ([system.py](file:///Users/dm/dev/PoreMS/porems/system.py))
+- [ ] Refactor `_collect_shape_radii` to always expect/receive a dict ([system.py](file:///Users/dm/dev/PoreMS/porems/system.py))
+- [ ] Fix `percent` geminal overcounting in multi-shapepores ([system.py](file:///Users/dm/dev/PoreMS/porems/system.py))
+- [ ] Minor refactor `table()` to reduce repetition ([system.py](file:///Users/dm/dev/PoreMS/porems/system.py))
+- [ ] Update `python_requires` to be more future-proof ([setup.py](file:///Users/dm/dev/PoreMS/setup.py))
+- [ ] Replace `Callable` from `typing` with `collections.abc` ([pore.py](file:///Users/dm/dev/PoreMS/porems/pore.py))
 
-## Phase 2: Planning
-- [x] Write implementation plan with all findings
-- [x] Get user review and approval
-
-## Phase 3: Execution – Critical Bugs
-- [x] Fix unreachable code in `Cone.normal()` (double return)
-- [x] Fix unguarded `size` variable in `roughness()` (NameError)
-- [x] Fix `SPHERE` shape accessing undefined `length` variable in `prepare()`
-- [x] Add `numpy` and `matplotlib` to `setup.py` dependencies
-
-## Phase 4: Execution – Logic / Correctness Issues
-- [x] Fix mutable default arguments (`hydro=[0, 0]` etc.)
-- [x] Replace bare `except` clauses with specific exception types (in `prepare()`)
-- [x] Fix variable shadowing (`mol` loop variable, `i` in nested loops)
-- [x] Fix removing items during iteration in `attach()`
-- [x] Fix `_normal_in` AttributeError in `PoreAmorphCylinder.attach_special`
-
-## Phase 5: Verification
-- [/] Run existing test suite
-- [ ] Verify all tests pass
+## Phase 2: Verification
+- [ ] Run full test suite
+- [ ] Write final walkthrough

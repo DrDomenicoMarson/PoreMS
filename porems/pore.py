@@ -8,9 +8,9 @@
 import copy
 import random
 
+from collections.abc import Callable
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Callable
 
 import porems.geometry as geometry
 import porems.generic as generic

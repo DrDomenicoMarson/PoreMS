@@ -1101,15 +1101,15 @@ class Cone(Shape):
         pos : list
             Cartesian coordinates for given polar coordinates
         """
-        def r(z):
+        def r_func(z):
             z = np.array(z)
             r_1 = self._inp["diameter_1"]/2
             r_2 = self._inp["diameter_2"]/2
             l = self._inp["length"]
             return r_1+(r_2-r_1)/(l-1)*(z-1)
 
-        x = np.outer(r(z), np.cos(phi))
-        y = np.outer(r(z), np.sin(phi))
+        x = np.outer(r_func(z), np.cos(phi))
+        y = np.outer(r_func(z), np.sin(phi))
         z = np.outer(z, np.ones(len(z)))
 
         return self.convert([x, y, z], False)
@@ -1144,14 +1144,14 @@ class Cone(Shape):
         pos : list
             Cartesian coordinates for given polar coordinates
         """
-        def r(z):
+        def r_func(z):
             r_1 = self._inp["diameter_1"]/2
             r_2 = self._inp["diameter_2"]/2
             l = self._inp["length"]
             return r_1+(r_2-r_1)/(l-1)*(z-1)
 
-        x = -r(z)*np.sin(phi)
-        y = r(z)*np.cos(phi)
+        x = -r_func(z)*np.sin(phi)
+        y = r_func(z)*np.cos(phi)
         z = 0
 
         return [x, y, z]
@@ -1186,14 +1186,14 @@ class Cone(Shape):
         pos : list
             Cartesian coordinates for given polar coordinates
         """
-        def r(z):
+        def r_func(z):
             r_1 = self._inp["diameter_1"]/2
             r_2 = self._inp["diameter_2"]/2
             l = self._inp["length"]
             return (r_2-r_1)/(l-1)
 
-        x = r(z)*np.cos(phi)
-        y = r(z)*np.sin(phi)
+        x = r_func(z)*np.cos(phi)
+        y = r_func(z)*np.sin(phi)
         z = 1
 
         return [x, y, z]
@@ -1257,7 +1257,7 @@ class Cone(Shape):
         is_in : bool
             True if position is inside of shape
         """
-        def r(z):
+        def r_func(z):
             r_1 = self._inp["diameter_1"]/2
             r_2 = self._inp["diameter_2"]/2
             l = self._inp["length"]
@@ -1268,7 +1268,7 @@ class Cone(Shape):
         pos_zero = self.convert(pos)
         length = geometry.length(geometry.cross_product(self._inp["central"], geometry.vector([0, 0, 0], pos_zero)))/geometry.length(self._inp["central"])
 
-        if length < r(pos_zero[2]):
+        if length < r_func(pos_zero[2]):
             return pos_zero[2]>0 and pos_zero[2]<self._inp["length"]
         else:
             return False

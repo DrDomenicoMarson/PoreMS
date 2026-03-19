@@ -1,3 +1,4 @@
 - use the mamba "pore" environment to run poreMS
 - you can install any needed package in the mamba "pore" environment
 - the project is a work-in-progress, we don't mind changing the API or refactoring as long it improves the code and simplify/fix things
+- we don't need to keep backward-compatibility

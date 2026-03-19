@@ -1,5 +1,6 @@
 import os
 import sys
+import warnings
 
 import shutil
 import unittest
@@ -941,6 +942,98 @@ class UserModelCase(unittest.TestCase):
         pore.finalize()
         pore.store("output/kit_narrow/")
 
+    def test_porekit_percent_shape_specific(self):
+        pore = pms.PoreKit()
+        pore.structure(pms.BetaCristobalit().generate([7, 7, 10], "z"))
+        pore.build()
+        pore.add_shape(
+            pore.shape_cylinder(4, 5, [3.5, 3.5, 2.5]),
+            section=pms.ShapeSection(z=(0, 5)),
+        )
+        pore.add_shape(
+            pore.shape_cylinder(3, 5, [3.5, 3.5, 7.5]),
+            section=pms.ShapeSection(z=(5, 10)),
+        )
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always", RuntimeWarning)
+            pore.prepare()
+
+        site_lookup = pore._pore.get_sites()
+        sites_by_shape = pore._pore.sites_sl_shape
+        valid_shape_keys = sorted(
+            shape_key for shape_key in sites_by_shape
+            if shape_key < len(pore.shape())
+        )
+        self.assertEqual(valid_shape_keys, [0, 1])
+
+        global_geminal_count = sum(
+            1
+            for site in site_lookup.values()
+            if site.site_type == "in" and site.oxygen_count == 2
+        )
+
+        selected_shape = None
+        for shape_key in valid_shape_keys:
+            shape_sites = sites_by_shape[shape_key]
+            shape_oh_count = sum(site_lookup[site_id].oxygen_count for site_id in shape_sites)
+            buggy_oh_count = len(shape_sites) + global_geminal_count
+            for percent in range(10, 101, 5):
+                correct_amount = int(percent / 100 * shape_oh_count)
+                buggy_amount = int(percent / 100 * buggy_oh_count)
+                if (
+                    correct_amount > 0
+                    and correct_amount <= len(shape_sites)
+                    and correct_amount != buggy_amount
+                ):
+                    selected_shape = (
+                        shape_key,
+                        percent,
+                        correct_amount,
+                        buggy_amount,
+                    )
+                    break
+            if selected_shape is not None:
+                break
+
+        self.assertIsNotNone(selected_shape)
+        shape_key, percent, expected_amount, buggy_amount = selected_shape
+        marker = pms.gen.tms()
+        marker.set_short("TMSP")
+        pore.attach(
+            marker,
+            0,
+            [0, 1],
+            percent,
+            "in",
+            inp="percent",
+            shape=f"shape_{shape_key}",
+            trials=2000,
+            is_proxi=False,
+        )
+
+        site_dict = pore._pore.get_site_dict()["in"]
+        attached_count = len(site_dict.get("TMSP", [])) + len(site_dict.get("TMSPG", []))
+        self.assertEqual(attached_count, expected_amount)
+        self.assertNotEqual(attached_count, buggy_amount)
+
+        table = pore.table()
+        shape_label = f"Pore {shape_key + 1}"
+        self.assertEqual(list(table.columns), ["Interior", "Exterior"])
+        self.assertIn(
+            f"Surface chemistry - Before Functionalization ({shape_label})",
+            table.index,
+        )
+        self.assertIn(
+            f"Surface chemistry - After Functionalization ({shape_label})",
+            table.index,
+        )
+        self.assertTrue(
+            any(
+                label.startswith(f"    {shape_label} Number of ")
+                for label in table.index
+            )
+        )
+
     def test_pore_cylinder(self):
         # self.skipTest("Temporary")
 
@@ -976,7 +1069,12 @@ class UserModelCase(unittest.TestCase):
         # Finalize
         pore.finalize()
         pore.store("output/cylinder/")
-        print(pore.table())
+        table = pore.table()
+        print(table)
+        self.assertEqual(list(table.columns), ["Interior", "Exterior"])
+        self.assertIn("Surface area (nm^2)", table.index)
+        self.assertIn("Surface chemistry - Before Functionalization", table.index)
+        self.assertIn("Surface chemistry - After Functionalization", table.index)
 
         ## Properties
         roughness = pore.roughness()

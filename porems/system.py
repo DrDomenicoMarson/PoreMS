@@ -21,6 +21,7 @@ _VALID_SHAPE_TYPES = {"CYLINDER", "SLIT", "SPHERE", "CONE"}
 _VALID_ATTACH_INPUTS = {"num", "molar", "percent"}
 _VALID_SITE_TYPES = {"in", "ex"}
 _VALID_SPECIAL_SYMMETRIES = {"point", "mirror"}
+_UNASSIGNED_SHAPE_KEY = 20
 
 
 @dataclass
@@ -843,12 +844,13 @@ class PoreKit():
         Returns
         -------
         shape_sites : dict
-            Mapping of shape ids to matching site ids, with key ``20`` used for
-            unassigned sites when needed.
+            Mapping of shape ids to matching site ids, with
+            :data:`_UNASSIGNED_SHAPE_KEY` used for unassigned sites when
+            needed.
         """
         analyses = self._shape_analyses()
         shape_sites = {analysis.shape_id: [] for analysis in analyses}
-        shape_sites[20] = []
+        shape_sites[_UNASSIGNED_SHAPE_KEY] = []
 
         for site_id in site_ids:
             pos = self._pore.get_block().pos(site_id)
@@ -860,10 +862,10 @@ class PoreKit():
                     if not allow_multiple_matches:
                         break
             if not matched:
-                shape_sites[20].append(site_id)
+                shape_sites[_UNASSIGNED_SHAPE_KEY].append(site_id)
 
-        if not shape_sites[20]:
-            del shape_sites[20]
+        if not shape_sites[_UNASSIGNED_SHAPE_KEY]:
+            del shape_sites[_UNASSIGNED_SHAPE_KEY]
 
         return shape_sites
 
@@ -881,10 +883,35 @@ class PoreKit():
 
         Returns
         -------
-        site_groups : dict or list
+        site_groups : dict[int, list]
             Shape-indexed site groups used for diameter and roughness.
         """
-        return self.sites_shape if self.sites_shape else self._si_pos_in
+        if self.sites_shape:
+            return self.sites_shape
+        return {
+            shape_id: positions
+            for shape_id, positions in enumerate(self._si_pos_in)
+        }
+
+    def _site_oh_count(self, site_ids):
+        """Return the total number of OH handles across selected sites.
+
+        Parameters
+        ----------
+        site_ids : list[int]
+            Silicon site identifiers that should contribute to the count.
+
+        Returns
+        -------
+        count : int
+            Total number of oxygen handles remaining on the selected sites.
+        """
+        site_lookup = self._pore.get_sites()
+        return sum(
+            site_lookup[site_id].oxygen_count
+            for site_id in site_ids
+            if site_id in site_lookup
+        )
 
     def _collect_shape_radii(self):
         """Collect per-shape radii for diameter and roughness analysis.
@@ -899,7 +926,7 @@ class PoreKit():
         analyses = self._shape_analyses()
 
         for analysis in analyses:
-            entries = site_groups.get(analysis.shape_id, []) if isinstance(site_groups, dict) else site_groups[analysis.shape_id]
+            entries = site_groups.get(analysis.shape_id, [])
             radii_temp = []
             for entry in entries:
                 radius = analysis.radius_from_position(self._resolve_site_position(entry))
@@ -1084,12 +1111,12 @@ class PoreKit():
         self._init_site_tracking()
         self.sites_sl_shape = self._classify_interior_sites(self._site_in, allow_multiple_matches=True)
 
-        # If every site match to one shape drop dictonary "20"
-        if 20 in self.sites_sl_shape:
-            self._pore.sites_attach_mol[20] = ShapeAttachmentSummary()
+        # If every site matches one shape, drop the unassigned bucket.
+        if _UNASSIGNED_SHAPE_KEY in self.sites_sl_shape:
+            self._pore.sites_attach_mol[_UNASSIGNED_SHAPE_KEY] = ShapeAttachmentSummary()
         else:
-            self.sites_shape.pop(20, None)
-            self._pore.sites_attach_mol.pop(20, None)
+            self.sites_shape.pop(_UNASSIGNED_SHAPE_KEY, None)
+            self._pore.sites_attach_mol.pop(_UNASSIGNED_SHAPE_KEY, None)
 
         # Preserve the historical analysis path for systems without interior
         # siloxane adjustment. In that case diameter/roughness should continue
@@ -1218,10 +1245,10 @@ class PoreKit():
         # Find free binding sites of Si atoms in the structure
         if site_type=="in":
             self._init_site_tracking()
-            self._pore.sites_attach_mol[20] = ShapeAttachmentSummary()
+            self._pore.sites_attach_mol[_UNASSIGNED_SHAPE_KEY] = ShapeAttachmentSummary()
             self.sites_shape = self._classify_interior_sites(sites, allow_multiple_matches=False)
-            if 20 not in self.sites_shape:
-                self._pore.sites_attach_mol.pop(20, None)
+            if _UNASSIGNED_SHAPE_KEY not in self.sites_shape:
+                self._pore.sites_attach_mol.pop(_UNASSIGNED_SHAPE_KEY, None)
             else:
                 self._warn_unassigned_interior_sites()
 
@@ -1230,7 +1257,7 @@ class PoreKit():
             interior_shape_items = [
                 (shape_id, shape_sites)
                 for shape_id, shape_sites in self.sites_shape.items()
-                if shape_id != 20
+                if shape_id != _UNASSIGNED_SHAPE_KEY
             ]
             for hydro_value, surface, (_, shape_sites) in zip(
                 hydro,
@@ -1315,9 +1342,14 @@ class PoreKit():
         pos_list = [] if pos_list is None else pos_list
 
         saved_unassigned_sites = None
-        had_unassigned_sites = shape == "all" and 20 in self._pore.sites_sl_shape
+        had_unassigned_sites = (
+            shape == "all"
+            and _UNASSIGNED_SHAPE_KEY in self._pore.sites_sl_shape
+        )
         if had_unassigned_sites:
-            saved_unassigned_sites = self._pore.sites_sl_shape.pop(20)
+            saved_unassigned_sites = self._pore.sites_sl_shape.pop(
+                _UNASSIGNED_SHAPE_KEY
+            )
 
         try:
             amount_list = {}
@@ -1345,28 +1377,16 @@ class PoreKit():
             elif inp == "percent":
                 if site_type == "in" and shape != "all":
                     sites = self._pore.sites_sl_shape[int(shape[-1])]
-                    num_oh = len(sites)
-                    num_oh += sum(
-                        1 for site_props in self._pore.get_sites().values()
-                        if site_props.oxygen_count == 2 and site_props.site_type == site_type
-                    )
+                    num_oh = self._site_oh_count(sites)
                     amount = int(amount / 100 * num_oh)
                 elif site_type == "in" and shape == "all":
                     for sites_shape_idx in self._pore.sites_sl_shape:
                         sites = self._pore.sites_sl_shape[sites_shape_idx]
-                        num_oh = len(sites)
-                        num_oh += sum(
-                            1 for site_props in self._pore.get_sites().values()
-                            if site_props.oxygen_count == 2 and site_props.site_type == site_type
-                        )
+                        num_oh = self._site_oh_count(sites)
                         amount_list[sites_shape_idx] = int(amount / 100 * num_oh)
                 elif site_type == "ex":
                     sites = self._site_ex
-                    num_oh = len(sites)
-                    num_oh += sum(
-                        1 for site_props in self._pore.get_sites().values()
-                        if site_props.oxygen_count == 2 and site_props.site_type == site_type
-                    )
+                    num_oh = self._site_oh_count(sites)
                     amount = int(amount / 100 * num_oh)
 
             else:
@@ -1447,7 +1467,7 @@ class PoreKit():
                     self._sort_list.append(attached_mol.get_short())
         finally:
             if had_unassigned_sites:
-                self._pore.sites_sl_shape[20] = saved_unassigned_sites
+                self._pore.sites_sl_shape[_UNASSIGNED_SHAPE_KEY] = saved_unassigned_sites
 
     ################
     # Finalization #
@@ -1664,6 +1684,7 @@ class PoreKit():
         for i, shape_spec in enumerate(self._shapes):
             shape_config = self._shape_config(shape_spec)
             centroid = shape_config.centroid
+            length = None
             if shape_spec.shape_type != "SPHERE":
                 length = shape_config.length
             if shape_spec.shape_type == "CYLINDER":
@@ -1699,7 +1720,7 @@ class PoreKit():
                         )
                     ).volume()
                 )
-            if shape_spec.shape_type == "CONE":
+            elif shape_spec.shape_type == "CONE":
                 volume.append(
                     pms.Cone(
                         ConeConfig(
@@ -1742,6 +1763,7 @@ class PoreKit():
         for i, shape_spec in enumerate(self._shapes):
             shape_config = self._shape_config(shape_spec)
             centroid = shape_config.centroid
+            length = None
             if shape_spec.shape_type != "SPHERE":
                 length = shape_config.length
             if shape_spec.shape_type == "CYLINDER":
@@ -1777,7 +1799,7 @@ class PoreKit():
                         )
                     ).surface()
                 )
-            if shape_spec.shape_type == "CONE":
+            elif shape_spec.shape_type == "CONE":
                 surf_in.append(
                     pms.Cone(
                         ConeConfig(
@@ -1806,7 +1828,7 @@ class PoreKit():
                 surf_ex.append(self._box[0]*(self._box[1]-diam[section]))
             elif self._shapes[section].shape_type=="SPHERE":
                 surf_ex.append(self._box[0]*self._box[1]-math.pi*(diam[section]/2)**2)
-            if self._shapes[section].shape_type=="CONE":
+            elif self._shapes[section].shape_type=="CONE":
                 surf_ex.append(0)
 
         return SurfaceAreaSummary(
@@ -1944,6 +1966,147 @@ class PoreKit():
         """
         return self._shapes
 
+    def _table_set_row(self, data, label, interior, exterior):
+        """Store one interior/exterior row in the table payload.
+
+        Parameters
+        ----------
+        data : dict
+            Table payload with ``"Interior"`` and ``"Exterior"`` sections.
+        label : str
+            Row label.
+        interior : str or list
+            Interior cell value.
+        exterior : str or list
+            Exterior cell value.
+        """
+        data["Interior"][label] = interior
+        data["Exterior"][label] = exterior
+
+    def _table_shape_label(self, shape_key):
+        """Return the label used for per-shape table sections.
+
+        Parameters
+        ----------
+        shape_key : int
+            Shape identifier or the unassigned-site sentinel.
+
+        Returns
+        -------
+        label : str
+            Human-readable shape label used in the table output.
+        """
+        if shape_key == _UNASSIGNED_SHAPE_KEY:
+            return "Unassigned binding sites"
+        return f"Pore {shape_key + 1}"
+
+    def _table_add_shape_summary_rows(self, data, shape_key, summary, form, surface_value=None):
+        """Add pre-functionalization per-shape rows to the table payload.
+
+        Parameters
+        ----------
+        data : dict
+            Table payload with ``"Interior"`` and ``"Exterior"`` sections.
+        shape_key : int
+            Shape identifier or the unassigned-site sentinel.
+        summary : ShapeAttachmentSummary
+            Per-shape surface summary.
+        form : str
+            Numeric formatting pattern.
+        surface_value : float, optional
+            Shape surface area used for hydroxylation density formatting.
+        """
+        shape_label = self._table_shape_label(shape_key)
+        hydroxylation = " "
+        if surface_value is not None and surface_value > 0:
+            hydroxylation = form % pms.utils.mols_to_mumol_m2(
+                summary.total_oh(),
+                surface_value,
+            )
+
+        self._table_set_row(
+            data,
+            f"Surface chemistry - Before Functionalization ({shape_label})",
+            " ",
+            " ",
+        )
+        self._table_set_row(
+            data,
+            f"    {shape_label} Number of single silanol groups",
+            f"{summary.single_silanol_sites:d}",
+            " ",
+        )
+        self._table_set_row(
+            data,
+            f"    {shape_label} Number of geminal silanol groups",
+            f"{summary.geminal_silanol_sites:d}",
+            " ",
+        )
+        self._table_set_row(
+            data,
+            f"    {shape_label} Number of siloxane bridges",
+            f"{summary.siloxane_bridges:d}",
+            " ",
+        )
+        self._table_set_row(
+            data,
+            f"    {shape_label} Total number of OH groups",
+            f"{summary.total_oh():d}",
+            " ",
+        )
+        self._table_set_row(
+            data,
+            f"    {shape_label} Overall hydroxylation (mumol/m^2)",
+            hydroxylation,
+            " ",
+        )
+
+    def _table_add_shape_molecule_rows(self, data, shape_key, summary, form, surface_value=None):
+        """Add post-functionalization per-shape rows to the table payload.
+
+        Parameters
+        ----------
+        data : dict
+            Table payload with ``"Interior"`` and ``"Exterior"`` sections.
+        shape_key : int
+            Shape identifier or the unassigned-site sentinel.
+        summary : ShapeAttachmentSummary
+            Per-shape surface summary.
+        form : str
+            Numeric formatting pattern.
+        surface_value : float, optional
+            Shape surface area used for density formatting.
+        """
+        items = list(summary.molecule_items())
+        if not items:
+            return
+
+        shape_label = self._table_shape_label(shape_key)
+        self._table_set_row(
+            data,
+            f"Surface chemistry - After Functionalization ({shape_label})",
+            " ",
+            " ",
+        )
+
+        for mol, count in items:
+            density = " "
+            if surface_value is not None and surface_value > 0:
+                density = form % pms.utils.mols_to_mumol_m2(count, surface_value)
+
+            self._table_set_row(
+                data,
+                f"    {shape_label} Number of {mol} groups",
+                f"{count:d}",
+                " ",
+            )
+            self._table_set_row(
+                data,
+                f"    {shape_label} {mol} density (mumol/m^2)",
+                density,
+                " ",
+            )
+
     #########
     # Table #
     #########
@@ -1961,133 +2124,173 @@ class PoreKit():
             Formatted table containing geometry, hydroxylation, and allocation
             summaries for interior and exterior surfaces.
         """
-        # Initialize
         form = "%."+str(decimals)+"f"
-
-        # Get allocation data
         allocation = self.allocation()
-
-        # Get properties
         surf = self.surface()
-        surface_in_by_shape = self.surface(is_sum=False).interior
+        surface_summary = self.surface(is_sum=False)
+        surface_in_by_shape = surface_summary.interior
         roughness = self.roughness()
-
-        # Save data
+        diameters = self.diameter()
+        volumes = self.volume(is_sum=False)
+        site_values = list(self._pore.get_sites().values())
         data = {"Interior": {}, "Exterior": {}}
 
-        data["Interior"]["Silica block xyz-dimensions (nm)"] = " "
-        data["Exterior"]["Silica block xyz-dimensions (nm)"] = "["+form%self.box()[0]+", "+form%self.box()[1]+", "+form%(self.box()[2]-2*self.reservoir())+"]"
-        data["Interior"]["Simulation box xyz-dimensions (nm)"] = " "
-        data["Exterior"]["Simulation box xyz-dimensions (nm)"] = "["+form%self.box()[0]+", "+form%self.box()[1]+", "+form%self.box()[2]+"]"
-        data["Interior"]["Surface roughness (nm)"] = [form%val for val in roughness.interior]
-        data["Exterior"]["Surface roughness (nm)"] = form%roughness.exterior
-        for i, val in enumerate(self.diameter()):
-            data["Interior"]["Pore "+ str(i+1) +" diameter (nm)"] = form%val
-            data["Exterior"]["Pore "+ str(i+1) +" diameter (nm)"] = " "
-        data["Interior"]["Solvent reservoir z-dimension (nm)"] = " "
-        data["Exterior"]["Solvent reservoir z-dimension (nm)"] = form%self.reservoir()
-        for i,val in enumerate(self.volume(is_sum=False)):
-            data["Interior"]["Pore "+ str(i+1) +" volume (nm^3)"] = form%val
-            data["Exterior"]["Pore "+ str(i+1) +" volume (nm^3)"] = " "
-        data["Interior"]["Pore volume (nm^3)"] = form%self.volume()
-        data["Exterior"]["Pore volume (nm^3)"] = " "
-        data["Interior"]["Solvent reservoir volume (nm^3)"] = " "
-        data["Exterior"]["Solvent reservoir volume (nm^3)"] = "2 * "+form%(self.box()[0]*self.box()[1]*self.reservoir())
-        for i,val in enumerate(self.surface(is_sum=False).interior):
-            data["Interior"]["Surface "+ str(i+1) +" area (nm^2)"] = form%val
-            data["Exterior"]["Surface "+ str(i+1) +" area (nm^2)"] = " "
-        data["Interior"]["Surface area (nm^2)"] = form%surf.interior
-        data["Exterior"]["Surface area (nm^2)"] = "2 * "+form%(surf.exterior/2)
+        self._table_set_row(
+            data,
+            "Silica block xyz-dimensions (nm)",
+            " ",
+            "["+form%self.box()[0]+", "+form%self.box()[1]+", "+form%(self.box()[2]-2*self.reservoir())+"]",
+        )
+        self._table_set_row(
+            data,
+            "Simulation box xyz-dimensions (nm)",
+            " ",
+            "["+form%self.box()[0]+", "+form%self.box()[1]+", "+form%self.box()[2]+"]",
+        )
+        self._table_set_row(
+            data,
+            "Surface roughness (nm)",
+            [form%val for val in roughness.interior],
+            form%roughness.exterior,
+        )
+        for i, val in enumerate(diameters):
+            self._table_set_row(
+                data,
+                "Pore "+ str(i+1) +" diameter (nm)",
+                form%val,
+                " ",
+            )
+        self._table_set_row(
+            data,
+            "Solvent reservoir z-dimension (nm)",
+            " ",
+            form%self.reservoir(),
+        )
+        for i, val in enumerate(volumes):
+            self._table_set_row(
+                data,
+                "Pore "+ str(i+1) +" volume (nm^3)",
+                form%val,
+                " ",
+            )
+        self._table_set_row(data, "Pore volume (nm^3)", form%self.volume(), " ")
+        self._table_set_row(
+            data,
+            "Solvent reservoir volume (nm^3)",
+            " ",
+            "2 * "+form%(self.box()[0]*self.box()[1]*self.reservoir()),
+        )
+        for i, val in enumerate(surface_in_by_shape):
+            self._table_set_row(
+                data,
+                "Surface "+ str(i+1) +" area (nm^2)",
+                form%val,
+                " ",
+            )
+        self._table_set_row(data, "Surface area (nm^2)", form%surf.interior, "2 * "+form%(surf.exterior/2))
 
-        data["Interior"]["Surface chemistry - Before Functionalization"] = " "
-        data["Exterior"]["Surface chemistry - Before Functionalization"] = " "
-        data["Interior"]["    Number of single silanol groups"] = "%i"%sum(
-            1 for x in self._pore.get_sites().values() if x.oxygen_count == 1 and x.site_type == "in"
+        self._table_set_row(
+            data,
+            "Surface chemistry - Before Functionalization",
+            " ",
+            " ",
         )
-        data["Exterior"]["    Number of single silanol groups"] = "%i"%sum(
-            1 for x in self._pore.get_sites().values() if x.oxygen_count == 1 and x.site_type == "ex"
+        self._table_set_row(
+            data,
+            "    Number of single silanol groups",
+            "%i"%sum(1 for x in site_values if x.oxygen_count == 1 and x.site_type == "in"),
+            "%i"%sum(1 for x in site_values if x.oxygen_count == 1 and x.site_type == "ex"),
         )
-        data["Interior"]["    Number of geminal silanol groups"] = "%i"%sum(
-            1 for x in self._pore.get_sites().values() if x.oxygen_count == 2 and x.site_type == "in"
+        self._table_set_row(
+            data,
+            "    Number of geminal silanol groups",
+            "%i"%sum(1 for x in site_values if x.oxygen_count == 2 and x.site_type == "in"),
+            "%i"%sum(1 for x in site_values if x.oxygen_count == 2 and x.site_type == "ex"),
         )
-        data["Exterior"]["    Number of geminal silanol groups"] = "%i"%sum(
-            1 for x in self._pore.get_sites().values() if x.oxygen_count == 2 and x.site_type == "ex"
+        self._table_set_row(
+            data,
+            "    Number of siloxane bridges",
+            "%i"%allocation["SLX"].interior.count if "SLX" in allocation else "0",
+            "%i"%allocation["SLX"].exterior.count if "SLX" in allocation else "0",
         )
-        data["Interior"]["    Number of siloxane bridges"] = "%i"%allocation["SLX"].interior.count if "SLX" in allocation else "0"
-        data["Exterior"]["    Number of siloxane bridges"] = "%i"%allocation["SLX"].exterior.count if "SLX" in allocation else "0"
-        data["Interior"]["    Total number of OH groups"] = "%i"%allocation["Hydro"].interior.count
-        data["Exterior"]["    Total number of OH groups"] = "%i"%allocation["Hydro"].exterior.count
-        data["Interior"]["    Overall hydroxylation (mumol/m^2)"] = form%allocation["Hydro"].interior.density_mumol_m2
-        data["Exterior"]["    Overall hydroxylation (mumol/m^2)"] = form%allocation["Hydro"].exterior.density_mumol_m2
+        self._table_set_row(
+            data,
+            "    Total number of OH groups",
+            "%i"%allocation["Hydro"].interior.count,
+            "%i"%allocation["Hydro"].exterior.count,
+        )
+        self._table_set_row(
+            data,
+            "    Overall hydroxylation (mumol/m^2)",
+            form%allocation["Hydro"].interior.density_mumol_m2,
+            form%allocation["Hydro"].exterior.density_mumol_m2,
+        )
 
         sites_attach_mol = getattr(self._pore, "sites_attach_mol", None)
         if sites_attach_mol is not None:
             for i in sites_attach_mol:
-                summary = sites_attach_mol[i]
-                if i != 20:
-                    data["Interior"]["Surface chemistry - Before Functionalization (Pore " + str(i+1) +")"] = " "
-                    data["Exterior"]["Surface chemistry - Before Functionalization (Pore " + str(i+1) +")"] = " "
-                    data["Interior"]["    Pore " + str(i+1) + " Number of single silanol groups"] = "%i"%summary.single_silanol_sites
-                    data["Exterior"]["    Pore " + str(i+1) + " Number of single silanol groups"] = " "
-                    data["Interior"]["    Pore " + str(i+1) + " Number of geminal silanol groups"] = "%i"%summary.geminal_silanol_sites
-                    data["Exterior"]["    Pore " + str(i+1) + " Number of geminal silanol groups"] = " "
-                    data["Interior"]["    Pore " + str(i+1) + " Number of siloxane bridges"] = "%i"%summary.siloxane_bridges
-                    data["Exterior"]["    Pore " + str(i+1) + " Number of siloxane bridges"] = " "
-                    data["Interior"]["    Pore " + str(i+1) + " Total number of OH groups"] = "%i"%summary.total_oh()
-                    data["Exterior"]["    Pore " + str(i+1) + " Total number of OH groups"] = " "
-                    data["Interior"]["    Pore " + str(i+1) + " Overall hydroxylation (mumol/m^2)"] = form%(
-                        pms.utils.mols_to_mumol_m2(summary.total_oh(), surface_in_by_shape[i])
-                    )
-                    data["Exterior"]["    Pore " + str(i+1) + " Overall hydroxylation (mumol/m^2)"] = " "
-                elif i == 20:
-                    data["Interior"]["Surface chemistry - Before Functionalization (Unassigned binding sites)"] = " "
-                    data["Exterior"]["Surface chemistry - Before Functionalization (Unassigned binding sites)"] = " "
-                    data["Interior"]["    Unassigned binding sites" + " Number of single silanol groups"] = "%i"%summary.single_silanol_sites
-                    data["Exterior"]["    Unassigned binding sites" + " Number of single silanol groups"] = " "
-                    data["Interior"]["    Unassigned binding sites" + " Number of geminal silanol groups"] = "%i"%summary.geminal_silanol_sites
-                    data["Exterior"]["    Unassigned binding sites" + " Number of geminal silanol groups"] = " "
-                    data["Interior"]["    Unassigned binding sites" + " Number of siloxane bridges"] = "%i"%summary.siloxane_bridges
-                    data["Exterior"]["    Unassigned binding sites" + " Number of siloxane bridges"] = " "
-                    data["Interior"]["    Unassigned binding sites" + " Total number of OH groups"] = "%i"%summary.total_oh()
-                    data["Exterior"]["    Unassigned binding sites" + " Total number of OH groups"] = " "
-                    data["Interior"]["    Unassigned binding sites" + " Overall hydroxylation (mumol/m^2)"] = " "
-                    data["Exterior"]["    Unassigned binding sites" + " Overall hydroxylation (mumol/m^2)"] = " "
+                surface_value = None
+                if i != _UNASSIGNED_SHAPE_KEY:
+                    surface_value = surface_in_by_shape[i]
+                self._table_add_shape_summary_rows(
+                    data,
+                    i,
+                    sites_attach_mol[i],
+                    form,
+                    surface_value=surface_value,
+                )
 
-
-        data["Interior"]["Surface chemistry - After Functionalization"] = " "
-        data["Exterior"]["Surface chemistry - After Functionalization"] = " "
+        self._table_set_row(
+            data,
+            "Surface chemistry - After Functionalization",
+            " ",
+            " ",
+        )
         for mol in allocation.keys():
             if mol not in ["SL", "SLG", "SLX", "Hydro", "OH"]:
-                data["Interior"]["    Number of "+mol+" groups"] = "%i"%allocation[mol].interior.count
-                data["Exterior"]["    Number of "+mol+" groups"] = "%i"%allocation[mol].exterior.count
-                data["Interior"]["    "+mol+" density (mumol/m^2)"] = form%allocation[mol].interior.density_mumol_m2
-                data["Exterior"]["    "+mol+" density (mumol/m^2)"] = form%allocation[mol].exterior.density_mumol_m2
-        data["Interior"]["    Bonded-phase density (mumol/m^2)"] = form%(allocation["Hydro"].interior.density_mumol_m2-allocation["OH"].interior.density_mumol_m2)
-        data["Exterior"]["    Bonded-phase density (mumol/m^2)"] = form%(allocation["Hydro"].exterior.density_mumol_m2-allocation["OH"].exterior.density_mumol_m2)
-        data["Interior"]["    Number of residual OH groups"] = "%i"%allocation["OH"].interior.count
-        data["Exterior"]["    Number of residual OH groups"] = "%i"%allocation["OH"].exterior.count
-        data["Interior"]["    Residual hydroxylation (mumol/m^2)"] = form%allocation["OH"].interior.density_mumol_m2
-        data["Exterior"]["    Residual hydroxylation (mumol/m^2)"] = form%allocation["OH"].exterior.density_mumol_m2
+                self._table_set_row(
+                    data,
+                    "    Number of "+mol+" groups",
+                    "%i"%allocation[mol].interior.count,
+                    "%i"%allocation[mol].exterior.count,
+                )
+                self._table_set_row(
+                    data,
+                    "    "+mol+" density (mumol/m^2)",
+                    form%allocation[mol].interior.density_mumol_m2,
+                    form%allocation[mol].exterior.density_mumol_m2,
+                )
+        self._table_set_row(
+            data,
+            "    Bonded-phase density (mumol/m^2)",
+            form%(allocation["Hydro"].interior.density_mumol_m2-allocation["OH"].interior.density_mumol_m2),
+            form%(allocation["Hydro"].exterior.density_mumol_m2-allocation["OH"].exterior.density_mumol_m2),
+        )
+        self._table_set_row(
+            data,
+            "    Number of residual OH groups",
+            "%i"%allocation["OH"].interior.count,
+            "%i"%allocation["OH"].exterior.count,
+        )
+        self._table_set_row(
+            data,
+            "    Residual hydroxylation (mumol/m^2)",
+            form%allocation["OH"].interior.density_mumol_m2,
+            form%allocation["OH"].exterior.density_mumol_m2,
+        )
 
         if sites_attach_mol is not None:
             for i in sites_attach_mol:
-                for mol, count in sites_attach_mol[i].molecule_items():
-                    if i == 20:
-                        data["Interior"]["Surface chemistry - After Functionalization (Unassigned binding sites)"] = " "
-                        data["Exterior"]["Surface chemistry - After Functionalization (Unassigned binding sites)"] = " "
-                        data["Interior"]["    Unassigned binding sites" + " Number of "+mol+" groups"] = "%i"%count
-                        data["Exterior"]["    Unassigned binding sites" + " Number of "+mol+" groups"] = " "
-                        data["Interior"]["    Unassigned binding sites" + " "+mol+" density (mumol/m^2)"] = " "
-                        data["Exterior"]["    Unassigned binding sites" + " "+mol+" density (mumol/m^2)"] = " "
-                    else:
-                        data["Interior"]["Surface chemistry - After Functionalization (Pore " + str(i+1) +")"] = " "
-                        data["Exterior"]["Surface chemistry - After Functionalization (Pore " + str(i+1) +")"] = " "
-                        data["Interior"]["    Pore " + str(i+1) + " Number of "+mol+" groups"] = "%i"%count
-                        data["Exterior"]["    Pore " + str(i+1) + " Number of "+mol+" groups"] = " "
-                        data["Interior"]["    Pore " + str(i+1) + " "+mol+" density (mumol/m^2)"] = form%(
-                            pms.utils.mols_to_mumol_m2(count, surface_in_by_shape[i])
-                        )
-                        data["Exterior"]["    Pore " + str(i+1) + " "+mol+" density (mumol/m^2)"] = " "
+                surface_value = None
+                if i != _UNASSIGNED_SHAPE_KEY:
+                    surface_value = surface_in_by_shape[i]
+                self._table_add_shape_molecule_rows(
+                    data,
+                    i,
+                    sites_attach_mol[i],
+                    form,
+                    surface_value=surface_value,
+                )
         return pd.DataFrame.from_dict(data)
 
 
