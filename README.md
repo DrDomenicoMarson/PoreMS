@@ -19,9 +19,9 @@ An examplary [workflow](https://porems.github.io/PoreMS/workflow.html) has been 
 
 ## Dependencies
 
-PoreMS supports Python 3.11-3.14.
+PoreMS targets Python 3.14.
 
-Installation requires [numpy](https://numpy.org/), [pandas](https://pandas.pydata.org/) and [matplotlib](https://matplotlib.org/).
+Installation requires [numpy](https://numpy.org/), [pandas](https://pandas.pydata.org/), [matplotlib](https://matplotlib.org/), [seaborn](https://seaborn.pydata.org/) and [PyYAML](https://pyyaml.org/).
 
 ## Search Execution Policy
 
@@ -45,9 +45,36 @@ bond_list = dice.find(None, ["Si", "O"], [0.145, 0.165], policy=policy)
 If you explicitly request `SearchExecution.PROCESSES`, run PoreMS from a file-backed `__main__` entrypoint such as a normal script or `python -m unittest ...`.
 
 
+## Bare Amorphous Slit Workflow
+
+PoreMS exposes a high-level workflow for building the periodic bare amorphous
+silica slit used in the current local studies.
+
+```python
+import porems as pms
+
+config = pms.BareAmorphousSlitConfig(
+    name="bare_amorphous_silica_slit",
+    slit_width_nm=7.0,
+    repeat_y=2,
+)
+
+result = pms.build_periodic_amorphous_slit(config)
+print(result.report.final_surface)
+
+pms.write_bare_amorphous_slit_study("output/bare_amorphous_slit", config)
+```
+
+`build_periodic_amorphous_slit(...)` returns a `SlitBuildResult` containing the
+generated `PoreKit` system and a structured `SlitBuildReport`.
+`write_bare_amorphous_slit_study(...)` stores the generated structure together
+with a JSON report and workflow notes in the selected output directory.
+
+
 ## Installation
 
-Clone the repository and install it from the repository root in editable mode:
+Create a Python 3.14 environment, then install the repository from the
+repository root in editable mode:
 
     pip install -r requirements.txt
     pip install -e .
@@ -65,6 +92,8 @@ Run the test suite from the repository root after the editable install:
 ## Development
 
 PoreMS development takes place on Github: [www.github.com/porems/PoreMS](https://github.com/porems/PoreMS)
+
+The current repository/documentation version is exposed as `porems.__version__`.
 
 Please submit any reproducible bugs you encounter to the [issue tracker](https://github.com/porems/PoreMS/issues).
 

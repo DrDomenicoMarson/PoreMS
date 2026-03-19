@@ -77,6 +77,23 @@ Optimization
     matrix.Matrix
 
 
+.. _workflow_api:
+
+Workflow
+--------
+
+.. autosummary::
+    :toctree: generated/
+
+    workflows.SurfaceCompositionTarget
+    workflows.BareAmorphousSlitConfig
+    workflows.SurfaceComposition
+    workflows.SlitBuildReport
+    workflows.SlitBuildResult
+    workflows.build_periodic_amorphous_slit
+    workflows.write_bare_amorphous_slit_study
+
+
 .. _utils_api:
 
 Utilities

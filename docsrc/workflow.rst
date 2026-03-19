@@ -14,6 +14,42 @@ In this workflow a simply pore simulation system will be created with TMS as
 surface molecules. Additionally, the GROMACS simulation package will be utilized.
 
 
+Bare Amorphous Slit Workflow
+----------------------------
+
+PoreMS exposes a high-level workflow for building a periodic bare amorphous
+silica slit together with a structured build report.
+
+.. code-block:: python
+
+  import porems as pms
+
+  config = pms.BareAmorphousSlitConfig(
+      name="bare_amorphous_silica_slit",
+      slit_width_nm=7.0,
+      repeat_y=2,
+  )
+
+  result = pms.build_periodic_amorphous_slit(config)
+  print(result.report.final_surface)
+
+  pms.write_bare_amorphous_slit_study("output/bare_amorphous_slit", config)
+
+``build_periodic_amorphous_slit(...)`` returns a ``SlitBuildResult`` containing
+the generated ``PoreKit`` system and a ``SlitBuildReport`` with the final box,
+surface composition, and siloxane summary. The storing helper writes the main
+structure files together with a JSON report and workflow notes for the study
+directory.
+
+The workflow is designed for the current periodic bare-silica slit studies:
+
+* zero exterior sites after preparation
+* replicated amorphous template slabs along ``y``
+* surface-state targeting through ``Q2/Q3/Q4`` fractions
+* study outputs written in one call through
+  ``write_bare_amorphous_slit_study(...)``
+
+
 Create surface molecules
 ------------------------
 

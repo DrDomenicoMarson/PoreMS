@@ -1,3 +1,4 @@
+from ._version import __version__
 from .atom import Atom
 from .dice import Dice, SearchExecution, SearchPolicy
 from .matrix import Matrix
@@ -23,6 +24,7 @@ import porems.geometry as geom
 import porems.utils as utils
 
 __all__ = [
+    "__version__",
     "Atom", "Molecule", "Store",
     "Dice", "SearchExecution", "SearchPolicy", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
