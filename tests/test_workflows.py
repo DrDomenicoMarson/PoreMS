@@ -29,6 +29,10 @@ class BareAmorphousSlitWorkflowCase(unittest.TestCase):
         self.assertEqual(self.report.site_ex, 0)
         self.assertEqual(self.result.system._site_ex, [])
         self.assertEqual(self.result.system._pore.get_site_dict()["ex"], {})
+        self.assertIsInstance(
+            next(iter(self.result.system._pore.get_sites().values())),
+            pms.BindingSite,
+        )
 
         expected_box = [9.605, 19.210, 9.605]
         for actual, expected in zip(self.report.box_nm, expected_box):
@@ -120,6 +124,8 @@ class BareAmorphousSlitWorkflowCase(unittest.TestCase):
         self.assertTrue(hasattr(pms, "SurfaceAreaSummary"))
         self.assertTrue(hasattr(pms, "SurfaceAllocationStats"))
         self.assertTrue(hasattr(pms, "AllocationSummary"))
+        self.assertTrue(hasattr(pms, "BindingSite"))
+        self.assertTrue(hasattr(pms, "ShapeAttachmentSummary"))
 
 
 if __name__ == "__main__":

@@ -27,7 +27,9 @@ Pore
 .. autosummary::
     :toctree: generated/
 
+    pore.BindingSite
     pore.Pore
+    system.ShapeAttachmentSummary
     system.RoughnessProfile
     system.SurfaceAreaSummary
     system.SurfaceAllocationStats

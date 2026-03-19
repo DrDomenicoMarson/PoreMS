@@ -277,16 +277,16 @@ def _surface_composition(total_surface_si, sites):
     ----------
     total_surface_si : int
         Total number of exposed surface silicon atoms tracked by the workflow.
-    sites : dict
-        Current PoreMS binding-site dictionary.
+    sites : dict[int, pms.BindingSite]
+        Current PoreMS binding sites keyed by silicon identifier.
 
     Returns
     -------
     composition : SurfaceComposition
         Surface-site counts.
     """
-    q2_sites = sum(1 for site in sites.values() if site["type"] == "in" and len(site["o"]) == 2)
-    q3_sites = sum(1 for site in sites.values() if site["type"] == "in" and len(site["o"]) == 1)
+    q2_sites = sum(1 for site in sites.values() if site.site_type == "in" and site.is_geminal)
+    q3_sites = sum(1 for site in sites.values() if site.site_type == "in" and site.oxygen_count == 1)
 
     return SurfaceComposition(
         total_surface_si=total_surface_si,
@@ -411,8 +411,8 @@ def _find_pair(sites, adjacency, first_count, second_count):
 
     Parameters
     ----------
-    sites : dict
-        Current binding-site dictionary.
+    sites : dict[int, pms.BindingSite]
+        Current binding sites keyed by silicon identifier.
     adjacency : dict
         Precomputed slit neighbor graph.
     first_count : int
@@ -427,13 +427,13 @@ def _find_pair(sites, adjacency, first_count, second_count):
         found.
     """
     for site_a in sorted(sites):
-        if sites[site_a]["type"] != "in" or len(sites[site_a]["o"]) != first_count:
+        if sites[site_a].site_type != "in" or sites[site_a].oxygen_count != first_count:
             continue
 
         for site_b, distance in adjacency.get(site_a, []):
             if site_b not in sites:
                 continue
-            if sites[site_b]["type"] != "in" or len(sites[site_b]["o"]) != second_count:
+            if sites[site_b].site_type != "in" or sites[site_b].oxygen_count != second_count:
                 continue
             if first_count == second_count and site_b < site_a:
                 continue
@@ -475,7 +475,7 @@ def _siloxane_bridge_molecule(kit, pair):
         pos_a[dim] + (pos_b[dim] - pos_a[dim]) / 2 for dim in range(3)
     ]
 
-    surface_axis = kit._pore.get_sites()[pair[0]]["normal"](center_pos)
+    surface_axis = kit._pore.get_sites()[pair[0]].normal(center_pos)
     molecule.rotate(
         pms.geom.cross_product([0, 0, 1], surface_axis),
         -pms.geom.angle([0, 0, 1], surface_axis),
@@ -515,10 +515,10 @@ def _bridge_pair(kit, pair, distance_range):
         kit._sort_list.append(molecule.get_short())
 
     for site_id in pair:
-        oxygen_id = sites[site_id]["o"][0]
+        oxygen_id = sites[site_id].oxygen_ids[0]
         kit._matrix.strip(oxygen_id)
-        if len(sites[site_id]["o"]) == 2:
-            sites[site_id]["o"].pop(0)
+        if sites[site_id].is_geminal:
+            sites[site_id].oxygen_ids.pop(0)
         else:
             del sites[site_id]
 
@@ -551,7 +551,7 @@ def _refresh_single_slit_tracking(kit, total_surface_si):
         Total number of exposed surface silicon atoms tracked by the workflow.
     """
     sites = kit._pore.get_sites()
-    site_in = sorted(site for site, data in sites.items() if data["type"] == "in")
+    site_in = sorted(site for site, data in sites.items() if data.site_type == "in")
 
     kit._site_in = site_in
     kit._site_ex = []
@@ -563,11 +563,11 @@ def _refresh_single_slit_tracking(kit, total_surface_si):
     composition = _surface_composition(total_surface_si, sites)
     siloxane_num = len(kit._pore.get_site_dict()["in"].get("SLX", []))
     kit._pore.sites_attach_mol = {
-        0: {
-            "SL": composition.q3_sites,
-            "SLG": composition.q2_sites,
-            "SLX": siloxane_num,
-        }
+        0: pms.ShapeAttachmentSummary(
+            single_silanol_sites=composition.q3_sites,
+            geminal_silanol_sites=composition.q2_sites,
+            siloxane_bridges=siloxane_num,
+        )
     }
 
 

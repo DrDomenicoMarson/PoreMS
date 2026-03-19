@@ -9,6 +9,8 @@ import copy
 import random
 
 from collections import Counter
+from dataclasses import dataclass, field
+from typing import Callable
 
 import porems.geometry as geometry
 import porems.generic as generic
@@ -18,6 +20,51 @@ from porems.molecule import Molecule
 
 
 _VALID_SITE_TYPES = {"in", "ex"}
+
+
+@dataclass
+class BindingSite:
+    """Surface silicon binding site with its remaining oxygen handles.
+
+    Parameters
+    ----------
+    oxygen_ids : list[int], optional
+        Surface oxygen atom identifiers currently bound to the silicon site.
+    site_type : str, optional
+        Surface family identifier, ``"in"`` for interior or ``"ex"`` for
+        exterior.
+    is_available : bool, optional
+        True when the site can still accept a new attachment.
+    normal : callable, optional
+        Surface-normal callback used to orient attached molecules at this site.
+    """
+
+    oxygen_ids: list[int] = field(default_factory=list)
+    site_type: str = "in"
+    is_available: bool = True
+    normal: Callable[[list], list] | None = None
+
+    @property
+    def oxygen_count(self):
+        """Return the number of remaining oxygen handles on the site.
+
+        Returns
+        -------
+        count : int
+            Number of oxygen atoms still bound to the silicon site.
+        """
+        return len(self.oxygen_ids)
+
+    @property
+    def is_geminal(self):
+        """Return whether the site is geminal.
+
+        Returns
+        -------
+        is_geminal : bool
+            True when two oxygen handles remain on the silicon site.
+        """
+        return self.oxygen_count == 2
 
 
 class Pore():
@@ -47,6 +94,8 @@ class Pore():
 
         self._num_in_ex = 0
         self._oxygen_ex = []
+        self._sites = {}
+        self.sites_attach_mol = {}
 
         self._mol_dict = {"block": {}, "in": {}, "ex": {}}
 
@@ -207,40 +256,42 @@ class Pore():
     def sites(self):
         """Build the internal binding-site registry.
 
-        Each silicon surface site is mapped to a dictionary containing the
-        unsaturated oxygen atoms bound to it, the site type (``"in"`` or
-        ``"ex"``), and an availability flag that is updated as groups are
-        attached.
+        Each silicon surface site is mapped to a :class:`BindingSite`
+        containing the currently exposed oxygen atoms, the site type
+        (``"in"`` or ``"ex"``), and the availability flag updated during
+        later attachment steps.
         """
         # Get list of surface oxygen atoms
         oxygen_list = self._matrix.bound(1)
         connect = self._matrix.get_matrix()
 
         # Create binding site dictionary
+        self._num_in_ex = 0
         self._sites = {}
         for o in oxygen_list:
-            if not connect[o]["atoms"][0] in self._sites:
-                self._sites[connect[o]["atoms"][0]] = {"o": []}
-            self._sites[connect[o]["atoms"][0]]["o"].append(o)
+            site_id = connect[o]["atoms"][0]
+            if site_id not in self._sites:
+                self._sites[site_id] = BindingSite()
+            self._sites[site_id].oxygen_ids.append(o)
 
         # Fill other information
         for si, data in self._sites.items():
             # Site type
             is_in = False
             is_ex = False
-            for o in data["o"]:
+            for o in data.oxygen_ids:
                 if o in self._oxygen_ex:
                     is_ex = True
                 else:
                     is_in = True
 
-            data["type"] = "ex" if is_ex else "in"
+            data.site_type = "ex" if is_ex else "in"
 
             if is_in and is_ex:
                 self._num_in_ex += 1
 
             # State
-            data["state"] = True
+            data.is_available = True
 
 
     #######################
@@ -331,7 +382,7 @@ class Pore():
                 pos = pos_list[i]
                 min_dist = 100000000
                 for site in sites:
-                    if self._sites[site]["state"]:
+                    if self._sites[site].is_available:
                         length = geometry.length(geometry.vector(self._block.pos(site), pos))
                         if length < min_dist:
                             si = site
@@ -340,8 +391,8 @@ class Pore():
             elif is_random:
                 for j in range(trials):
                     si_rand = random.choice(sites)
-                    if self._sites[si_rand]["state"]:
-                        if (is_g==False and len(self._sites[si_rand]["o"])==2):
+                    if self._sites[si_rand].is_available:
+                        if is_g is False and self._sites[si_rand].is_geminal:
                             pass  
                         else: 
                             si = si_rand                  
@@ -351,25 +402,25 @@ class Pore():
                 si = sites[i] if i<len(sites) else None
 
             # Place molecule on surface
-            if si is not None and self._sites[si]["state"]: 
-                if (is_g==False and len(self._sites[si]["o"])==2):
+            if si is not None and self._sites[si].is_available: 
+                if is_g is False and self._sites[si].is_geminal:
                     pass
                 else:
                     # Disable binding site
-                    self._sites[si]["state"] = False
+                    self._sites[si].is_available = False
                 
                     # Create a copy of the molecule
                     mol_temp = copy.deepcopy(mol)
 
                     # Check if geminal
-                    if len(self._sites[si]["o"])==2:
+                    if self._sites[si].is_geminal:
                         mol_temp.add("O", mount, r=0.164, theta=45)
                         mol_temp.add("H", mol_temp.get_num()-1, r=0.098)
                         mol_temp.set_name(mol.get_name()+"g")
                         mol_temp.set_short(mol.get_short()+"G")
 
                     # Rotate molecule towards surface normal vector
-                    surf_axis = self._sites[si]["normal"](self._block.pos(si))
+                    surf_axis = self._sites[si].normal(self._block.pos(si))
                     mol_temp.rotate(geometry.cross_product([0, 0, 1], surf_axis), -geometry.angle([0, 0, 1], surf_axis))
 
                     # Move molecule to mounting position
@@ -382,7 +433,7 @@ class Pore():
                     self._mol_dict[site_type][mol_temp.get_short()].append(mol_temp)
 
                     # Remove bonds of occupied binding site
-                    self._matrix.strip([si]+self._sites[si]["o"])
+                    self._matrix.strip([si] + self._sites[si].oxygen_ids)
 
                     # Recursively fill sites in proximity with silanol and geminal silanol
                     if is_proxi:
@@ -456,7 +507,7 @@ class Pore():
                     # Check if binding partner is in local si-si matrix
                     if sites.index(si_rand_proxi) in si_matrix:
                         # Check if unbound states
-                        if self._sites[si_rand]["state"] and self._sites[si_rand_proxi]["state"]:
+                        if self._sites[si_rand].is_available and self._sites[si_rand_proxi].is_available:
                             # Check if binding site silicon atoms are already connected with an oxygen
                             is_connected = False
                             for atom_o in bond_matrix[si_rand]["atoms"]:
@@ -469,7 +520,7 @@ class Pore():
                                 break
 
             # Place molecule on surface
-            if si and self._sites[si[0]]["state"] and self._sites[si[1]]["state"]:
+            if si and self._sites[si[0]].is_available and self._sites[si[1]].is_available:
                 # Create a copy of the molecule
                 mol_temp = copy.deepcopy(mol)
 
@@ -478,7 +529,7 @@ class Pore():
                 center_pos = [pos_vec_halve[x]+self._block.pos(si[0])[x] for x in range(self._dim)]
 
                 # Rotate molecule towards surface normal vector
-                surf_axis = self._sites[si[0]]["normal"](center_pos)
+                surf_axis = self._sites[si[0]].normal(center_pos)
                 mol_temp.rotate(geometry.cross_product([0, 0, 1], surf_axis), -geometry.angle([0, 0, 1], surf_axis))
 
                 # Move molecule to mounting position and remove temporary atom
@@ -493,9 +544,9 @@ class Pore():
 
                 # Remove oxygen atom and if not geminal delete site
                 for si_id in si:
-                    self._matrix.strip(self._sites[si_id]["o"][0])
-                    if len(self._sites[si_id]["o"])==2:
-                        self._sites[si_id]["o"].pop(0)
+                    self._matrix.strip(self._sites[si_id].oxygen_ids[0])
+                    if self._sites[si_id].is_geminal:
+                        self._sites[si_id].oxygen_ids.pop(0)
                     else:
                         del self._sites[si_id]
                     del si_matrix[sites.index(si_id)]
@@ -653,8 +704,8 @@ class Pore():
 
         Returns
         -------
-        sites : dict
-            Site dictionary keyed by silicon atom id.
+        sites : dict[int, BindingSite]
+            Binding sites keyed by silicon atom id.
         """
         return self._sites
 

@@ -737,13 +737,14 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual(len(matrix.bound(1)), 710)
         pore.sites()
         site_list = pore.get_sites()
-        site_in = [site_key for site_key, site_val in site_list.items() if site_val["type"]=="in"]
-        site_ex = [site_key for site_key, site_val in site_list.items() if site_val["type"]=="ex"]
+        self.assertIsInstance(next(iter(site_list.values())), pms.BindingSite)
+        site_in = [site_key for site_key, site_val in site_list.items() if site_val.site_type == "in"]
+        site_ex = [site_key for site_key, site_val in site_list.items() if site_val.site_type == "ex"]
         self.assertEqual(len(site_in), 432)
         self.assertEqual(len(site_ex), 201)
 
-        si_pos_in = [block.pos(site_key) for site_key, site_val in site_list.items() if site_val["type"]=="in"]
-        si_pos_ex = [block.pos(site_key) for site_key, site_val in site_list.items() if site_val["type"]=="ex"]
+        si_pos_in = [block.pos(site_key) for site_key, site_val in site_list.items() if site_val.site_type == "in"]
+        si_pos_ex = [block.pos(site_key) for site_key, site_val in site_list.items() if site_val.site_type == "ex"]
 
         if si_pos_in:
             temp_mol = pms.Molecule()
@@ -772,13 +773,13 @@ class UserModelCase(unittest.TestCase):
             return [0, 0, -1] if pos[2] < centroid[2] else [0, 0, 1]
 
         for site in site_in:
-            site_list[site]["normal"] = cylinder.normal
+            site_list[site].normal = cylinder.normal
         for site in site_ex:
-            site_list[site]["normal"] = normal
+            site_list[site].normal = normal
 
         ## Siloxane
         mols_siloxane = pore.siloxane(site_in, 100)
-        site_in = [site_key for site_key, site_val in site_list.items() if site_val["type"]=="in"]
+        site_in = [site_key for site_key, site_val in site_list.items() if site_val.site_type == "in"]
 
         ## Normal
         mols_in = pore.attach(mol, 0, [0, 1], site_in, 100, site_type="in")
