@@ -52,6 +52,7 @@ class PoreKit():
         # Create pore object
         self._pore = pms.Pore(self._block, self._matrix)
         self._pore.set_name("pore")
+        self._pore.set_box(self._box)
 
     ##########
     # Shapes #
@@ -214,6 +215,33 @@ class PoreKit():
 
         return ["CONE", cone]
 
+    def _has_interior_hydroxylation_target(self):
+        """Check whether the interior surface hydroxylation should be adjusted.
+
+        Returns
+        -------
+        has_target : bool
+            True if at least one interior shape requests a positive
+            hydroxylation target.
+        """
+        return any(hydro > 0 for hydro in self._hydro["in"])
+
+    def _init_site_tracking(self):
+        """Initialize site classification containers.
+
+        This helper keeps the interior-site bookkeeping available even when no
+        siloxane adjustment is requested.
+        """
+        self.sites_shape = {}
+        self._pore.sites_attach_mol = {}
+
+        for i, shape in enumerate(self._shapes):
+            self.sites_shape[i] = []
+            self._pore.sites_attach_mol[i] = {}
+
+        self.sites_shape[20] = []
+        self._pore.sites_attach_mol[20] = {}
+
     def prepare(self):
         """Prepare pore surface, add siloxane bridges, assign sites to sections,
         and assign a unique normal vector to each site by updating the
@@ -315,7 +343,7 @@ class PoreKit():
             print("%i"%num_site_err+" sites were not assigned to shapes. Consider adjusting section intervals.")
 
         # Siloxane bridges
-        if self._hydro["in"]: 
+        if self._has_interior_hydroxylation_target():
             self._siloxane("in")
         if self._hydro["ex"]:
             self._siloxane("ex")
@@ -327,14 +355,13 @@ class PoreKit():
         # Calculate free binding sites of the several pores
         # Initialize dictonaries
         self.sites_sl_shape = {}
+        self._init_site_tracking()
+        self.sites_sl_shape[20] = []
 
         # Loop over the shapes
         for i,shape in enumerate(self._shapes):
             self.sites_sl_shape[i] = []
             self.sites = []
-
-        # Key 20 is for binding sites which are not assigned to one specific shape
-        self.sites_sl_shape[20] = []
 
         # Loop over the free binding sites
         for site in self._site_in:
@@ -379,6 +406,8 @@ class PoreKit():
         # If every site match to one shape drop dictonary "20"
         if self.sites_sl_shape[20] == []:
             del self.sites_sl_shape[20]
+            del self.sites_shape[20]
+            del self._pore.sites_attach_mol[20]
 
                
         # Count the numbers of attached siloxane
@@ -692,7 +721,12 @@ class PoreKit():
     # Finalization #
     ################
     def finalize(self):
-        """Finalize pore system."""
+        """Finalize pore system.
+
+        Remaining free binding sites are filled with silanol groups. If a
+        reservoir was requested, the final pore object is translated and boxed
+        accordingly. Otherwise the original simulation box is preserved.
+        """
 
         # Fill silanol on the exterior surface
         mols_ex = self._pore.fill_sites(self._site_ex, "ex") if self._site_ex else []
@@ -715,7 +749,10 @@ class PoreKit():
                     self._sort_list.append(mol.get_short())
 
         # Create reservoir
-        self._pore.reservoir(self._res)
+        if self._res > 0:
+            self._pore.reservoir(self._res)
+        else:
+            self._pore.set_box(self._box)
 
     def store(self, link="./", sort_list=[]):
         """Store pore system and all necessary files for simulation at given

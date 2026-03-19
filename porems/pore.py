@@ -183,6 +183,26 @@ class Pore():
         self.prepare()
         self._oxygen_ex = self._matrix.bound(1)
 
+    def _site_search_molecule(self, sites):
+        """Create a zero-based temporary molecule for local site searches.
+
+        Parameters
+        ----------
+        sites : list
+            Silicon site identifiers used for a local proximity search.
+
+        Returns
+        -------
+        site_molecule : Molecule
+            Temporary molecule containing deep-copied silicon atoms translated
+            so that all coordinates are non-negative.
+        """
+        site_atoms = [copy.deepcopy(self._block.get_atom_list()[atom]) for atom in sites]
+        site_molecule = Molecule(inp=site_atoms)
+        site_molecule.zero()
+
+        return site_molecule
+
     def sites(self):
         """Create binding site dictionary of the format
 
@@ -294,8 +314,7 @@ class Pore():
         # Search for overlapping placements - Calculate diameter and add carbon VdW-raidus (Wiki)
         if is_proxi:
             mol_diam = (max(mol.get_box()[:2])+0.17)*scale
-            si_atoms = [self._block.get_atom_list()[atom] for atom in sites]
-            si_dice = Dice(Molecule(inp=si_atoms), mol_diam, True)
+            si_dice = Dice(self._site_search_molecule(sites), mol_diam, True)
             si_proxi = si_dice.find_parallel(None, ["Si", "Si"], [-mol_diam, mol_diam])
             si_matrix = {x[0]: x[1] for x in si_proxi}
 
@@ -407,8 +426,7 @@ class Pore():
         mol.zero()
 
         # Search for silicon atoms near each other
-        si_atoms = [self._block.get_atom_list()[atom] for atom in sites]
-        si_dice = Dice(Molecule(inp=si_atoms), slx_dist[1], False)
+        si_dice = Dice(self._site_search_molecule(sites), slx_dist[1], False)
         si_proxi = si_dice.find_parallel(None, ["Si", "Si"], slx_dist)
         si_matrix = {x[0]: x[1] for x in si_proxi}
 

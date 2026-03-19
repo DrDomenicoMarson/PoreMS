@@ -7,6 +7,15 @@ from .pore import Pore
 from .system import PoreKit, PoreCylinder, PoreSlit, PoreCapsule, PoreAmorphCylinder
 from .shape import Cylinder, Sphere, Cuboid, Cone
 from .store import Store
+from .workflows import (
+    SurfaceCompositionTarget,
+    BareAmorphousSlitConfig,
+    SurfaceComposition,
+    SlitBuildReport,
+    SlitBuildResult,
+    build_periodic_amorphous_slit,
+    write_bare_amorphous_slit_study,
+)
 
 import porems.database as db
 import porems.generic as gen
@@ -19,5 +28,8 @@ __all__ = [
     "BetaCristobalit", "AlphaCristobalit",
     "Pore", "PoreKit", "PoreCylinder", "PoreSlit", "PoreCapsule", "PoreAmorphCylinder",
     "Cylinder", "Sphere", "Cuboid", "Cone",
+    "SurfaceCompositionTarget", "BareAmorphousSlitConfig",
+    "SurfaceComposition", "SlitBuildReport", "SlitBuildResult",
+    "build_periodic_amorphous_slit", "write_bare_amorphous_slit_study",
     "db", "gen", "geom", "utils"
 ]

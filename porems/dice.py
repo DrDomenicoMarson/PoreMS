@@ -92,7 +92,7 @@ class Dice:
             \\text{id}=\\begin{pmatrix}x&y&z\\end{pmatrix}.
         """
         # Calculate number of cubes in each dimension
-        self._count = [math.floor(box/self._size) for box in self._mol_box]
+        self._count = [max(1, math.floor(box/self._size)) for box in self._mol_box]
 
         # Fill cube origins
         self._origin = {}
@@ -116,7 +116,16 @@ class Dice:
         index : tuple
             Cube index
         """
-        return tuple([math.floor(pos/self._size) if math.floor(pos/self._size)<self._count[dim] else self._count[dim]-1 for dim, pos in enumerate(position)])
+        index = []
+        for dim, pos in enumerate(position):
+            pos_index = math.floor(pos/self._size)
+            if pos_index < 0:
+                pos_index = 0
+            elif pos_index >= self._count[dim]:
+                pos_index = self._count[dim]-1
+            index.append(pos_index)
+
+        return tuple(index)
 
     def _fill(self):
         """Based on their coordinates, the atom ids, as defined in the molecule
@@ -365,9 +374,9 @@ class Dice:
         cube_np = [cube_list[cube_num*i:] if i == self._np-1 else cube_list[cube_num*i:cube_num*(i+1)] for i in range(self._np)]
 
         # Run parallel search
-        pool = mp.Pool(processes=self._np)
-        results = [pool.apply_async(self.find_bond, args=(x, atom_type, distance)) for x in cube_np]
-        bond_list = sum([x.get() for x in results], [])
+        with mp.Pool(processes=self._np) as pool:
+            results = [pool.apply_async(self.find_bond, args=(x, atom_type, distance)) for x in cube_np]
+            bond_list = sum([x.get() for x in results], [])
 
         # Destroy object
         del results
