@@ -17,6 +17,9 @@ from porems.dice import Dice
 from porems.molecule import Molecule
 
 
+_VALID_SITE_TYPES = {"in", "ex"}
+
+
 class Pore():
     """This class prepares and converts a given molecule block into a pore
     system.
@@ -264,7 +267,25 @@ class Pore():
     #######################
     # Molecule Attachment #
     #######################
-    def attach(self, mol, mount, axis, sites, amount, scale=1, trials=1000, pos_list=[], site_type="in", is_proxi=True, is_random=True, is_rotate=False, is_g=True):
+    def _validate_site_type(self, site_type):
+        """Validate a pore surface site type.
+
+        Parameters
+        ----------
+        site_type : str
+            Requested site type.
+
+        Raises
+        ------
+        ValueError
+            Raised when the site type is not supported.
+        """
+        if site_type not in _VALID_SITE_TYPES:
+            raise ValueError(
+                f"Unsupported site_type '{site_type}'. Expected one of: {sorted(_VALID_SITE_TYPES)}."
+            )
+
+    def attach(self, mol, mount, axis, sites, amount, scale=1, trials=1000, pos_list=None, site_type="in", is_proxi=True, is_random=True, is_rotate=False, is_g=True):
         """Attach molecules on the surface.
 
         Parameters
@@ -300,11 +321,14 @@ class Pore():
         -------
         mol_list : list
             List of molecule objects that are attached on the surface
+
+        Raises
+        ------
+        ValueError
+            Raised when the requested site type is not supported.
         """
-        # Check site type input
-        if not site_type in ["in", "ex"]:
-            print("Pore - Wrong attachement site-type...")
-            return
+        self._validate_site_type(site_type)
+        pos_list = [] if pos_list is None else pos_list
 
         # Rotate molecule towards z-axis
         mol_axis = mol.bond(*axis)
@@ -407,11 +431,13 @@ class Pore():
             Number of trials picking a random site
         site_type : string, optional
             Site type - interior **in**, exterior **ex**
+
+        Raises
+        ------
+        ValueError
+            Raised when the requested site type is not supported.
         """
-        # Check site type input
-        if not site_type in ["in", "ex"]:
-            print("Pore - Wrong attachement site-type...")
-            return
+        self._validate_site_type(site_type)
 
         # Create siloxane molecule
         mol = Molecule("siloxane", "SLX")

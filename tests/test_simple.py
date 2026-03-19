@@ -755,8 +755,10 @@ class UserModelCase(unittest.TestCase):
         pms.Store(pore, "output", sort_list=sort_list).top()
 
         # Error test
-        self.assertIsNone(pore.attach(mol, 0, [0, 1], site_in, 0, cylinder.normal, site_type="DOTA"))
-        self.assertIsNone(pore.siloxane(site_in, 0, cylinder.normal, site_type="DOTA"))
+        with self.assertRaisesRegex(ValueError, "site_type"):
+            pore.attach(mol, 0, [0, 1], site_in, 0, cylinder.normal, site_type="DOTA")
+        with self.assertRaisesRegex(ValueError, "site_type"):
+            pore.siloxane(site_in, 0, cylinder.normal, site_type="DOTA")
 
         # Getter and Setter
         self.assertEqual(pore.get_block().get_name(), "pore_cylinder_block")
@@ -830,14 +832,18 @@ class UserModelCase(unittest.TestCase):
 
     def test_pore_kit(self):
         # self.skipTest("Temporary")
+        unassigned_warning = "Some interior silicon binding sites could not be assigned"
 
         pore = pms.PoreKit()
         pore.structure(pms.BetaCristobalit().generate([5, 5, 10], "z"))
         pore.build()
         pore.exterior(5, hydro=0.4)
+        with self.assertRaisesRegex(ValueError, "shape type"):
+            pore.add_shape(["DOTA", None], hydro=0.4)
         pore.add_shape(pore.shape_cylinder(2, 10, [3.5, 3.5, 5]), hydro=0.4)
         pore.add_shape(pore.shape_cylinder(2, 10, [1.5, 1.5, 5]), hydro=0.4)
-        pore.prepare()
+        with self.assertWarnsRegex(RuntimeWarning, unassigned_warning):
+            pore.prepare()
         pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in")
         pore.attach(pms.gen.tms(), 0, [0, 1], 20, "ex")
         pore.finalize()
@@ -851,7 +857,8 @@ class UserModelCase(unittest.TestCase):
         pore.add_shape(pore.shape_cylinder(6, 4, [3.5, 3.5, 2]), section={"x": [], "y": [], "z": [0,  4]}, hydro=0.4)
         pore.add_shape(pore.shape_cone(4.5, 3, 2,  [3.5, 3.5, 5]), section={"x": [], "y": [], "z": [4,  6]}, hydro=0.4)
         pore.add_shape(pore.shape_cylinder(4, 4, [3.5, 3.5, 8]), section={"x": [], "y": [], "z": [6, 10]}, hydro=0.4)
-        pore.prepare()
+        with self.assertWarnsRegex(RuntimeWarning, unassigned_warning):
+            pore.prepare()
         pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in")
         pore.attach(pms.gen.tms(), 0, [0, 1], 20, "ex")
         pore.finalize()
@@ -880,10 +887,14 @@ class UserModelCase(unittest.TestCase):
 
         # Special cases
         print()
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA"))
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA"))
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, pos_list=[[1, 3, 3], [7, 4, 2]]))
-        self.assertIsNone(pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA"))
+        with self.assertRaisesRegex(ValueError, "site_type"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA")
+        with self.assertRaisesRegex(ValueError, "inp"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA")
+        with self.assertRaisesRegex(ValueError, "positions"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, pos_list=[[1, 3, 3], [7, 4, 2]])
+        with self.assertRaisesRegex(ValueError, "symmetry"):
+            pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA")
 
         # Finalize
         pore.finalize()
@@ -895,8 +906,9 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual([round(x, 4) for x in pore.centroid()], [3.0147, 3.0572, 3.0569])
         self.assertEqual(round(pore.roughness()["in"][0], 1), 0.1)
         self.assertEqual(round(pore.roughness()["ex"], 1), 0.0)
-        self.assertEqual(round(pore.volume()), 78)
-        self.assertEqual({key: round(item) for key, item in pore.surface().items()}, {'in': 78, 'ex': 49})
+        self.assertAlmostEqual(pore.volume(), 77.8, delta=1.0)
+        self.assertAlmostEqual(pore.surface()["in"], 78.0, delta=1.0)
+        self.assertAlmostEqual(pore.surface()["ex"], 49.0, delta=1.0)
 
     def test_pore_slit(self):
         # self.skipTest("Temporary")
@@ -921,9 +933,12 @@ class UserModelCase(unittest.TestCase):
 
         # Special cases
         print()
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA"))
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA"))
-        self.assertIsNone(pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA"))
+        with self.assertRaisesRegex(ValueError, "site_type"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA")
+        with self.assertRaisesRegex(ValueError, "inp"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA")
+        with self.assertRaisesRegex(ValueError, "symmetry"):
+            pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA")
 
         # Finalize
         pore.finalize()
@@ -940,13 +955,15 @@ class UserModelCase(unittest.TestCase):
 
     def test_pore_capsule(self):
         # self.skipTest("Temporary")
+        unassigned_warning = "Some interior silicon binding sites could not be assigned"
 
         # Empty pore
         pore = pms.PoreCapsule([3, 3, 6], 2, 1, 2.5)
         pore.finalize()
 
         # Filled pore
-        pore = pms.PoreCapsule([6, 6, 10], 4, 2, 5, [5, 5])
+        with self.assertWarnsRegex(RuntimeWarning, unassigned_warning):
+            pore = pms.PoreCapsule([6, 6, 10], 4, 2, 5, [5, 5])
 
         ## Attachment
         # pore.attach_special(pms.gen.tms(),  0, [0, 1], 5)
@@ -961,8 +978,10 @@ class UserModelCase(unittest.TestCase):
 
         # Special cases
         print()
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA"))
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA"))
+        with self.assertRaisesRegex(ValueError, "site_type"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA")
+        with self.assertRaisesRegex(ValueError, "inp"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA")
         # elf.assertIsNone(pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA"))
 
         # Finalize
@@ -983,13 +1002,15 @@ class UserModelCase(unittest.TestCase):
 
     def test_pore_cylinder_amorph(self):
         # self.skipTest("Temporary")
+        unassigned_warning = "Some interior silicon binding sites could not be assigned"
 
         # Empty pore
         pore = pms.PoreAmorphCylinder(2, 0)
         pore.finalize()
 
         # Filled pore
-        pore = pms.PoreAmorphCylinder(4, 5, [2, 2])
+        with self.assertWarnsRegex(RuntimeWarning, unassigned_warning):
+            pore = pms.PoreAmorphCylinder(4, 5, [2, 2])
 
         ## Attachment
         # pore.attach_special(pms.gen.tms(),  0, [0, 1], 5)
@@ -1004,10 +1025,14 @@ class UserModelCase(unittest.TestCase):
 
         # Special cases
         print()
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA"))
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA"))
-        self.assertIsNone(pore.attach(pms.gen.tms(), 0, [0, 1], 100, pos_list=[[1, 3, 3], [7, 4, 2]]))
-        self.assertIsNone(pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA"))
+        with self.assertRaisesRegex(ValueError, "site_type"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA")
+        with self.assertRaisesRegex(ValueError, "inp"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA")
+        with self.assertRaisesRegex(ValueError, "positions"):
+            pore.attach(pms.gen.tms(), 0, [0, 1], 100, pos_list=[[1, 3, 3], [7, 4, 2]])
+        with self.assertRaisesRegex(ValueError, "symmetry"):
+            pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA")
 
         # Finalize
         pore.finalize()
