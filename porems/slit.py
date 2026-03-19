@@ -7,6 +7,7 @@
 
 import copy
 import json
+import math
 import os
 
 from dataclasses import asdict, dataclass, field
@@ -72,6 +73,9 @@ class AmorphousSlitConfig:
         Accepted ``Si-O`` bond-length range for the amorphous template.
     siloxane_distance_range_nm : tuple, optional
         Accepted ``Si-Si`` distance range for custom siloxane formation.
+    surface_fraction_tolerance : float, optional
+        Allowed absolute fraction deviation per ``Q`` state when the exact
+        integer target cannot be realized on the current slit.
     template_split_pairs : tuple, optional
         Template-specific bond pairs that must be disconnected after
         reconstructing the amorphous connectivity matrix.
@@ -86,6 +90,7 @@ class AmorphousSlitConfig:
     )
     amorph_bond_range_nm: tuple[float, float] = (0.160 - 0.02, 0.160 + 0.02)
     siloxane_distance_range_nm: tuple[float, float] = (0.40, 0.65)
+    surface_fraction_tolerance: float = 0.005
     template_split_pairs: tuple[tuple[int, int], ...] = ((57790, 2524),)
 
     def __post_init__(self):
@@ -99,10 +104,12 @@ class AmorphousSlitConfig:
         """
         if self.slit_width_nm <= 0:
             raise ValueError("The slit width must be positive.")
-        if self.repeat_y < 2:
-            raise ValueError("The amorphous slit requires at least two y-repeats.")
+        if self.repeat_y < 1:
+            raise ValueError("The amorphous slit requires at least one y-repeat.")
         if self.temperature_k <= 0:
             raise ValueError("The temperature must be positive.")
+        if self.surface_fraction_tolerance < 0:
+            raise ValueError("The surface fraction tolerance must be non-negative.")
 
 
 @dataclass(frozen=True)
@@ -200,10 +207,16 @@ class SlitPreparationReport:
         Number of siloxane bridges introduced during surface editing.
     siloxane_distance_range_nm : tuple
         Accepted ``Si-Si`` distance range used during custom surface editing.
+    surface_fraction_tolerance : float
+        Allowed absolute fraction deviation per ``Q`` state for fallback target
+        selection.
+    used_surface_tolerance : bool
+        Whether the selected target surface was accepted through the tolerance
+        fallback rather than by matching the exact integer target directly.
     initial_surface : SurfaceComposition
         Surface composition before custom condensation.
     target_surface : SurfaceComposition
-        Requested prepared surface composition.
+        Selected prepared surface composition enforced on the slit.
     prepared_surface : SurfaceComposition
         Surface composition after Q-state preparation and before optional
         grafting.
@@ -217,6 +230,8 @@ class SlitPreparationReport:
     site_ex: int
     siloxane_bridges: int
     siloxane_distance_range_nm: tuple[float, float]
+    surface_fraction_tolerance: float
+    used_surface_tolerance: bool
     initial_surface: SurfaceComposition
     target_surface: SurfaceComposition
     prepared_surface: SurfaceComposition
@@ -239,6 +254,49 @@ class SlitPreparationResult:
 
     system: pms.PoreKit
     report: SlitPreparationReport
+
+
+@dataclass(frozen=True)
+class _SurfaceTargetCandidate:
+    """Candidate surface composition ranked against the requested fractions.
+
+    Parameters
+    ----------
+    composition : SurfaceComposition
+        Candidate integer ``Q``-state counts for the slit surface.
+    total_fraction_error : float
+        Sum of the absolute fraction deviations from the requested
+        ``Q2/Q3/Q4`` fractions.
+    """
+
+    composition: SurfaceComposition
+    total_fraction_error: float
+
+
+@dataclass
+class _SurfaceTargetAttempt:
+    """Successful realization of a target slit-surface composition.
+
+    Parameters
+    ----------
+    system : PoreKit
+        Edited slit system that satisfies the selected surface target.
+    target_surface : SurfaceComposition
+        Selected integer target satisfied by ``system``.
+    prepared_surface : SurfaceComposition
+        Final surface composition after editing.
+    siloxane_bridges : int
+        Number of siloxane bridges introduced while realizing the target.
+    used_surface_tolerance : bool
+        Whether the selected target came from the tolerance fallback rather
+        than the exact integer target.
+    """
+
+    system: pms.PoreKit
+    target_surface: SurfaceComposition
+    prepared_surface: SurfaceComposition
+    siloxane_bridges: int
+    used_surface_tolerance: bool
 
 
 def _amorphous_template_path():
@@ -397,6 +455,97 @@ def _target_surface_counts(total_surface_si, initial_surface, target):
         raise ValueError("Could not determine target surface counts compatible with the current slit.")
 
     return best[1]
+
+
+def _surface_fraction_errors(composition, target):
+    """Return absolute fraction deviations from the requested surface target.
+
+    Parameters
+    ----------
+    composition : SurfaceComposition
+        Candidate or prepared slit-surface composition.
+    target : SurfaceCompositionTarget
+        Requested ``Q2/Q3/Q4`` fractions.
+
+    Returns
+    -------
+    errors : tuple[float, float, float]
+        Absolute fraction deviations for ``Q2``, ``Q3``, and ``Q4``.
+    """
+    return (
+        abs(composition.q2_fraction - target.q2_fraction),
+        abs(composition.q3_fraction - target.q3_fraction),
+        abs(composition.q4_fraction - target.q4_fraction),
+    )
+
+
+def _surface_target_candidates(total_surface_si, initial_surface, target, exact_target, tolerance):
+    """Enumerate nearby realizable target counts inside the allowed tolerance.
+
+    Parameters
+    ----------
+    total_surface_si : int
+        Total number of exposed surface silicon atoms.
+    initial_surface : SurfaceComposition
+        Initial surface-site counts before custom condensation.
+    target : SurfaceCompositionTarget
+        Requested surface fractions.
+    exact_target : SurfaceComposition
+        Preferred exact integer target derived from the requested fractions.
+    tolerance : float
+        Allowed absolute fraction deviation per ``Q`` state.
+
+    Returns
+    -------
+    candidates : list[_SurfaceTargetCandidate]
+        Nearby candidate targets sorted by increasing total fraction error.
+    """
+    q2_min = max(0, math.ceil(max(0.0, target.q2_fraction - tolerance) * total_surface_si - 1e-9))
+    q2_max = min(
+        initial_surface.q2_sites,
+        math.floor(min(1.0, target.q2_fraction + tolerance) * total_surface_si + 1e-9),
+    )
+    q3_min = max(0, math.ceil(max(0.0, target.q3_fraction - tolerance) * total_surface_si - 1e-9))
+    q3_max = min(
+        total_surface_si,
+        math.floor(min(1.0, target.q3_fraction + tolerance) * total_surface_si + 1e-9),
+    )
+
+    candidates = []
+    seen = {exact_target}
+    for q2_sites in range(q2_min, q2_max + 1):
+        for q3_sites in range(q3_min, q3_max + 1):
+            q4_sites = total_surface_si - q2_sites - q3_sites
+            if q4_sites < initial_surface.q4_sites:
+                continue
+
+            composition = SurfaceComposition(total_surface_si, q2_sites, q3_sites, q4_sites)
+            if composition in seen:
+                continue
+            if composition.q3_sites % 2 != initial_surface.q3_sites % 2:
+                continue
+
+            errors = _surface_fraction_errors(composition, target)
+            if any(error > tolerance for error in errors):
+                continue
+
+            candidates.append(
+                _SurfaceTargetCandidate(
+                    composition=composition,
+                    total_fraction_error=sum(errors),
+                )
+            )
+            seen.add(composition)
+
+    candidates.sort(
+        key=lambda candidate: (
+            candidate.total_fraction_error,
+            candidate.composition.q4_sites,
+            candidate.composition.q3_sites,
+            candidate.composition.q2_sites,
+        )
+    )
+    return candidates
 
 
 def _are_sites_directly_connected(matrix, site_a, site_b):
@@ -646,6 +795,18 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
     sites = kit._pore.get_sites()
     current_surface = _surface_composition(total_surface_si, sites)
 
+    while current_surface.q3_sites < target_surface.q3_sites:
+        pair = _find_pair(sites, adjacency, 2, 2)
+        if pair is None:
+            raise ValueError("No remaining Q2/Q2 siloxane pair is available to increase the Q3 population.")
+
+        bridge_count += _bridge_pair(kit, pair)
+        _consume_pair(adjacency, pair)
+        current_surface = _surface_composition(total_surface_si, sites)
+
+    if current_surface.q2_sites < target_surface.q2_sites:
+        raise ValueError("The slit surface cannot increase Q3 to the requested value without undershooting the requested Q2 count.")
+
     while current_surface.q2_sites > target_surface.q2_sites:
         q2_delta = current_surface.q2_sites - target_surface.q2_sites
         pair = _find_pair(sites, adjacency, 2, 1)
@@ -660,9 +821,6 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
         bridge_count += _bridge_pair(kit, pair)
         _consume_pair(adjacency, pair)
         current_surface = _surface_composition(total_surface_si, sites)
-
-    if current_surface.q3_sites < target_surface.q3_sites:
-        raise ValueError("The slit surface contains fewer Q3 sites than requested after Q2 reduction.")
 
     while current_surface.q3_sites > target_surface.q3_sites:
         if (current_surface.q3_sites - target_surface.q3_sites) < 2:
@@ -682,6 +840,77 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
     _refresh_single_slit_tracking(kit, total_surface_si)
 
     return bridge_count
+
+
+def _realize_surface_target(base_system, total_surface_si, initial_surface, target, exact_target, tolerance, distance_range):
+    """Select and realize a compatible slit-surface composition.
+
+    Parameters
+    ----------
+    base_system : PoreKit
+        Prepared slit system before custom siloxane formation.
+    total_surface_si : int
+        Total number of exposed surface silicon atoms tracked by the slit
+        preparation.
+    initial_surface : SurfaceComposition
+        Initial surface-site counts before custom condensation.
+    target : SurfaceCompositionTarget
+        Requested surface fractions.
+    exact_target : SurfaceComposition
+        Preferred exact integer target derived from the requested fractions.
+    tolerance : float
+        Allowed absolute fraction deviation per ``Q`` state for fallback
+        target selection.
+    distance_range : tuple[float, float]
+        Accepted ``Si-Si`` distance range for siloxane formation.
+
+    Returns
+    -------
+    attempt : _SurfaceTargetAttempt
+        Successfully realized slit surface and the selected target metadata.
+
+    Raises
+    ------
+    ValueError
+        Raised when no exact or tolerance-compatible target can be realized on
+        the current slit.
+    """
+    candidate_specs = [(exact_target, False)]
+    candidate_specs.extend(
+        (candidate.composition, True)
+        for candidate in _surface_target_candidates(
+            total_surface_si,
+            initial_surface,
+            target,
+            exact_target,
+            tolerance,
+        )
+    )
+
+    for candidate_surface, used_tolerance in candidate_specs:
+        trial_system = copy.deepcopy(base_system)
+        try:
+            bridge_count = _enforce_surface_target(
+                trial_system,
+                total_surface_si,
+                candidate_surface,
+                distance_range,
+            )
+        except ValueError:
+            continue
+
+        prepared_surface = _surface_composition(total_surface_si, trial_system._pore.get_sites())
+        return _SurfaceTargetAttempt(
+            system=trial_system,
+            target_surface=candidate_surface,
+            prepared_surface=prepared_surface,
+            siloxane_bridges=bridge_count,
+            used_surface_tolerance=used_tolerance,
+        )
+
+    raise ValueError(
+        "The slit surface could not be edited to the requested Q2/Q3/Q4 composition within the allowed tolerance."
+    )
 
 
 def prepare_amorphous_slit_surface(config=None):
@@ -721,17 +950,23 @@ def prepare_amorphous_slit_surface(config=None):
 
     total_surface_si = len(system._site_in)
     initial_surface = _surface_composition(total_surface_si, system._pore.get_sites())
-    target_surface = _target_surface_counts(total_surface_si, initial_surface, config.surface_target)
-    siloxane_bridges = _enforce_surface_target(
+    exact_target = _target_surface_counts(total_surface_si, initial_surface, config.surface_target)
+    target_attempt = _realize_surface_target(
         system,
         total_surface_si,
-        target_surface,
+        initial_surface,
+        config.surface_target,
+        exact_target,
+        config.surface_fraction_tolerance,
         tuple(config.siloxane_distance_range_nm),
     )
+    system = target_attempt.system
+    target_surface = target_attempt.target_surface
+    prepared_surface = target_attempt.prepared_surface
+    siloxane_bridges = target_attempt.siloxane_bridges
 
     system._pore.set_name(config.name)
 
-    prepared_surface = _surface_composition(total_surface_si, system._pore.get_sites())
     wall_thickness = (system.box()[1] - config.slit_width_nm) / 2
     report = SlitPreparationReport(
         name=config.name,
@@ -742,6 +977,8 @@ def prepare_amorphous_slit_surface(config=None):
         site_ex=len(system._site_ex),
         siloxane_bridges=siloxane_bridges,
         siloxane_distance_range_nm=tuple(config.siloxane_distance_range_nm),
+        surface_fraction_tolerance=config.surface_fraction_tolerance,
+        used_surface_tolerance=target_attempt.used_surface_tolerance,
         initial_surface=initial_surface,
         target_surface=target_surface,
         prepared_surface=prepared_surface,
