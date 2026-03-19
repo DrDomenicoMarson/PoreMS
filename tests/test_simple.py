@@ -79,7 +79,8 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual(round(pms.geom.dot_product(vec_a, vec_b), 4), 7)
         self.assertEqual(round(pms.geom.length(vec_a), 4), 2.4495)
         self.assertEqual([round(x, 4) for x in pms.geom.vector(vec_a, vec_b)], [-1, 2, 0])
-        self.assertIsNone(pms.geom.vector([0, 1], [0, 0, 0]))
+        with self.assertRaisesRegex(ValueError, "Wrong dimensions"):
+            pms.geom.vector([0, 1], [0, 0, 0])
         self.assertEqual([round(x, 4) for x in pms.geom.unit(vec_a)], [0.4082, 0.4082, 0.8165])
         self.assertEqual([round(x, 4) for x in pms.geom.cross_product(vec_a, vec_b)], [-4, -2, 3])
         self.assertEqual(round(pms.geom.angle(vec_a, vec_b), 4), 37.5714)
@@ -92,12 +93,17 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual([round(x, 4) for x in pms.geom.main_axis("x")], [1, 0, 0])
         self.assertEqual([round(x, 4) for x in pms.geom.main_axis("y")], [0, 1, 0])
         self.assertEqual([round(x, 4) for x in pms.geom.main_axis("z")], [0, 0, 1])
-        self.assertEqual(pms.geom.main_axis("h"), "Wrong axis definition...")
-        self.assertEqual(pms.geom.main_axis(100), "Wrong axis definition...")
-        self.assertEqual(pms.geom.main_axis(0.1), "Wrong axis definition...")
+        with self.assertRaisesRegex(ValueError, "Wrong axis definition"):
+            pms.geom.main_axis("h")
+        with self.assertRaisesRegex(ValueError, "Wrong axis definition"):
+            pms.geom.main_axis(100)
+        with self.assertRaisesRegex(ValueError, "Wrong axis definition"):
+            pms.geom.main_axis(0.1)
         self.assertEqual([round(x, 4) for x in pms.geom.rotate(vec_a, "x", 90, True)], [1.0, -2.0, 1.0])
-        self.assertIsNone(pms.geom.rotate(vec_a, [0, 1, 2, 3], 90, True))
-        self.assertIsNone(pms.geom.rotate(vec_a, "h", 90, True))
+        with self.assertRaisesRegex(ValueError, "Wrong vector dimensions"):
+            pms.geom.rotate(vec_a, [0, 1, 2, 3], 90, True)
+        with self.assertRaisesRegex(ValueError, "Wrong axis definition"):
+            pms.geom.rotate(vec_a, "h", 90, True)
 
 
     ############
@@ -106,7 +112,8 @@ class UserModelCase(unittest.TestCase):
     def test_database(self):
         print()
         self.assertEqual(pms.db.get_mass("H"), 1.0079)
-        self.assertIsNone(pms.db.get_mass("DOTA"))
+        with self.assertRaisesRegex(ValueError, "Atom name not found"):
+            pms.db.get_mass("DOTA")
 
 
     ########
@@ -156,7 +163,8 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual([col+col for col in pos_gro], pos_append)
 
         print()
-        self.assertEqual(pms.Molecule(inp="data/benzene.DOTA").get_atom_list(), None)
+        with self.assertRaisesRegex(ValueError, "Unsupported filetype"):
+            pms.Molecule(inp="data/benzene.DOTA")
 
     def test_molecule_properties(self):
         mol = pms.Molecule(inp="data/benzene.gro")
@@ -194,11 +202,15 @@ class UserModelCase(unittest.TestCase):
 
         print()
 
-        self.assertIsNone(mol._vector(0.1, 0.1))
-        self.assertIsNone(mol._vector([0, 0], [0, 0]))
+        with self.assertRaisesRegex(ValueError, "Wrong input"):
+            mol._vector(0.1, 0.1)
+        with self.assertRaisesRegex(ValueError, "Wrong dimensions"):
+            mol._vector([0, 0], [0, 0])
 
-        self.assertIsNone(mol.part_angle([0, 0, 1, 0], [0, 1, 0, 0], 1, 45, 1))
-        self.assertIsNone(mol.part_angle([0, 0], [0, 1, 2], 1, 45, 1))
+        with self.assertRaisesRegex(ValueError, "Wrong bond input"):
+            mol.part_angle([0, 0, 1, 0], [0, 1, 0, 0], 1, 45, 1)
+        with self.assertRaisesRegex(ValueError, "Wrong bond dimensions"):
+            mol.part_angle([0, 0], [0, 1, 2], 1, 45, 1)
 
     def test_molecule_creation(self):
         mol = pms.Molecule()
@@ -260,7 +272,8 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual([round(x, 4) for x in  pms.gen.silanol().pos(0)], [0.000, 0.000, 0.000])
 
         print()
-        self.assertIsNone(pms.gen.ketone(2, 0))
+        with self.assertRaisesRegex(ValueError, "too small for ketones"):
+            pms.gen.ketone(2, 0)
 
 
     #########
@@ -280,8 +293,10 @@ class UserModelCase(unittest.TestCase):
         pms.Store(mol, "output").grid("store_grid.itp")
 
         print()
-        pms.Store({})
-        self.assertIsNone(pms.Store(mol).top())
+        with self.assertRaisesRegex(TypeError, "Unsupported input type"):
+            pms.Store({})
+        with self.assertRaisesRegex(TypeError, "Unsupported input type for topology creation"):
+            pms.Store(mol).top()
 
 
     ###########
@@ -751,7 +766,8 @@ class UserModelCase(unittest.TestCase):
 
         # Store test
         print()
-        pms.Store(pore, "output", sort_list=sort_list[:-1])
+        with self.assertRaisesRegex(ValueError, "Sorting list does not contain all keys"):
+            pms.Store(pore, "output", sort_list=sort_list[:-1])
         pms.Store(pore, "output", sort_list=sort_list).top()
 
         # Error test

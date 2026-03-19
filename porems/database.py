@@ -121,18 +121,22 @@ masses = {"H":    1.0079,  # Hydrogen
 def get_mass(symbol):
     """Return the mass of the specified atom.
 
-        Parameters
-        ----------
-        symbol : str
-            Atom symbol
+    Parameters
+    ----------
+    symbol : str
+        Atom symbol
 
-        Returns
-        -------
-        mass : float
-            Atom mass in :math:`\\frac g{mol}`
+    Returns
+    -------
+    mass : float
+        Atom mass in :math:`\\frac g{mol}`
+
+    Raises
+    ------
+    ValueError
+        Raised when the atom symbol is not present in the local mass table.
     """
     if symbol in masses:
         return masses[symbol]
-    else:
-        print("DB: Atom name not found.")
-        return
+
+    raise ValueError("DB: Atom name not found.")

@@ -46,11 +46,32 @@ class Store:
         Store(mol).pdb()
         Store(pore, "output").gro("pore.gro")
     """
-    def __init__(self, inp, link="./", sort_list=[]):
+    def __init__(self, inp, link="./", sort_list=None):
+        """Initialize a structure writer for a molecule or pore object.
+
+        Parameters
+        ----------
+        inp : Molecule or Pore
+            Molecule or pore object to serialize.
+        link : str, optional
+            Output directory for generated files.
+        sort_list : list, optional
+            Molecule short-name ordering for pore outputs.
+
+        Raises
+        ------
+        TypeError
+            Raised when ``inp`` is neither a :class:`porems.molecule.Molecule`
+            nor a :class:`porems.pore.Pore`.
+        ValueError
+            Raised when a provided pore ``sort_list`` does not match the pore
+            molecule dictionary keys exactly.
+        """
         # Initialize
         self._dim = 3
         self._link = link if link[-1] == "/" else link+"/"
         self._inp = inp
+        sort_list = [] if sort_list is None else sort_list
 
         # Process input
         if isinstance(inp, Molecule):
@@ -61,14 +82,12 @@ class Store:
                     self._mols = sum([inp.get_mol_dict()[x] for x in sort_list], [])
                     self._short_list = sort_list
                 else:
-                    print("Store: Sorting list does not contain all keys...")
-                    return
+                    raise ValueError("Store: Sorting list does not contain all keys...")
             else:
                 self._mols = sum([x for x in inp.get_mol_dict().values()], [])
                 self._short_list = list(x for x in inp.get_mol_dict().keys())
         else:
-            print("Store: Unsupported input type...")
-            return
+            raise TypeError("Store: Unsupported input type...")
 
         # Get properties after input checking type
         self._name = inp.get_name() if inp.get_name() else "molecule"
@@ -417,11 +436,15 @@ class Store:
         ----------
         name : string, optional
             Filename
+
+        Raises
+        ------
+        TypeError
+            Raised when topology generation is requested for a non-pore input.
         """
         # Check input type
         if not isinstance(self._inp, Pore):
-            print("Store: Unsupported input type for topology creation...")
-            return
+            raise TypeError("Store: Unsupported input type for topology creation...")
 
         # Initialize
         link = self._link
@@ -448,7 +471,7 @@ class Store:
             for mol_short in self._short_list:
                 file_out.write(mol_short+" "+str(len(self._inp.get_mol_dict()[mol_short]))+"\n")
 
-    def grid(self, name="", charges={"si": 1.28, "om": -0.64}):
+    def grid(self, name="", charges=None):
         """Store the **grid.itp** file containing the necessary parameters and
         charges of the grid molecules.
 
@@ -459,6 +482,8 @@ class Store:
         charges : dictionary, optional
             Dictionary of charges for silicon and oxygen atoms
         """
+        charges = {"si": 1.28, "om": -0.64} if charges is None else charges
+
         # Initialize
         link = self._link
         link += name if name else "grid.itp"

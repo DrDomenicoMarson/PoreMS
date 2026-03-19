@@ -160,11 +160,15 @@ def ketone(length, pos, name="ketone", short="KET", is_h=True):
     -------
     mol : Molecule
         Molecule object
+
+    Raises
+    ------
+    ValueError
+        Raised when fewer than three carbon atoms are requested.
     """
     # Check input
     if length < 3:
-        print("Specified length is too small for ketones ...")
-        return
+        raise ValueError("Specified length is too small for ketones ...")
 
     # Initialize Molecule
     mol = Molecule(name, short)

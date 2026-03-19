@@ -122,11 +122,15 @@ class Molecule:
         -------
         atom_list : list
             Atom list
+
+        Raises
+        ------
+        ValueError
+            Raised when the requested file type is unsupported.
         """
         # Process input
         if not file_type in ["GRO", "PDB", "MOL2"]:
-            print("Unsupported filetype.")
-            return
+            raise ValueError("Unsupported filetype.")
 
         # Read molecule
         atom_list = []
@@ -238,19 +242,23 @@ class Molecule:
         -------
         vector : list
             Bond vector
+
+        Raises
+        ------
+        ValueError
+            Raised when the inputs are not atom ids or three-dimensional
+            position vectors.
         """
         # Process input
         if isinstance(pos_a, int) and isinstance(pos_b, int):
             pos_a = self.pos(pos_a)
             pos_b = self.pos(pos_b)
-        elif not (isinstance(pos_a, list) and isinstance(pos_b, list)):
-            print("Vector: Wrong input...")
-            return
+        elif not (isinstance(pos_a, (list, tuple)) and isinstance(pos_b, (list, tuple))):
+            raise ValueError("Vector: Wrong input...")
 
         # Check dimensions
-        if not len(pos_a) == self._dim:
-            print("Vector: Wrong dimensions...")
-            return
+        if len(pos_a) != self._dim or len(pos_b) != self._dim:
+            raise ValueError("Vector: Wrong dimensions...")
 
         # Calculate vector
         return geometry.vector(pos_a, pos_b)
@@ -425,7 +433,7 @@ class Molecule:
         """
         self.translate(self._vector(self.pos(atom), pos))
 
-    def zero(self, pos=[0, 0, 0]):
+    def zero(self, pos=None):
         """Move whole the molecule, so that the minimal coordinate
         between all atoms is zero in all dimensions, or rather the values of the
         position variable ``pos``. This function is basically setting
@@ -441,6 +449,8 @@ class Molecule:
         vec : list
             Vector used for the translation
         """
+        pos = [0, 0, 0] if pos is None else pos
+
         # Calculate translation vector
         data = self.column_pos()
         vec = [pos[i]-min(data[i]) for i in range(self._dim)]
@@ -470,7 +480,7 @@ class Molecule:
     ####################
     # Advanced Editing #
     ####################
-    def part_move(self, bond, atoms, length, vec=[]):
+    def part_move(self, bond, atoms, length, vec=None):
         """Change the length of a specified bond. Variable ``atoms`` specifies
         which atoms or rather which part of the molecule needs to be moved for
         this specific bond. The given length is going to be the new bond length,
@@ -577,7 +587,18 @@ class Molecule:
         .. code-block:: python
 
             mol.part_angle([0, 1], [1, 2], [1, 2, 3], 90, 1)
+
+        Raises
+        ------
+        ValueError
+            Raised when the provided bond definitions do not have compatible
+            dimensions.
         """
+        if len(bond_a) != len(bond_b):
+            raise ValueError("Part_Angle : Wrong bond dimensions...")
+        if len(bond_a) not in [2, self._dim]:
+            raise ValueError("Part_Angle : Wrong bond input...")
+
         # Create temporary molecule
         self.move(zero, [0, 0, 0])
         if isinstance(atoms, int):
@@ -585,17 +606,10 @@ class Molecule:
         temp = self._temp(atoms)
 
         # Rotate molecule around normal vector
-        if len(bond_a) == len(bond_b):
-            if len(bond_a) == 2:
-                vec = geometry.cross_product(self._vector(*bond_a), self._vector(*bond_b))
-            elif len(bond_a) == self._dim:
-                vec = geometry.cross_product(bond_a, bond_b)
-            else:
-                print("Part_Angle : Wrong bond input...")
-                return
+        if len(bond_a) == 2:
+            vec = geometry.cross_product(self._vector(*bond_a), self._vector(*bond_b))
         else:
-            print("Part_Angle : Wrong bond dimensions...")
-            return
+            vec = geometry.cross_product(bond_a, bond_b)
 
         # Rotate molecule
         temp.rotate(vec, angle)
@@ -604,7 +618,7 @@ class Molecule:
     #########
     # Atoms #
     #########
-    def add(self, atom_type, pos, bond=[], r=0, theta=0, phi=0, is_deg=True, name="", residue=0):
+    def add(self, atom_type, pos, bond=None, r=0, theta=0, phi=0, is_deg=True, name="", residue=0):
         """Add a new atom in polar coordinates. The ``pos`` input is either
         an atom id, that determines is the bond-start,
         or a vector for a specific position.
@@ -833,7 +847,7 @@ class Molecule:
         """
         self._charge = charge
 
-    def set_masses(self, masses=[]):
+    def set_masses(self, masses=None):
         """Set the molar masses of the atoms.
 
         Parameters

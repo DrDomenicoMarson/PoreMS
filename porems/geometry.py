@@ -8,6 +8,69 @@
 import math
 
 
+_AXIS_ERROR = "Wrong axis definition..."
+_VECTOR_DIMENSION_ERROR = "Vector: Wrong dimensions..."
+_ROTATE_VECTOR_DIMENSION_ERROR = "Rotate: Wrong vector dimensions."
+
+
+def _validate_matching_dimensions(vec_a, vec_b, message):
+    """Validate that two vectors have the same dimensionality.
+
+    Parameters
+    ----------
+    vec_a : list
+        First vector-like object.
+    vec_b : list
+        Second vector-like object.
+    message : str
+        Error message used for the raised exception.
+
+    Raises
+    ------
+    ValueError
+        Raised when the two vectors do not have matching dimensions.
+    """
+    if len(vec_a) != len(vec_b):
+        raise ValueError(message)
+
+
+def _resolve_main_axis(inp, dim):
+    """Resolve an axis token to its integer axis index.
+
+    Parameters
+    ----------
+    inp : int or str
+        Axis identifier.
+    dim : int
+        Number of dimensions in the returned unit vector.
+
+    Returns
+    -------
+    axis : int
+        One-based axis index.
+
+    Raises
+    ------
+    ValueError
+        Raised when the axis identifier is invalid for the requested
+        dimensionality.
+    """
+    if not isinstance(dim, int) or dim < 1:
+        raise ValueError(_AXIS_ERROR)
+
+    if isinstance(inp, str):
+        axis_map = {"x": 1, "y": 2, "z": 3}
+        axis = axis_map.get(inp)
+        if axis is None or axis > dim:
+            raise ValueError(_AXIS_ERROR)
+        return axis
+
+    if isinstance(inp, int) and 1 <= inp <= 3 and inp <= dim:
+        return inp
+
+    raise ValueError(_AXIS_ERROR)
+
+
 def dot_product(vec_a, vec_b):
     """Calculate the dot product of two vectors
     :math:`\\boldsymbol{a},\\boldsymbol{b}\\in\\mathbb{R}^n`
@@ -76,11 +139,13 @@ def vector(pos_a, pos_b):
     -------
     vector : list
         Bond vector
+
+    Raises
+    ------
+    ValueError
+        Raised when the two position vectors do not have matching dimensions.
     """
-    # Check dimensions
-    if not len(pos_a) == len(pos_b):
-        print("Vector: Wrong dimensions...")
-        return
+    _validate_matching_dimensions(pos_a, pos_b, _VECTOR_DIMENSION_ERROR)
 
     # Calculate vector
     return [pos_b[i]-pos_a[i] for i in range(len(pos_a))]
@@ -258,27 +323,13 @@ def main_axis(inp, dim=3):
     -------
     vec : list
         Unit vector
-    """
-    # Error message
-    axis_error = "Wrong axis definition..."
 
-    # Process input
-    if isinstance(inp, str):
-        if inp == "x":
-            axis = 1
-        elif inp == "y":
-            axis = 2
-        elif inp == "z":
-            axis = 3
-        else:
-            return axis_error
-    elif isinstance(inp, int):
-        if inp == 1 or inp == 2 or inp == 3:
-            axis = inp
-        else:
-            return axis_error
-    else:
-        return axis_error
+    Raises
+    ------
+    ValueError
+        Raised when the requested axis identifier or dimensionality is invalid.
+    """
+    axis = _resolve_main_axis(inp, dim)
 
     # Return vector
     return [1 if i == axis-1 else 0 for i in range(dim)]
@@ -325,6 +376,12 @@ def rotate(data, axis, angle, is_deg, dim=3):
     -------
     coord : list
         Vector c as the result of the rotation
+
+    Raises
+    ------
+    ValueError
+        Raised when the rotation axis input has an invalid shape or axis
+        identifier.
     """
     # Angle
     angle = angle*math.pi/180 if is_deg else angle
@@ -334,15 +391,19 @@ def rotate(data, axis, angle, is_deg, dim=3):
         if len(axis) == dim:
             n = axis
         elif len(axis) == 2:
-            n = vector(axis[0], axis[1])
+            if not all(isinstance(entry, (list, tuple)) for entry in axis):
+                raise ValueError(_ROTATE_VECTOR_DIMENSION_ERROR)
+            try:
+                n = vector(axis[0], axis[1])
+            except ValueError as error:
+                raise ValueError(_ROTATE_VECTOR_DIMENSION_ERROR) from error
         else:
-            print("Rotate: Wrong vector dimensions.")
-            return
+            raise ValueError(_ROTATE_VECTOR_DIMENSION_ERROR)
     else:
-        n = main_axis(axis)
-        if isinstance(n, str):
-            print("Rotate: "+n)
-            return
+        try:
+            n = main_axis(axis, dim=dim)
+        except ValueError as error:
+            raise ValueError(f"Rotate: {error}") from error
 
     # Unit vector
     n = unit(n)
