@@ -4,6 +4,7 @@ import shutil
 import unittest
 
 import porems as pms
+from porems._version import __version__ as EXPECTED_VERSION
 
 
 class BareAmorphousSlitWorkflowCase(unittest.TestCase):
@@ -106,6 +107,15 @@ class BareAmorphousSlitWorkflowCase(unittest.TestCase):
         self.assertIn("GAFF2 + AM1-BCC", notes)
         self.assertIn("0.400 - 0.650 nm", notes)
         self.assertIn("relative adsorption-strength benchmark", notes)
+
+    def test_top_level_exports_and_version(self):
+        self.assertEqual(pms.__version__, EXPECTED_VERSION)
+        self.assertTrue(callable(pms.build_periodic_amorphous_slit))
+        self.assertTrue(callable(pms.write_bare_amorphous_slit_study))
+        self.assertIsInstance(self.config, pms.BareAmorphousSlitConfig)
+        self.assertIsInstance(self.result, pms.SlitBuildResult)
+        self.assertIsInstance(self.report, pms.SlitBuildReport)
+        self.assertIsInstance(self.report.final_surface, pms.SurfaceComposition)
 
 
 if __name__ == "__main__":

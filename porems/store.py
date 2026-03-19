@@ -1,7 +1,7 @@
 ################################################################################
 # Store Class                                                                  #
 #                                                                              #
-"""Contains function for creating simulation files."""
+"""Writers for structure, topology, and helper simulation files."""
 ################################################################################
 
 
@@ -16,25 +16,22 @@ from porems.pore import Pore
 
 
 class Store:
-    """This class converts a molecule object to a structure file of different
-    possible formats. Currently only **PDB** and **GRO** are fully supported.
+    """Write molecule and pore objects to simulation input files.
 
-    For pore objects two additional methods are available for generating the
-    main topology file and a topology file containing grid molecule
-    parameters and charges. Currently only the GROMACS format is supported.
-
-    Furthermore, there is an automized routine for generating topologies
-    with Antechamber where job-file for this tool are created.
+    The writer supports several structure formats for
+    :class:`porems.molecule.Molecule` objects and adds GROMACS-specific
+    topology helpers when the input is a :class:`porems.pore.Pore`.
+    Template-based helper files for Antechamber and grid topologies are also
+    available through this interface.
 
     Parameters
     ----------
-    inp : Molecule, Pore
-        Molecule or Pore object
-    link : string, optional
-        Folder link for output
+    inp : Molecule or Pore
+        Molecule or pore object to serialize.
+    link : str, optional
+        Output directory for generated files.
     sort_list : list, optional
-        Optionally provide a sorting list in case a dictionary of molecules is
-        given
+        Optional pore molecule ordering used when writing topology entries.
 
     Examples
     --------
@@ -101,18 +98,19 @@ class Store:
     # Antechamber #
     ###############
     def job(self, name="", master=""):
-        """Create job file to run with Antechamber. A shell file and a tleap
-        file are created with all necessary commands to create a topology from a
-        pdb file. For the conversion to GROMACS file format the python package
-        **ParmED** needs to be installed.
+        """Write Antechamber helper scripts for the current molecule.
+
+        A shell job file and a matching ``tleap`` input are generated from the
+        bundled templates. They can be used to derive force-field parameters
+        for standalone molecules outside the pore workflow.
 
         Parameters
         ----------
-        name : string, optional
-            Filename
-        master : string, optional
-            Set name for master job file if needed (practical for running
-            multiple topology generations)
+        name : str, optional
+            Base filename for the generated helper files.
+        master : str, optional
+            Optional master shell script to which execution commands for the
+            generated job are appended.
         """
         # Initialize
         link = self._link
@@ -154,12 +152,12 @@ class Store:
     # Structure #
     #############
     def obj(self, name=""):
-        """Save the molecule object or the dictionary of those using pickle.
+        """Serialize the wrapped object with pickle.
 
         Parameters
         ----------
-        name : string, optional
-            Filename
+        name : str, optional
+            Output filename. Defaults to ``<name>.obj``.
         """
         # Initialize
         link = self._link
@@ -169,16 +167,15 @@ class Store:
         utils.save(self._inp, link)
 
     def pdb(self, name="", use_atom_names=False):
-        """Generate the structure file for the defined molecule in the **PDB**
-        format.
+        """Write the current structure in PDB format.
 
         Parameters
         ----------
-        name : string, optional
-            Filename
+        name : str, optional
+            Output filename. Defaults to ``<name>.pdb``.
         use_atom_names : bool, optional
-            True to use atom names if they are defined, False to enumerate based
-            on type
+            True to preserve explicit atom names when available. False to
+            enumerate atom names from atom types.
         """
         # Initialize
         link = self._link
@@ -245,16 +242,15 @@ class Store:
             file_out.write("TER\nEND\n")
 
     def gro(self, name="", use_atom_names=False):
-        """Generate the structure file for the defined molecule in the **GRO**
-        format.
+        """Write the current structure in GROMACS GRO format.
 
         Parameters
         ----------
-        name : string, optional
-            Filename
+        name : str, optional
+            Output filename. Defaults to ``<name>.gro``.
         use_atom_names : bool, optional
-            True to use atom names if they are defined, False to enumerate based
-            on type
+            True to preserve explicit atom names when available. False to
+            enumerate atom names from atom types.
         """
         # Initialize
         link = self._link
@@ -320,16 +316,15 @@ class Store:
             file_out.write(out_string)
 
     def xyz(self, name="", use_atom_names=False):
-        """Generate the structure file for the defined molecule in the **XYZ**
-        format for running qm-simulations.
+        """Write the current structure in XYZ format.
 
         Parameters
         ----------
-        name : string, optional
-            Filename
+        name : str, optional
+            Output filename. Defaults to ``<name>.xyz``.
         use_atom_names : bool, optional
-            True to use atom names if they are defined, False to enumerate based
-            on type
+            Retained for API compatibility. XYZ output always uses atom types as
+            element labels.
         """
         # Initialize
         link = self._link
@@ -352,13 +347,14 @@ class Store:
                     file_out.write(out_string+"\n")
 
     def lmp(self, name=""):
-        """Generate the structure file for the defined molecule in the LAMMPS
-        format. Assuming real units are used, the coordinates are in Angstroms.
+        """Write the current structure in LAMMPS data format.
+
+        Coordinates are written in Angstrom assuming ``real`` units.
 
         Parameters
         ----------
-        name : string, optional
-            Filename
+        name : str, optional
+            Output filename. Defaults to ``<name>.lmp``.
         """
         # Initialize
         link = self._link
@@ -428,14 +424,15 @@ class Store:
     # Topology #
     ############
     def top(self, name=""):
-        """Store the **topology** file for a pore. A top file is created
-        containing the itp-include for all molecules and the count of the
-        different groups of the pore.
+        """Write the main GROMACS topology for a pore object.
+
+        The generated ``.top`` file includes molecule ``.itp`` files and the
+        final molecule counts stored in the wrapped pore.
 
         Parameters
         ----------
-        name : string, optional
-            Filename
+        name : str, optional
+            Output filename. Defaults to ``<name>.top``.
 
         Raises
         ------
@@ -472,15 +469,15 @@ class Store:
                 file_out.write(mol_short+" "+str(len(self._inp.get_mol_dict()[mol_short]))+"\n")
 
     def grid(self, name="", charges=None):
-        """Store the **grid.itp** file containing the necessary parameters and
-        charges of the grid molecules.
+        """Write the ``grid.itp`` topology template for silica grid atoms.
 
         Parameters
         ----------
-        name : string, optional
-            Filename
-        charges : dictionary, optional
-            Dictionary of charges for silicon and oxygen atoms
+        name : str, optional
+            Output filename. Defaults to ``grid.itp``.
+        charges : dict, optional
+            Charge mapping containing ``"si"`` and ``"om"`` entries for the
+            silicon and oxygen grid atoms.
         """
         charges = {"si": 1.28, "om": -0.64} if charges is None else charges
 

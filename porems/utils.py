@@ -1,7 +1,7 @@
 ################################################################################
 # Utils                                                                        #
 #                                                                              #
-"""Here popular basic methods are noted."""
+"""Small filesystem, timing, and unit-conversion helpers."""
 ################################################################################
 
 
@@ -14,42 +14,42 @@ from shutil import copyfile
 
 
 def mkdirp(directory):
-    """Create directory if it does not exist.
+    """Create a directory when it does not exist already.
 
     Parameters
     ----------
-    directory : string
-        Directory name
+    directory : str
+        Directory path to create.
     """
     if not os.path.exists(directory):
         os.makedirs(directory)
 
 
 def copy(source, target):
-    """Copy a specified file to a specified location.
+    """Copy a file to a new location.
 
     Parameters
     ----------
-    source : string
-        Link to requested file
-    target : string
-        Link to requested new file
+    source : str
+        Source file path.
+    target : str
+        Target file path.
     """
     copyfile(source, target)
 
 
 def column(data):
-    """Convert given row list matrix into column list matrix
+    """Transpose a nested row-major list into column-major form.
 
     Parameters
     ----------
     data : list
-        Row data matrix
+        Row-major matrix.
 
     Returns
     -------
     data_col : list
-        column data matrix
+        Column-major matrix.
     """
     num_row = len(data)
     num_col = len(data[0])
@@ -64,33 +64,32 @@ def column(data):
 
 
 def tic():
-    """MATLAB tic replica - return current time.
+    """Return the current wall-clock time.
 
     Returns
     -------
     time : float
-        Current time in seconds
+        Current time in seconds.
     """
     return time.time()
 
 
 def toc(t, message="", is_print=True):
-    """MATLAB toc replica - return time difference to tic and alternatively
-    print a message.
+    """Return the elapsed wall-clock time since :func:`tic`.
 
     Parameters
     ----------
     t : float
-        Starting time - given by tic function
-    message : string, optional
-        Custom output message
+        Start time returned by :func:`tic`.
+    message : str, optional
+        Optional prefix message for the printed output.
     is_print : bool, optional
-        True for printing an output message
+        True to print the elapsed time.
 
     Returns
     -------
     time : float
-        Time difference
+        Elapsed time in seconds.
     """
     if message:
         message += " - runtime = "
@@ -104,47 +103,47 @@ def toc(t, message="", is_print=True):
 
 
 def replace(file_link, old, new):
-    """Replace a given string in a file.
+    """Replace text in a file in place.
 
     Parameters
     ----------
-    file_link : string
-        Link to requested file
-    old : string
-        String to be replaced in file
-    new : string
-        New string to be written
+    file_link : str
+        File path to edit.
+    old : str
+        Text to replace.
+    new : str
+        Replacement text.
     """
     for line in fileinput.input(file_link, inplace=True):
         print(line.rstrip().replace(old, new))
 
 
 def save(obj, link):
-    """Save an object using pickle in the specified link.
+    """Serialize an object with pickle.
 
     Parameters
     ----------
-    obj : Object
-        Object to be saved
-    link : string
-        Specific link to save object
+    obj : object
+        Object to serialize.
+    link : str
+        Output file path.
     """
     with open(link, "wb") as f:
         pickle.dump(obj, f)
 
 
 def load(link):
-    """Load pickled object from the specified folder.
+    """Load a pickled object from disk.
 
     Parameters
     ----------
-    link : string
-        Specific link to load object
+    link : str
+        Pickle file path.
 
     Returns
     -------
-    obj : Object
-        Loaded object
+    obj : object
+        Deserialized object.
     """
     with open(link, 'rb') as f:
         return pickle.load(f)
@@ -186,7 +185,7 @@ def mumol_m2_to_mols(c, A):
     Returns
     -------
     N : float
-        Number of molecules
+        Number of molecules.
     """
     return 0.6022*c*A
 
@@ -226,7 +225,7 @@ def mols_to_mumol_m2(N, A):
     Returns
     -------
     c : float
-        Concentration in :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
+        Concentration in :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`.
     """
     return N/0.6022/A
 
@@ -252,7 +251,7 @@ def mmol_g_to_mumol_m2(c, SBET):
     Returns
     -------
     c : float
-        Concentration in :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
+        Concentration in :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`.
     """
     return c/SBET*1e3
 
@@ -292,7 +291,7 @@ def mmol_l_to_mols(c, V):
     Returns
     -------
     N : float
-        Number of molecules
+        Number of molecules.
     """
     return 6.022e-4*c*V
 
@@ -331,6 +330,6 @@ def mols_to_mmol_l(N, V):
     Returns
     -------
     c : float
-        Concentration in :math:`\\frac{\\text{mmol}}{\\text{l}}`
+        Concentration in :math:`\\frac{\\text{mmol}}{\\text{l}}`.
     """
     return N/6.022e-4/V

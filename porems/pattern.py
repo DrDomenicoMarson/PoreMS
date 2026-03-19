@@ -1,8 +1,7 @@
 ################################################################################
 # Pattern Pack                                                                 #
 #                                                                              #
-"""This file contains minimal pattern structures and their properties for
-creating pore structures."""
+"""Periodic silica pattern generators used as pore-building starting blocks."""
 ################################################################################
 
 
@@ -16,7 +15,7 @@ from porems.molecule import Molecule
 
 
 class Pattern():
-    """This class is a container for individual pattern classes."""
+    """Base class for crystalline silica pattern generators."""
     def __init__(self):
         self._dim = 3
         self._repeat = [0, 0, 0]
@@ -72,19 +71,19 @@ class Pattern():
         self._orient = orient
 
     def generate(self, size, orient):
-        """Generate full block structure.
+        """Generate a repeated block structure for the requested size.
 
         Parameters
         ----------
         size : list
-            Desired block dimensions
-        orient : string
-            Orientation of the block that should be drilled
+            Requested block dimensions.
+        orient : str
+            Axis that should become the drilling axis.
 
         Returns
         -------
         structure : Molecule
-            Full block structure
+            Generated block structure.
         """
         # Calculate repetition and size
         self._num = [round(size[i]/self._repeat[i]) for i in range(self._dim)]
@@ -113,18 +112,17 @@ class Pattern():
         Returns
         -------
         repeat : list
-            List of repetition distances
+            Repeat distances.
         """
         return self._repeat
 
     def get_gap(self):
-        """Return the gap between the pore block and the box edge in all
-        dimensions.
+        """Return the edge gaps used after orientation and centering.
 
         Returns
         -------
         gap : list
-            List of edge distances
+            Gap distances to the simulation box.
         """
         return self._gap
 
@@ -134,34 +132,33 @@ class Pattern():
         Returns
         -------
         size : list
-            List of molecule dimentsions
+            Block dimensions.
         """
         return self._size
 
     def get_block(self):
-        """Return the generated molecule object.
+        """Return the generated block molecule.
 
         Returns
         -------
         block : Molecule
-            Generated block molecule
+            Generated block molecule.
         """
         return self._structure
 
     def get_orient(self):
-        """Return the orientation of the block.
+        """Return the orientation used for the generated block.
 
         Returns
         -------
-        orient : string
-            Block orientation
+        orient : str
+            Block orientation.
         """
         return self._orient
 
 
 class BetaCristobalit(Pattern):
-    """This class defines the minimal structure of a :math:`\\beta`-cristobalite
-    molecule."""
+    """Minimal :math:`\\beta`-cristobalite unit-cell generator."""
     def __init__(self):
         # Call super class
         super(BetaCristobalit, self).__init__()
@@ -210,12 +207,12 @@ class BetaCristobalit(Pattern):
         return hex
 
     def pattern(self):
-        """Construct minimal block structure.
+        """Construct the minimal :math:`\\beta`-cristobalite block.
 
         Returns
         -------
         block : Molecule
-            Minimal block structure
+            Minimal block structure.
         """
         # Initialize
         mols = [self._hexagonal() for x in range(3)]
@@ -281,8 +278,7 @@ class BetaCristobalit(Pattern):
 
 
 class AlphaCristobalit(Pattern):
-    """This class defines the minimal structure of a :math:`\\alpha`-cristobalite
-    molecule.
+    """Minimal :math:`\\alpha`-cristobalite unit-cell generator.
 
     * http://aflowlib.org/prototype-encyclopedia/A2B_tP12_92_b_a.html
     * https://www.atomic-scale-physics.de/lattice/struk/acrist.html
@@ -294,12 +290,12 @@ class AlphaCristobalit(Pattern):
         self._repeat = [.4978, .4978, .6948]
 
     def pattern(self):
-        """Construct minimal block structure.
+        """Construct the minimal :math:`\\alpha`-cristobalite block.
 
         Returns
         -------
         block : Molecule
-            Minimal block structure
+            Minimal block structure.
         """
         # Initialize
         block = Molecule()

@@ -76,9 +76,9 @@ class BareAmorphousSlitConfig:
     surface_target: SurfaceCompositionTarget = field(
         default_factory=lambda: SurfaceCompositionTarget(0.069, 0.681, 0.25)
     )
-    amorph_bond_range_nm: tuple = (0.160 - 0.02, 0.160 + 0.02)
-    siloxane_distance_range_nm: tuple = (0.40, 0.65)
-    template_split_pairs: tuple = ((57790, 2524),)
+    amorph_bond_range_nm: tuple[float, float] = (0.160 - 0.02, 0.160 + 0.02)
+    siloxane_distance_range_nm: tuple[float, float] = (0.40, 0.65)
+    template_split_pairs: tuple[tuple[int, int], ...] = ((57790, 2524),)
 
     def __post_init__(self):
         if self.slit_width_nm <= 0:
@@ -164,12 +164,12 @@ class SlitBuildReport:
 
     name: str
     temperature_k: float
-    box_nm: list
+    box_nm: list[float]
     slit_width_nm: float
     wall_thickness_nm: float
     site_ex: int
     siloxane_bridges: int
-    siloxane_distance_range_nm: tuple
+    siloxane_distance_range_nm: tuple[float, float]
     initial_surface: SurfaceComposition
     target_surface: SurfaceComposition
     final_surface: SurfaceComposition
@@ -187,7 +187,7 @@ class SlitBuildResult:
         Summary of the generated geometry and surface composition.
     """
 
-    system: object
+    system: pms.PoreKit
     report: SlitBuildReport
 
 
@@ -708,6 +708,12 @@ def build_periodic_amorphous_slit(config=None):
     -------
     result : SlitBuildResult
         Generated slit system and summary report.
+
+    Raises
+    ------
+    ValueError
+        Raised when the generated slit unexpectedly contains exterior surface
+        sites or when the provided configuration is internally inconsistent.
     """
     config = config if config is not None else BareAmorphousSlitConfig()
 
@@ -772,6 +778,12 @@ def write_bare_amorphous_slit_study(output_dir, config=None):
     -------
     result : SlitBuildResult
         Generated slit system and summary report.
+
+    Raises
+    ------
+    ValueError
+        Raised when :func:`build_periodic_amorphous_slit` cannot generate a
+        valid periodic slit for the requested configuration.
     """
     result = build_periodic_amorphous_slit(config=config)
     pms.utils.mkdirp(output_dir)

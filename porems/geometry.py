@@ -1,7 +1,7 @@
 ################################################################################
 # Geometry                                                                     #
 #                                                                              #
-"""Here basic geometric functions are noted."""
+"""Vector and coordinate-geometry helpers used across the package."""
 ################################################################################
 
 
@@ -92,13 +92,13 @@ def dot_product(vec_a, vec_b):
     Returns
     -------
     dot : float
-        Dot product value
+        Dot product value.
     """
     return sum((a*b) for a, b in zip(vec_a, vec_b))
 
 
 def length(vec):
-    """Calculate the length of a vector
+    """Calculate the Euclidean length of a vector
     :math:`\\boldsymbol{a}\\in\\mathbb{R}^n`
 
     .. math::
@@ -114,7 +114,7 @@ def length(vec):
     Returns
     -------
     length : float
-        Vector length
+        Vector length.
     """
     return math.sqrt(dot_product(vec, vec))
 
@@ -153,7 +153,7 @@ def vector(pos_a, pos_b):
 
 def unit(vec):
     """Transform a vector :math:`\\boldsymbol{a}\\in\\mathbb{R}^n` into a
-    unit vector
+    unit vector.
 
     .. math::
 
@@ -168,7 +168,7 @@ def unit(vec):
     Returns
     -------
     vec : list
-        Vector
+        Unit vector.
     """
     vec_length = length(vec)
 
@@ -305,8 +305,9 @@ def angle_azi(pos, is_deg=False):
 
 
 def main_axis(inp, dim=3):
-    """Return the three-dimensional unit-vector of the main axes.
-    Input is either integer or string
+    """Return the requested Cartesian basis vector.
+
+    Input is either an integer or string:
 
     * 1 or "x" for the x-axis
     * 2 or "y" for the y-axis
@@ -315,14 +316,14 @@ def main_axis(inp, dim=3):
     Parameters
     ----------
     inp : integer, string
-        Axis type input
-    dim : integer, optional
-        Number of dimensions
+        Axis identifier.
+    dim : int, optional
+        Number of dimensions in the returned basis vector.
 
     Returns
     -------
     vec : list
-        Unit vector
+        Unit vector.
 
     Raises
     ------
@@ -375,7 +376,7 @@ def rotate(data, axis, angle, is_deg, dim=3):
     Returns
     -------
     coord : list
-        Vector c as the result of the rotation
+        Rotated coordinates.
 
     Raises
     ------

@@ -1,7 +1,7 @@
 ################################################################################
 # Pore Class                                                                   #
 #                                                                              #
-"""Function for editing a pore surface."""
+"""Surface preparation and functionalization helpers for pore blocks."""
 ################################################################################
 
 
@@ -21,19 +21,19 @@ _VALID_SITE_TYPES = {"in", "ex"}
 
 
 class Pore():
-    """This class prepares and converts a given molecule block into a pore
-    system.
+    """Prepared pore block with editable binding sites.
 
-    Methods are provided for preparing the surface according to procedures
-    described in literature and for functionalizing the surface with any desired
-    molecule objects.
+    The class wraps a silica block and its connectivity matrix, prepares
+    chemically valid surface sites, tracks interior and exterior attachment
+    states, and attaches silanol, siloxane, or user-provided molecules to the
+    resulting binding sites.
 
     Parameters
     ----------
     block : Molecule
-        Block molecule to be prepared as a pore
+        Block molecule that will be interpreted as a pore scaffold.
     matrix : Matrix
-        Matrix object containing all bond information of given block molecule
+        Connectivity matrix describing the bonds in ``block``.
     """
     def __init__(self, block, matrix):
         # Initialize
@@ -55,17 +55,13 @@ class Pore():
     # Surface #
     ###########
     def prepare(self):
-        """For the purpose of ensuring chemical propriety, the carved out
-        surface needs to be processed based on a set of rules as proposed by
-        Coasne et al. (2008).
+        """Prepare the carved silica surface for later functionalization.
 
-        First, all unsaturated silicon atoms are to be removed. Next, silicon
-        atoms with three unsaturated oxygen bonds are eliminated. Finally, now
-        unbound oxygen atoms must be deleted. The resulting surface has fully
-        saturated silicon atoms with a maximum of two unsaturated oxygen bonds.
-
-        These unsaturated oxygens will be used as binding sites to connect
-        molecules that are to be placed on the surface.
+        The preparation follows the pore-surface cleanup rules used throughout
+        PoreMS: undercoordinated silicon atoms are removed, silicon atoms with
+        excessive dangling oxygen neighbors are stripped, and the remaining
+        unsaturated oxygen atoms become attachment handles for later surface
+        chemistry.
         """
         # Remove unsaturated silicon atoms
         for atom, props in self._matrix.get_matrix().items():
@@ -81,16 +77,16 @@ class Pore():
                     self._matrix.strip(si)
 
     def amorph(self, dist=0.05, accept=None, trials=100):
-        """Make Structure amorphous.
+        """Randomly displace bonded atoms to roughen the local structure.
 
         Parameters
         ----------
         dist : float, optional
-            Maximal displacement distance
+            Maximum displacement per Cartesian component.
         accept : list, optional
-            Acceptance criteria for allowed bond distances with partners
-        trials : integer, optional
-            Allowed number of trials per atom
+            Accepted bond-length interval after displacement.
+        trials : int, optional
+            Maximum number of displacement attempts per atom.
         """
         accept = [0.1, 0.2] if accept is None else accept
 
@@ -126,12 +122,12 @@ class Pore():
                     break
 
     def exterior(self):
-        """Create an exterior surface for reservoir attachement. Using the
-        periodic boundary distance as the indication, the bond between Si and O
-        is broken and the silicon atom is saturated with and additional O atom
-        using the original bond vector for orientation. At the end, the system
-        is shifted by the given gap vector which represents the distance between
-        bonds.
+        """Create exterior surface sites for reservoir-facing functionalization.
+
+        Periodic Si-O bonds crossing the box boundary are split, replacement
+        oxygen atoms are added on the exposed silicon atoms, and the block is
+        shifted so the newly exposed outer surfaces can later be populated with
+        molecules.
         """
         # Initialize
         box = self._block.get_box()
@@ -209,31 +205,12 @@ class Pore():
         return site_molecule
 
     def sites(self):
-        """Create binding site dictionary of the format
+        """Build the internal binding-site registry.
 
-        .. math::
-
-            \\boldsymbol{B}=\\begin{Bmatrix}
-                si_1:&
-                \\begin{Bmatrix}
-                    \\text{o}: \\begin{pmatrix}o_{1,1},\\dots o_{1,n}\\end{pmatrix}&
-                    \\text{type}: \\text{in/ex}&
-                    \\text{state}: \\text{True/False}
-                \\end{Bmatrix}\\\\
-                \\vdots&\\vdots\\\\
-                si_m:&
-                \\begin{Bmatrix}
-                    \\text{o}: \\begin{pmatrix}o_{m,1},\\dots o_{m,n}\\end{pmatrix}&
-                    \\text{type}: \\text{in/ex}&
-                    \\text{state}: \\text{True/False}
-                \\end{Bmatrix}
-            \\end{Bmatrix}
-
-        with entries
-
-        * **o** - Unsaturated oxygen atoms bound to silicon atom
-        * **type** - Exterior "ex" or interior "in" binding site
-        * **state** - available - True, used - False
+        Each silicon surface site is mapped to a dictionary containing the
+        unsaturated oxygen atoms bound to it, the site type (``"in"`` or
+        ``"ex"``), and an availability flag that is updated as groups are
+        attached.
         """
         # Get list of surface oxygen atoms
         oxygen_list = self._matrix.bound(1)
@@ -288,41 +265,42 @@ class Pore():
             )
 
     def attach(self, mol, mount, axis, sites, amount, scale=1, trials=1000, pos_list=None, site_type="in", is_proxi=True, is_random=True, is_rotate=False, is_g=True):
-        """Attach molecules on the surface.
+        """Attach molecules to available pore surface sites.
 
         Parameters
         ----------
         mol : Molecule
-            Molecule object to attach
-        mount : integer
-            Atom id of the molecule that is placed on the surface silicon atom
+            Molecule to attach.
+        mount : int
+            Atom id on ``mol`` placed onto the selected silicon site.
         axis : list
-            List of two atom ids of the molecule that define the molecule axis
+            Two atom ids defining the molecule orientation axis.
         sites : list
-            List of silicon ids of which binding sites should be picked
+            Silicon site ids from which attachment positions are chosen.
         amount : int
-            Number of molecules to attach
+            Number of molecules to attach.
         scale : float, optional
-            Circumference scaling around the molecule position
-        trials : integer, optional
-            Number of trials picking a random site
+            Effective lateral spacing multiplier for proximity searches.
+        trials : int, optional
+            Number of random site-selection attempts per molecule.
         pos_list : list, optional
-            List of positions (cartesian) to find nearest available binding site for
-        site_type : string, optional
-            Site type - interior **in**, exterior **ex**
+            Explicit Cartesian target positions used to pick nearest free sites.
+        site_type : str, optional
+            Site family, either interior ``"in"`` or exterior ``"ex"``.
         is_proxi : bool, optional
-            True to fill binding sites in proximity of filled binding site
+            True to consume nearby sites with silanol fills after attachment.
         is_random : bool, optional
-            True to randomly pick a binding site from given list
+            True to choose sites randomly from ``sites``.
         is_rotate : bool, optional
-            True to randomly rotate molecule around own axis
-        is_g : bool, optinal
-            Force to add molecules only on single binding sites
+            True to allow random rotation around the molecule axis before
+            placement.
+        is_g : bool, optional
+            True to allow geminal surface sites as mounting positions.
 
         Returns
         -------
         mol_list : list
-            List of molecule objects that are attached on the surface
+            Attached molecule copies in placement order.
 
         Raises
         ------
@@ -414,25 +392,29 @@ class Pore():
         return mol_list
 
     def siloxane(self, sites, amount, slx_dist=None, trials=1000, site_type="in"):
-        """Attach siloxane bridges on the surface similar to Krishna et al.
-        (2009). Here silicon atoms of silanol groups wich are at least 0.31 nm
-        near each other can be converted to siloxan bridges, by removing one
-        oxygen atom of the silanol groups and moving the other at the center of
-        the two.
+        """Convert neighboring silanol sites into siloxane bridges.
+
+        Candidate silicon pairs are searched within ``slx_dist`` and, when
+        available, converted from two hydroxylated sites into one bridging
+        siloxane oxygen placed between them.
 
         Parameters
         ----------
         sites : list
-            List of silicon ids of which binding sites should be picked
+            Silicon site ids considered for bridge formation.
         amount : int
-            Number of molecules to attach
+            Number of bridges to attempt.
         slx_dist : list
-            Silicon atom distance bounds to search for parters in proximity
-            [lower, upper]
-        trials : integer, optional
-            Number of trials picking a random site
-        site_type : string, optional
-            Site type - interior **in**, exterior **ex**
+            Accepted silicon-silicon distance interval ``[lower, upper]``.
+        trials : int, optional
+            Number of random pair-selection attempts per bridge.
+        site_type : str, optional
+            Site family, either interior ``"in"`` or exterior ``"ex"``.
+
+        Returns
+        -------
+        mol_list : list
+            Added siloxane bridge molecules.
 
         Raises
         ------
@@ -521,23 +503,19 @@ class Pore():
         return mol_list
 
     def fill_sites(self, sites, site_type):
-        """Fill list of given sites that are empty with silanol and geminal
-        silanol molecules, respectively.
+        """Fill remaining free sites with silanol or geminal silanol groups.
 
         Parameters
         ----------
         sites : list
-            List of silicon ids
-        normal : function
-            Function that returns the normal vector of the surface for a given
-            position
-        site_type : string, optional
-            Site type - interior **in**, exterior **ex**
+            Silicon site ids to fill.
+        site_type : str
+            Site family, either interior ``"in"`` or exterior ``"ex"``.
 
         Returns
         -------
         mol_list : list
-            List of molecule objects that are attached on the surface
+            Added silanol molecules.
         """
         mol_list = self.attach(generic.silanol(), 0, [0, 1], sites, len(sites), site_type=site_type, is_proxi=False, is_random=False)
         
@@ -548,17 +526,17 @@ class Pore():
     # Final Edits #
     ###############
     def objectify(self, atoms):
-        """Create molecule objects of specified list of atoms.
+        """Convert standalone scaffold atoms into one-atom molecule objects.
 
         Parameters
         ----------
         atoms : list
-            List of atom ids
+            Atom ids to convert.
 
         Returns
         -------
         mol_list : list
-            List of molecule objects
+            One-atom molecule objects created from the selected atoms.
         """
         # Initialize
         mol_list = []
@@ -586,12 +564,12 @@ class Pore():
         return mol_list
 
     def reservoir(self, size):
-        """Create a reservoir with given length on each side of pore system.
+        """Translate the pore content into a box with solvent reservoirs.
 
         Parameters
         ----------
         size : float
-            Reservoir size in nm
+            Reservoir length added on each side along ``z`` in nanometers.
         """
         # Convert molecule dict into list
         mol_list = sum([x for x in self.get_mol_dict().values()], [])
@@ -621,18 +599,18 @@ class Pore():
 
         Parameters
         ----------
-        name : string
-            Pore name
+        name : str
+            Pore name.
         """
         self._name = name
 
     def set_box(self, box):
-        """Set the box size.
+        """Set the pore simulation box dimensions.
 
         Parameters
         ----------
         box : list
-            Box size in all dimensions
+            Box lengths in all dimensions.
         """
         self._box = box
 
@@ -645,8 +623,8 @@ class Pore():
 
         Returns
         -------
-        name : string
-            Pore name
+        name : str
+            Pore name.
         """
         return self._name
 
@@ -656,7 +634,7 @@ class Pore():
         Returns
         -------
         box : list
-            Box size in all dimensions
+            Box lengths in all dimensions.
         """
         return self._box
 
@@ -666,27 +644,28 @@ class Pore():
         Returns
         -------
         block : Molecule
-            Block molecule object
+            Underlying block molecule.
         """
         return self._block
 
     def get_sites(self):
-        """Return the binding sites dictionary.
+        """Return the binding-site registry.
 
         Returns
         -------
-        sites : dictionary
-            Binding sites dictionary
+        sites : dict
+            Site dictionary keyed by silicon atom id.
         """
         return self._sites
 
     def get_mol_dict(self):
-        """Return the dictionary of all molecules.
+        """Return all molecules grouped by residue short name.
 
         Returns
         -------
-        mol_dict : dictionary
-            Dictionary of all molecules
+        mol_dict : dict
+            Molecule dictionary merged across interior, exterior, and block
+            groups.
         """
         mol_dict = {}
         for site_type in self._mol_dict.keys():
@@ -698,22 +677,22 @@ class Pore():
         return mol_dict
 
     def get_site_dict(self):
-        """Return the molecule dictionary with site type differentiation.
+        """Return molecules grouped by site family.
 
         Returns
         -------
-        site_dict : dictionary
-            Dictionary of all molecules with sorted sites
+        site_dict : dict
+            Molecule dictionary split into ``"block"``, ``"in"``, and ``"ex"``.
         """
         return self._mol_dict
 
     def get_num_in_ex(self):
-        """Return the number of geminal si-binding sites that have one OH on the
-        interior surface and on on the exterior surface.
+        """Return the number of mixed interior/exterior geminal sites.
 
         Returns
         -------
-        num_in_ex : integer
-            Dictionary of all molecules with sorted sites
+        num_in_ex : int
+            Number of geminal silicon sites spanning both interior and exterior
+            oxygen assignments.
         """
         return self._num_in_ex

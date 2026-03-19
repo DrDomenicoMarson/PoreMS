@@ -1,7 +1,7 @@
 ################################################################################
 # Atom Class                                                                   #
 #                                                                              #
-"""All necessary function for creating and editing atoms."""
+"""Atom container used throughout molecule and pore structures."""
 ################################################################################
 
 
@@ -9,19 +9,18 @@ import pandas as pd
 
 
 class Atom:
-    """This class defines an atom object containing the position, the atom type
-    and optionally a specific name.
+    """Represent a single atom with coordinates and lightweight metadata.
 
     Parameters
     ----------
     pos : list
-        Atom position
-    atom_type : string
-        Atom type as in the periodic table of elements
-    name : string, optional
-        Atom name
-    residue : integer, optional
-        Residue number
+        Cartesian atom position.
+    atom_type : str
+        Chemical symbol used for the atom type.
+    name : str, optional
+        Optional atom label.
+    residue : int, optional
+        Residue index used by structure writers.
     """
     def __init__(self, pos, atom_type, name="", residue=0):
         # Initialize
@@ -35,12 +34,12 @@ class Atom:
     # Representation #
     ##################
     def __repr__(self):
-        """Create a pandas table of the atom data.
+        """Return a tabular string representation of the atom.
 
         Returns
         -------
-        repr : DataFrame
-            Pandas data frame of the molecule object
+        repr : str
+            Pandas-formatted string containing the stored atom data.
         """
         # Set colums names
         columns = ["Residue", "Name", "Type", "x", "y", "z"]
@@ -57,42 +56,42 @@ class Atom:
     # Setter Methods #
     ##################
     def set_pos(self, pos):
-        """Set the atom position.
+        """Update the atom position.
 
         Parameters
         ----------
         pos : list
-            Atom position
+            Cartesian atom position.
         """
         self._pos = pos
 
     def set_atom_type(self, atom_type):
-        """Set the atom type.
+        """Update the atom type.
 
         Parameters
         ----------
-        atom_type : string
-            Atom type as in the periodic table of elements
+        atom_type : str
+            Chemical symbol used for the atom type.
         """
         self._atom_type = atom_type
 
     def set_name(self, name):
-        """Set the atom name.
+        """Update the atom name.
 
         Parameters
         ----------
-        name : string
-            Atom name
+        name : str
+            Atom label.
         """
         self._name = name
 
     def set_residue(self, residue):
-        """Set the residue index.
+        """Update the residue index.
 
         Parameters
         ----------
-        residue : integer
-            Residue index
+        residue : int
+            Residue index used by structure writers.
         """
         self._residue = residue
 
@@ -106,7 +105,7 @@ class Atom:
         Returns
         -------
         pos : list
-            Atom position
+            Cartesian atom position.
         """
         return self._pos
 
@@ -115,8 +114,8 @@ class Atom:
 
         Returns
         -------
-        atom_type : string
-            Atom type
+        atom_type : str
+            Chemical symbol used for the atom type.
         """
         return self._atom_type
 
@@ -125,8 +124,8 @@ class Atom:
 
         Returns
         -------
-        name : string
-            Atom name
+        name : str
+            Atom label.
         """
         return self._name
 
@@ -135,7 +134,7 @@ class Atom:
 
         Returns
         -------
-        residue : integer
-            Residue index
+        residue : int
+            Residue index used by structure writers.
         """
         return self._residue

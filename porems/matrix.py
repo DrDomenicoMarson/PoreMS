@@ -1,12 +1,12 @@
 ################################################################################
 # Matric Class                                                                 #
 #                                                                              #
-"""Matrix class for preserving bond information."""
+"""Connectivity-matrix helper used during pore preparation."""
 ################################################################################
 
 
 class Matrix:
-    """The aim of this class is preserving all information of the grid bonds.
+    """Store and edit grid connectivity during pore preparation.
 
     Although the search can be parallelized, still multiple iterations are
     needed to cover the surface preparations. Additionally, due to machine
@@ -48,8 +48,7 @@ class Matrix:
     Parameters
     ----------
     bonds : list
-        List of all pairwise bonds in the grid with only two different atom
-        types
+        Pairwise bond information for the source grid.
     """
     def __init__(self, bonds):
         # Create bond dictionary
@@ -73,10 +72,10 @@ class Matrix:
 
         Parameters
         ----------
-        atom_a : integer
-            Atom A
-        atom_b : integer
-            Atom B
+        atom_a : int
+            First atom id.
+        atom_b : int
+            Second atom id.
         """
         self._matrix[atom_a]["atoms"].remove(atom_b)
         self._matrix[atom_b]["atoms"].remove(atom_a)
@@ -86,8 +85,8 @@ class Matrix:
 
         Parameters
         ----------
-        atoms : list, integer
-            List of atom ids or one atom id
+        atoms : list or int
+            Atom id or list of atom ids whose bonds should be removed.
         """
         # Porocess input
         atoms = [atoms] if isinstance(atoms, int) else atoms
@@ -99,14 +98,14 @@ class Matrix:
                 self.split(atom_a, atom_b)
 
     def add(self, atom_a, atom_b):
-        """Add atom between given atom ids.
+        """Add a bond between two atoms.
 
         Parameters
         ----------
         atom_a : int
-            First atom id
+            First atom id.
         atom_b : int
-            Second atom id
+            Second atom id.
         """
         # Add entry fort first atom
         if atom_a in self._matrix.keys():
@@ -121,8 +120,9 @@ class Matrix:
             self._matrix[atom_b] = {"atoms": [atom_a], "bonds": -1}
 
     def bound(self, num_bonds, logic="eq"):
-        """Return a list of atoms with the specified number of bonds. Possible
-        ``logic`` arguments are
+        """Return atoms matching a bond-count predicate.
+
+        Supported ``logic`` arguments are
 
         * **eq** - Equals
         * **lt** - Less than
@@ -131,14 +131,14 @@ class Matrix:
         Parameters
         ----------
         num_bonds : int
-            Number of bonds to search for
-        logic : string, optional
-            Logic statement
+            Number of bonds to compare against.
+        logic : str, optional
+            Comparison operator.
 
         Returns
         -------
         atoms : list
-            List of atom ids with the number of specified bonds
+            Atom ids that satisfy the requested predicate.
 
         Raises
         ------
@@ -164,7 +164,8 @@ class Matrix:
 
         Returns
         -------
-        matrix : dictionary
-            Connectivity matrix
+        matrix : dict
+            Connectivity mapping from atom ids to bonded neighbors and the
+            original bond count.
         """
         return self._matrix

@@ -1,7 +1,7 @@
 ################################################################################
 # Dice Class                                                                   #
 #                                                                              #
-"""Separation of a molecule object into smaller cubes for pair-search."""
+"""Cube-based neighbor-search helpers for molecular structures."""
 ################################################################################
 
 
@@ -92,11 +92,10 @@ class SearchPolicy:
 
 
 class Dice:
-    """This class splits the molecule into smaller sub boxes and provides
-    configurable functions for pair-search.
+    """Partition a molecule into cubes for local pair searches.
 
     The aim is reducing the workload on search algorithms for atom pairs.
-    Normally the computational effort would be
+    A naive neighbor search would scale as
 
     .. math::
 
@@ -116,9 +115,9 @@ class Dice:
 
         \\mathcal O(27\\cdot b^2)
 
-    Therefore, the computational effort for an entire search scales linear with
-    the number of cubes. For example, doubling the cristobalite block size only
-    increases the effort eightfold.
+    Therefore, the computational effort for an entire search scales linearly
+    with the number of cubes. For example, doubling the cristobalite block size
+    only increases the effort eightfold.
 
     Furthermore, the search can be parallelized across multiple processes,
     since no communication is needed between the subprocesses that each cover
@@ -131,13 +130,26 @@ class Dice:
     Parameters
     ----------
     mol : Molecule
-        Molecule to be divided
+        Molecule to be divided into cubes.
     size : float
-        Cube edge size
+        Cube edge size.
     is_pbc : bool
-        True if periodic boundary conditions are needed
+        True when periodic boundary conditions should be applied during
+        neighbor lookups.
     """
     def __init__(self, mol, size, is_pbc):
+        """Initialize the cube-based search structure.
+
+        Parameters
+        ----------
+        mol : Molecule
+            Molecule to be divided into cubes.
+        size : float
+            Edge length of each search cube.
+        is_pbc : bool
+            True when periodic boundary conditions should be applied during
+            neighbor lookups.
+        """
         # Initialize
         self._dim = 3
         self._np = mp.cpu_count()
@@ -604,6 +616,9 @@ class Dice:
         RuntimeError
             If ``SearchExecution.PROCESSES`` is requested from an unsafe
             multiprocessing entrypoint.
+        ValueError
+            If process-based execution is requested with fewer than two worker
+            processes.
         """
         if atom_type is None or distance is None:
             raise TypeError("Dice.find requires atom_type and distance arguments.")
@@ -648,8 +663,8 @@ class Dice:
 
         Parameters
         ----------
-        bond : bool
-            True to turn on periodic boundary conditions
+        pbc : bool
+            True to enable periodic boundary conditions for neighbor lookups.
         """
         self._is_pbc = pbc
 
@@ -662,8 +677,8 @@ class Dice:
 
         Returns
         -------
-        origin : dictionary
-            Dictionary of origin positions for each cube
+        origin : dict
+            Mapping from cube index tuples to origin positions.
         """
         return self._origin
 
@@ -672,8 +687,8 @@ class Dice:
 
         Returns
         -------
-        pointer : dictionary
-            Pointer dictionary
+        pointer : dict
+            Mapping from cube index tuples to lists of atom ids.
         """
         return self._pointer
 
@@ -683,17 +698,17 @@ class Dice:
         Returns
         -------
         count : list
-            Number of cubes
+            Number of cubes along ``x``, ``y`` and ``z``.
         """
         return self._count
 
     def get_size(self):
-        """Return the cubes size.
+        """Return the cube size.
 
         Returns
         -------
-        size : integer
-            Cube size
+        size : float
+            Edge length of each search cube.
         """
         return self._size
 
@@ -703,6 +718,6 @@ class Dice:
         Returns
         -------
         mol : Molecule
-            Molecule
+            Wrapped molecule instance.
         """
         return self._mol

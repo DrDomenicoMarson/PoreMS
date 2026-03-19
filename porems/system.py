@@ -1,7 +1,7 @@
 ################################################################################
 # Basic Pore System Classes                                                    #
 #                                                                              #
-"""Here basic pore system constructions are defined."""
+"""High-level pore builders and geometry analysis helpers."""
 ################################################################################
 
 
@@ -23,7 +23,7 @@ _VALID_SPECIAL_SYMMETRIES = {"point", "mirror"}
 
 @dataclass
 class _ShapeAnalysis:
-    """Precomputed geometry data for one pore shape."""
+    """Cached geometry metadata for one configured pore shape."""
 
     shape_id: int
     shape_type: str
@@ -40,7 +40,7 @@ class _ShapeAnalysis:
 
     @classmethod
     def from_shape(cls, shape_id, shape):
-        """Build cached analysis data for one shape entry."""
+        """Build analysis metadata from one stored shape entry."""
         shape_type, shape_obj = shape[0], shape[1]
         inp = shape_obj.get_inp()
         centroid = inp["centroid"]
@@ -73,7 +73,7 @@ class _ShapeAnalysis:
         )
 
     def matches_site(self, pos):
-        """Return True if a binding-site position belongs to the shape."""
+        """Return True when a binding-site position belongs to the shape."""
         radi = pms.geom.length(pms.geom.vector([self.centroid[0], self.centroid[1], pos[2]], pos))
         z_min = self.centroid[2] - self.extent / 2
         z_max = self.centroid[2] + self.extent / 2
@@ -89,7 +89,7 @@ class _ShapeAnalysis:
         return False
 
     def radius_from_position(self, pos):
-        """Return the analysis radius for a position or None if it is excluded."""
+        """Return the relevant analysis radius for one position."""
         if self.shape_type == "CYLINDER":
             if self.z_min < pos[2] < self.z_max and self.central == [0, 0, 1]:
                 return pms.geom.length(pms.geom.vector([self.centroid[0], self.centroid[1], pos[2]], pos))
@@ -124,7 +124,12 @@ class _ShapeAnalysis:
 
 
 class PoreKit():
-    """Pore construction kit.
+    """Composable builder for pore systems carved from silica blocks.
+
+    ``PoreKit`` exposes the low-level workflow used by the higher-level pore
+    convenience classes: provide a structure, build its connectivity, define one
+    or more pore shapes, prepare the surface, attach molecules, then finalize
+    and store the result.
     """
     def __init__(self):
         # Initialize
@@ -135,12 +140,12 @@ class PoreKit():
         self._yml = {}
 
     def structure(self, structure):
-        """Add structure to the Pore builder.
+        """Set the silica structure used by the pore builder.
 
         Parameters
         ----------
         structure : Molecule
-            Crystal structure given as a PoreMS Molecule object
+            Input silica structure as a :class:`porems.molecule.Molecule`.
         """
         # Globalize crystal structure
         self._block = structure
@@ -148,12 +153,12 @@ class PoreKit():
         self._centroid = self._block.centroid()
 
     def build(self, bonds=None):
-        """Process provided structure to build connectivity matrix.
+        """Build the Si-O connectivity matrix and base pore object.
 
         Parameters
         ----------
         bonds : list, optional
-            Minimal ans maximal bond length range for Si-O bonds
+            Accepted Si-O bond-length interval used during connectivity search.
         """
         bonds = [0.155-1e-2, 0.155+1e-2] if bonds is None else bonds
 
@@ -170,34 +175,34 @@ class PoreKit():
     # Shapes #
     ##########
     def exterior(self, res, hydro=0):
-        """Optionally create and adjust exterior surface.
+        """Expose and configure the exterior surface.
 
         Parameters
         ----------
         res : float
-            Reservoir length in nm
+            Reservoir length in nanometers added on each side during
+            finalization.
         hydro : float, optional
-            Hydroxilation degree for exterior surface in
+            Target hydroxylation degree for the exterior surface in
             :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
-            leave zero for no adjustment
+            Leave zero to keep the original exterior hydroxylation.
         """
         self._pore.exterior()
         self._hydro["ex"] = hydro
         self._res = res
 
     def add_shape(self, shape, section=None, hydro=0):
-        """Add shape to pore system for drilling.
+        """Register one pore shape for drilling and later analysis.
 
         Parameters
         ----------
         shape : list
-            Shape type (pos 0) and shape (pos 1)
-        section : dictionary, optional
-            Range of shape from start x,y,z-length to end x,y,z-length,
-            leave empty for whole range - mainly used to assign
-            silanol groups to the shapes
-        hydro : float, optional, TEMPORARY
-            Hydroxilation degree for interior surface in
+            Two-item shape entry containing the shape type and shape object.
+        section : dict, optional
+            Optional coordinate ranges used to assign interior sites to this
+            shape after preparation.
+        hydro : float, optional
+            Target hydroxylation degree for the interior surface in
             :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
 
         Raises
@@ -220,23 +225,23 @@ class PoreKit():
         self._shapes.append(shape)
 
     def shape_cylinder(self, diam, length=0, centroid=None, central=None):
-        """Add cylindrical shape
+        """Create a cylindrical drilling shape.
 
         Parameters
         ----------
         diam : float
-            Cylinder diameter
+            Cylinder diameter in nanometers.
         length : float, optional
-            length of cylindrical shape leave zero for full length
+            Cylinder length in nanometers. Use zero for the full box length.
         centroid : list, optional
-            Cylinder centroid. Leave empty for the system centroid.
+            Cylinder centroid. Defaults to the system centroid.
         central : list, optional
             Central axis for cylinder. Defaults to the z-axis.
 
         Returns
         -------
         shape : list
-            Shape type (pos 0) and shape (pos 1)
+            Shape entry ready for :meth:`add_shape`.
         """
         central = [0, 0, 1] if central is None else central
 
@@ -250,23 +255,23 @@ class PoreKit():
         return ["CYLINDER", cylinder]
 
     def shape_slit(self, height, length=0, centroid=None, central=None):
-        """Add slit shape
+        """Create a slit-pore drilling shape.
 
         Parameters
         ----------
         height : float
-            Cylinder diameter
+            Slit height in nanometers.
         length : float, optional
-            length of cylindrical shape
+            Slit length in nanometers. Use zero for the full box length.
         centroid : list, optional
-            Slit centroid. Leave empty for the system centroid.
+            Slit centroid. Defaults to the system centroid.
         central : list, optional
             Central axis for the slit. Defaults to the z-axis.
 
         Returns
         -------
         shape : list
-            Shape type (pos 0) and shape (pos 1)
+            Shape entry ready for :meth:`add_shape`.
         """
         central = [0, 0, 1] if central is None else central
 
@@ -280,21 +285,21 @@ class PoreKit():
         return ["SLIT", cuboid]
 
     def shape_sphere(self, diameter, centroid=None, central=None):
-        """Add sphere shape
+        """Create a spherical drilling shape.
 
         Parameters
         ----------
         diameter : float
-            Sphere diameter
+            Sphere diameter in nanometers.
         centroid : list, optional
-            Sphere centroid. Leave empty for the system centroid.
+            Sphere centroid. Defaults to the system centroid.
         central : list, optional
             Central axis for sphere orientation. Defaults to the z-axis.
 
         Returns
         -------
         shape : list
-            Shape type (pos 0) and shape (pos 1)
+            Shape entry ready for :meth:`add_shape`.
         """
         central = [0, 0, 1] if central is None else central
 
@@ -307,25 +312,25 @@ class PoreKit():
         return ["SPHERE", sphere]
 
     def shape_cone(self, diam_1, diam_2, length=0, centroid=None, central=None):
-        """Add cone shape
+        """Create a conical drilling shape.
 
         Parameters
         ----------
         diam_1 : float
-            Cone first diameter
+            First cone diameter in nanometers.
         diam_2 : float
-            Cone second diameter
+            Second cone diameter in nanometers.
         length : float, optional
-            length of cylindrical shape leave zero for full length
+            Cone length in nanometers. Use zero for the full box length.
         centroid : list, optional
-            Cone centroid. Leave empty for the system centroid.
+            Cone centroid. Defaults to the system centroid.
         central : list, optional
             Central axis for cone. Defaults to the z-axis.
 
         Returns
         -------
         shape : list
-            Shape type (pos 0) and shape (pos 1)
+            Shape entry ready for :meth:`add_shape`.
         """
         central = [0, 0, 1] if central is None else central
 
@@ -574,9 +579,13 @@ class PoreKit():
                 counts[short_name] = counts.get(short_name, 0) + 1
 
     def prepare(self):
-        """Prepare pore surface, add siloxane bridges, assign sites to sections,
-        and assign a unique normal vector to each site by updating the
-        original pore object site list.
+        """Drill the configured shapes and prepare the resulting surface.
+
+        This step removes atoms inside the configured shapes, prepares the
+        exposed silica surface, assigns surface normals and section ownership,
+        optionally creates siloxane bridges to hit hydroxylation targets, and
+        initializes the per-shape tracking used by later attachment and
+        analysis routines.
         """
         # Carve out shape
         del_list = []
@@ -730,17 +739,17 @@ class PoreKit():
     # Attachment #
     ##############
     def _normal_ex(self, pos):
-        """Normal function for the exterior surface
+        """Return the outward normal of the exterior reservoir surface.
 
         Parameters
         ----------
         pos : list
-            Position on the surface
+            Surface position.
 
         Returns
         -------
         normal : list
-            Vector perpendicular to surface of the given position
+            Unit-like normal vector pointing away from the silica block.
         """
         return [0, 0, -1] if pos[2] < self.centroid()[2] else [0, 0, 1]
 
@@ -804,15 +813,14 @@ class PoreKit():
                 self._sort_list.append(attached_mol.get_short())
 
     def _siloxane(self, site_type, slx_dist=None):
-        """Attach siloxane bridges using function
-        :func:`porems.pore.Pore.siloxane`.
+        """Adjust hydroxylation by introducing siloxane bridges.
 
         Parameters
         ----------
-        site_type : string
-            Site type - interior **in**, exterior **ex**
+        site_type : str
+            Site family, either interior ``"in"`` or exterior ``"ex"``.
         slx_dist : list, optional
-            Silicon atom distance to search for partners in proximity
+            Accepted silicon-silicon distance interval for bridge formation.
         """
         slx_dist = [0.507-1e-2, 0.507+1e-2] if slx_dist is None else slx_dist
 
@@ -882,37 +890,38 @@ class PoreKit():
                         
 
     def attach(self, mol, mount, axis, amount, site_type="in", inp="num", shape="all", pos_list=None, scale=1, trials=1000, is_proxi=True, is_rotate=False, is_g=True):
-        """Attach molecule on the surface.
+        """Attach a molecule to interior or exterior pore sites.
 
         Parameters
         ----------
         mol : Molecule
-            Molecule object to attach
-        mount : integer
-            Atom id of the molecule that is placed on the surface silicon atom
+            Molecule to attach.
+        mount : int
+            Atom id on ``mol`` placed on the selected silicon site.
         axis : list
-            List of two atom ids of the molecule that define the molecule axis
+            Two atom ids defining the molecule orientation axis.
         amount : int
-            Number of molecules to attach
-        site_type : string, optional
-            Use **in** for the interior surface and **ex** for the exterior
-        inp : string, optional
-            Input type: **num** - Number of molecules,
-            **molar** - :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`,
-            **percent** - :math:`\\%` of OH groups
-        shape : string, optional 
-            Optional is "all" this means every shape will be functionalize. 
-            Otherwise specific the shape if you want to functionalize.
+            Requested number or density of attachments, depending on ``inp``.
+        site_type : str, optional
+            Use ``"in"`` for interior sites and ``"ex"`` for exterior sites.
+        inp : str, optional
+            Amount interpretation: absolute number (``"num"``), hydroxylation
+            density (``"molar"``), or fraction of OH groups (``"percent"``).
+        shape : str, optional
+            Shape selector for interior attachment. Use ``"all"`` for all
+            interior shapes or ``"shape_N"`` for one specific shape.
         pos_list : list, optional
-            List of positions (Cartesian) to find nearest available binding site for
+            Explicit Cartesian target positions used to pick nearest free sites.
         scale : float, optional
-            Circumference scaling around the molecule position
-        trials : integer, optional
-            Number of trials picking a random site
+            Effective lateral spacing multiplier for proximity searches.
+        trials : int, optional
+            Number of random site-selection attempts.
         is_proxi : bool, optional
-            True to fill binding sites in proximity of filled binding site
+            True to consume nearby sites with silanol fills after attachment.
         is_rotate : bool, optional
-            True to randomly rotate molecule around own axis
+            True to allow random rotation around the molecule axis.
+        is_g : bool, optional
+            True to allow geminal surface sites as mounting positions.
 
         Raises
         ------
@@ -1063,11 +1072,11 @@ class PoreKit():
     # Finalization #
     ################
     def finalize(self):
-        """Finalize pore system.
+        """Finalize the pore by saturating remaining sites and boxing it.
 
-        Remaining free binding sites are filled with silanol groups. If a
-        reservoir was requested, the final pore object is translated and boxed
-        accordingly. Otherwise the original simulation box is preserved.
+        Remaining free interior and exterior sites are filled with silanol
+        groups. If a reservoir length was requested, the pore is translated and
+        re-boxed accordingly; otherwise the original block box is preserved.
         """
 
         # Fill silanol on the exterior surface
@@ -1097,13 +1106,12 @@ class PoreKit():
             self._pore.set_box(self._box)
 
     def store(self, link="./", sort_list=None):
-        """Store pore system and all necessary files for simulation at given
-        link.
+        """Write the finalized pore system and companion simulation files.
 
         Parameters
         ----------
-        link : string, optional
-            Folder link for output
+        link : str, optional
+            Output directory.
         sort_list : list, optional
             Sorting list for output structure files. Defaults to the internal
             builder ordering.
@@ -1128,12 +1136,12 @@ class PoreKit():
         self.yml(link)
 
     def yml(self, link="./"):
-        """Save yaml file with properties necessary for analysis.
+        """Write a YAML summary of the pore geometry and chemistry.
 
         Parameters
         ----------
-        link : string, optional
-            Folder link for output
+        link : str, optional
+            Output directory.
         """
         # Process input
         link = link if link[-1] == "/" else link+"/"
@@ -1176,9 +1184,10 @@ class PoreKit():
     # Analysis #
     ############
     def diameter(self):
-        """Calculate true diameter after drilling and preparation. This
-        is done by determining the mean value :math:`\\bar r` of the silicon
-        distances :math:`r_i` of silicon :math:`i` towards the shape center
+        """Return the effective pore diameter after preparation.
+
+        The diameter is estimated from the mean radial distance of the tracked
+        interior silicon positions relative to each shape axis or centroid.
 
         .. math::
 
@@ -1193,7 +1202,7 @@ class PoreKit():
         Returns
         -------
         diameter : list
-            List of shape diameters after preparation
+            Effective diameters for each configured shape.
         """
         radii = self._collect_shape_radii()
         # Calculate mean
@@ -1204,15 +1213,12 @@ class PoreKit():
         return diam
 
     def roughness(self):
-        """Calculate surface roughness. In the case of a cylindrical pore one can
-        visualize pulling the pore apart, thus flattening the interior surface.
-        The roughness is then determined by calculating the standard deviation
-        of the binding site silicon atoms peaks and valleys.
+        """Return the surface roughness of the pore surfaces.
 
-        It is therefore enough to calculate the distances towards a specific
-        axis, which in this case will be the central axis. The mean value
-        :math:`\\bar r` of the silicon distances :math:`r_i` of silicon
-        :math:`i` towards the pore center, is calculated by
+        Roughness is calculated as the root-mean-square deviation of the
+        tracked silicon-site radii from the mean radius of each shape. When
+        reservoirs are present, an exterior roughness value is reported as
+        well.
 
         .. math::
 
@@ -1227,8 +1233,9 @@ class PoreKit():
 
         Returns
         -------
-        roughness : float
-            Surface roughness
+        roughness : dict
+            Dictionary with interior roughness values by shape and one exterior
+            roughness value.
         """
         radii_in = self._collect_shape_radii()
 
@@ -1257,12 +1264,12 @@ class PoreKit():
         return {"in": r_q_in, "ex": r_q_ex}
 
     def volume(self, is_sum=True):
-        """Calculate pore volume. This is done by defining a new shape object
-        with system sizes after pore preparation and using the volume functions.
+        """Return the pore volume derived from the prepared geometry.
 
         Notes
         -----
-        Sphere volume is fully calculated.
+        The calculation rebuilds idealized analysis shapes from the prepared
+        effective diameters.
 
         Parameters
         ----------
@@ -1272,7 +1279,8 @@ class PoreKit():
         Returns
         -------
         volume : float, list
-            Total pore volume if is_sum is True. Otherwise a list of volumes
+            Total pore volume when ``is_sum`` is True, otherwise one value per
+            configured shape.
         """
         # Get diameters
         diam = self.diameter()
@@ -1297,14 +1305,13 @@ class PoreKit():
         return sum(volume) if is_sum else volume
 
     def surface(self, is_sum=True):
-        """Calculate pore surface and exterior surface. This is done by defining
-        a new shape object with system sizes after pore preparation and using
-        the surface functions.
+        """Return interior and exterior surface areas of the pore system.
 
         Notes
         -----
-        Sphere surface is fully calculated and outer surface assumes
-        that spheres intersect at the center.
+        The calculation rebuilds idealized analysis shapes from the prepared
+        effective diameters. Exterior surfaces are inferred from the end
+        sections of the configured shapes.
 
         Parameters
         ----------
@@ -1313,8 +1320,8 @@ class PoreKit():
 
         Returns
         -------
-        surface : dictionary
-            Pore surface of interior and exterior
+        surface : dict
+            Dictionary containing interior and exterior surface areas.
         """
         # Get diameters
         diam = self.diameter()
@@ -1358,20 +1365,16 @@ class PoreKit():
         return {"in": sum(surf_in) if is_sum else surf_in,"ex": sum(surf_ex) if is_sum else surf_ex}
 
     def allocation(self):
-        """Calculate molecule allocation on the surface. Using interior and
-        exterior surfaces, the allocation rates can be determined by counting
-        the number of used molecules on the surfaces.
+        """Return surface allocation statistics for all attached molecules.
 
-        Using the conversion function :func:`porems.utils.mols_to_mumol_m2`, the
-        number of molecules is converted to concentration in
+        The reported values include absolute counts, densities per square
+        nanometer, and densities converted to
         :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`.
 
         Returns
         -------
-        alloc : dictionary
-            Dictionary containing the surface allocation of all molecules in
-            number of molecules, :math:`\\frac{\\text{mols}}{\\text{nm}^2}` and
-            :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
+        alloc : dict
+            Surface allocation statistics grouped by molecule short name.
         """
         # Get surfaces
         surf = self.surface()
@@ -1425,37 +1428,37 @@ class PoreKit():
         Returns
         -------
         res : float
-            Reservoir length
+            Reservoir length in nanometers.
         """
         return self._res
 
     def box(self):
-        """Return the box size of the pore block.
+        """Return the final simulation box dimensions.
 
         Returns
         -------
         box : list
-            Box size in all dimensions
+            Box lengths in all dimensions.
         """
         return self._pore.get_box()
 
     def centroid(self):
-        """Return pore centroid.
+        """Return the pore centroid.
 
         Returns
         -------
         centroid : list
-            Centroid of the pore
+            Geometric center used for the configured shapes.
         """
         return self._centroid
 
     def shape(self):
-        """Return the pore shape for analysis using PoreAna.
+        """Return the configured shape definitions.
 
         Returns
         -------
-        pore_shape : dictionary
-            Pore shape
+        pore_shape : list
+            Shape entries used to drill and analyze the pore.
         """
         return self._shapes
 
@@ -1463,17 +1466,18 @@ class PoreKit():
     # Table #
     #########
     def table(self, decimals=3):
-        """Create properties as pandas table for easy viewing.
+        """Return a tabular summary of the pore geometry and chemistry.
 
         Parameters
         ----------
-        decimals : integer, optional
-            Number of decimals to be rounded to
+        decimals : int, optional
+            Number of decimal places used for formatted values.
 
         Returns
         -------
         tables : DataFrame
-            Pandas table of all properties
+            Formatted table containing geometry, hydroxylation, and allocation
+            summaries for interior and exterior surfaces.
         """
         # Initialize
         form = "%."+str(decimals)+"f"
@@ -1594,19 +1598,18 @@ class PoreKit():
 
 
 class PoreCylinder(PoreKit):
-    """This class carves a cylindrical pore system out of a
-    :math:`\\beta`-cristobalite block.
+    """Convenience builder for a cylindrical pore in :math:`\\beta`-cristobalite.
 
     Parameters
     ----------
     size : list
-        Size of the silicon-oxygen-grid
+        Replication counts of the silica pattern.
     diam : float
-        Cylinder diameter
+        Cylinder diameter in nanometers.
     res : float, optional
-        Reservoir size on each side
+        Reservoir size on each side in nanometers.
     hydro : list, optional
-        Hydroxilation degree for interior and exterior of the pore in
+        Hydroxylation degree for interior and exterior of the pore in
         :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
 
     Examples
@@ -1645,26 +1648,26 @@ class PoreCylinder(PoreKit):
         self.prepare()
 
     def attach_special(self, mol, mount, axis, amount, scale=1, symmetry="point", is_proxi=True, is_rotate=False):
-        """Special attachment of molecules on the surface.
+        """Attach molecules at evenly spaced special positions on the cylinder.
 
         Parameters
         ----------
         mol : Molecule
-            Molecule object to attach
-        mount : integer
-            Atom id of the molecule that is placed on the surface silicon atom
+            Molecule to attach.
+        mount : int
+            Atom id on ``mol`` placed on the selected silicon site.
         axis : list
-            List of two atom ids of the molecule that define the molecule axis
+            Two atom ids defining the molecule orientation axis.
         amount : int
-            Number of molecules to attach
+            Number of molecules to attach.
         scale : float, optional
-            Circumference scaling around the molecule position
-        symmetry : string, optional
-            Symmetry option - point, mirror
+            Effective lateral spacing multiplier for proximity searches.
+        symmetry : str, optional
+            Symmetry option, either ``"point"`` or ``"mirror"``.
         is_proxi : bool, optional
-            True to fill binding sites in proximity of filled binding site
+            True to consume nearby sites with silanol fills after attachment.
         is_rotate : bool, optional
-            True to randomly rotate molecule around own axis
+            True to allow random rotation around the molecule axis.
         
         Raises
         ------
@@ -1674,18 +1677,18 @@ class PoreCylinder(PoreKit):
         self._attach_special(mol, mount, axis, amount, scale, symmetry, is_proxi, is_rotate)
 
 class PoreSlit(PoreKit):
-    """This class carves a slit-pore out of a :math:`\\beta`-cristobalite block.
+    """Convenience builder for a slit pore in :math:`\\beta`-cristobalite.
 
     Parameters
     ----------
     size : list
-        Size of the silicon-oxygen-grid
+        Replication counts of the silica pattern.
     height : float
-        Pore height
+        Slit height in nanometers.
     res : float, optional
-        Reservoir size on each side
+        Reservoir size on each side in nanometers.
     hydro: list, optional
-        Hydroxilation degree for interior and exterior of the pore in
+        Hydroxylation degree for interior and exterior of the pore in
         :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
 
     Examples
@@ -1726,26 +1729,26 @@ class PoreSlit(PoreKit):
     # Attachment #
     ##############
     def attach_special(self, mol, mount, axis, amount, scale=1, symmetry="point", is_proxi=True, is_rotate=False):
-        """Special attachment of molecules on the surface.
+        """Attach molecules at evenly spaced special positions on the slit.
 
         Parameters
         ----------
         mol : Molecule
-            Molecule object to attach
-        mount : integer
-            Atom id of the molecule that is placed on the surface silicon atom
+            Molecule to attach.
+        mount : int
+            Atom id on ``mol`` placed on the selected silicon site.
         axis : list
-            List of two atom ids of the molecule that define the molecule axis
+            Two atom ids defining the molecule orientation axis.
         amount : int
-            Number of molecules to attach
+            Number of molecules to attach.
         scale : float, optional
-            Circumference scaling around the molecule position
-        symmetry : string, optional
-            Symmetry option - point, mirror
+            Effective lateral spacing multiplier for proximity searches.
+        symmetry : str, optional
+            Symmetry option, either ``"point"`` or ``"mirror"``.
         is_proxi : bool, optional
-            True to fill binding sites in proximity of filled binding site
+            True to consume nearby sites with silanol fills after attachment.
         is_rotate : bool, optional
-            True to randomly rotate molecule around own axis
+            True to allow random rotation around the molecule axis.
         
         Raises
         ------
@@ -1756,21 +1759,20 @@ class PoreSlit(PoreKit):
 
 
 class PoreCapsule(PoreKit):
-    """This class carves a capsule pore system out of a
-    :math:`\\beta`-cristobalite block.
+    """Convenience builder for a capsule-shaped pore system.
 
     Parameters
     ----------
     size : list
-        Size of the silicon-oxygen-grid
+        Replication counts of the silica pattern.
     diam : float
-        Cylinder diameter
+        Capsule diameter in nanometers.
     sep : float
-        Separation length between capsule
+        Separation distance between the spherical capsule sections.
     res : float, optional
-        Reservoir size on each side
+        Reservoir size on each side in nanometers.
     hydro: list, optional
-        Hydroxilation degree for interior and exterior of the pore in
+        Hydroxylation degree for interior and exterior of the pore in
         :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
 
     Examples
@@ -1830,19 +1832,20 @@ class PoreCapsule(PoreKit):
 
 
 class PoreAmorphCylinder(PoreKit):
-    """This class carves a cylindrical pore system out of an amorph
-    :math:`\\beta`-cristobalite block from
-    `Vink et al. <http://doi.org/10.1103/PhysRevB.67.245201>`_ with dimensions
-    [9.605, 9.605, 9.605] (x, y, z).
+    """Convenience builder for a cylindrical pore in the amorphous template from
+    `Vink et al. <http://doi.org/10.1103/PhysRevB.67.245201>`_.
+
+    The starting amorphous silica template has dimensions
+    ``[9.605, 9.605, 9.605]`` in nanometers.
 
     Parameters
     ----------
-    diam : float
-        Cylinder diameter
+        diam : float
+        Cylinder diameter in nanometers.
     res : float, optional
-        Reservoir size on each side
+        Reservoir size on each side in nanometers.
     hydro: list, optional
-        Hydroxilation degree for interior and exterior of the pore in
+        Hydroxylation degree for interior and exterior of the pore in
         :math:`\\frac{\\mu\\text{mol}}{\\text{m}^2}`
 
     Examples
@@ -1886,26 +1889,26 @@ class PoreAmorphCylinder(PoreKit):
     # Attachment #
     ##############
     def attach_special(self, mol, mount, axis, amount, scale=1, symmetry="point", is_proxi=True, is_rotate=False):
-        """Special attachment of molecules on the surface.
+        """Attach molecules at evenly spaced special positions on the cylinder.
 
         Parameters
         ----------
         mol : Molecule
-            Molecule object to attach
-        mount : integer
-            Atom id of the molecule that is placed on the surface silicon atom
+            Molecule to attach.
+        mount : int
+            Atom id on ``mol`` placed on the selected silicon site.
         axis : list
-            List of two atom ids of the molecule that define the molecule axis
+            Two atom ids defining the molecule orientation axis.
         amount : int
-            Number of molecules to attach
+            Number of molecules to attach.
         scale : float, optional
-            Circumference scaling around the molecule position
-        symmetry : string, optional
-            Symmetry option - point, mirror
+            Effective lateral spacing multiplier for proximity searches.
+        symmetry : str, optional
+            Symmetry option, either ``"point"`` or ``"mirror"``.
         is_proxi : bool, optional
-            True to fill binding sites in proximity of filled binding site
+            True to consume nearby sites with silanol fills after attachment.
         is_rotate : bool, optional
-            True to randomly rotate molecule around own axis
+            True to allow random rotation around the molecule axis.
         
         Raises
         ------

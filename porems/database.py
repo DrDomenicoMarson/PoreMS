@@ -1,7 +1,7 @@
 ################################################################################
 # Database Class                                                               #
 #                                                                              #
-"""Very simple molecule database helper methods."""
+"""Lightweight lookup tables used by the public chemistry helpers."""
 ################################################################################
 
 # Create masses dictionary
@@ -119,22 +119,22 @@ masses = {"H":    1.0079,  # Hydrogen
 # Getter Methods #
 ##################
 def get_mass(symbol):
-    """Return the mass of the specified atom.
+    """Return the atomic mass for a chemical symbol.
 
     Parameters
     ----------
     symbol : str
-        Atom symbol
+        Chemical symbol to look up.
 
     Returns
     -------
     mass : float
-        Atom mass in :math:`\\frac g{mol}`
+        Atomic mass in :math:`\\frac{g}{mol}`.
 
     Raises
     ------
     ValueError
-        Raised when the atom symbol is not present in the local mass table.
+        Raised when ``symbol`` is not present in the local mass table.
     """
     if symbol in masses:
         return masses[symbol]

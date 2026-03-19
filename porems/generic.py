@@ -1,8 +1,7 @@
 ################################################################################
 # Generic Molecules Pack                                                       #
 #                                                                              #
-"""This file contains function for generic molecules  and serves as an exemplary
-molecule generation process."""
+"""Factory helpers for small reusable molecule building blocks."""
 ################################################################################
 
 
@@ -10,23 +9,23 @@ from porems.molecule import Molecule
 
 
 def alkane(length, name="alkane", short="ALK", is_h=True):
-    """This function generates linear alkane molecules.
+    """Build a linear alkane molecule.
 
     Parameters
     ----------
-    length : integer
-        Number of carbon atoms
-    name : string, optional
-        Molecule name
-    short : string, optional
-        Molecule short name
+    length : int
+        Number of carbon atoms in the chain.
+    name : str, optional
+        Molecule name.
+    short : str, optional
+        Molecule short name.
     is_h : bool, optional
-        True if hydrogens are to be added
+        True to add hydrogens to the carbon skeleton.
 
     Returns
     -------
     mol : Molecule
-        Molecule object
+        Generated molecule object.
     """
     # Initialize Molecule
     mol = Molecule(name, short)
@@ -74,23 +73,23 @@ def alkane(length, name="alkane", short="ALK", is_h=True):
 
 
 def alcohol(length, name="alcohol", short="ALC", is_h=True):
-    """This function generates linear alcohol molecules.
+    """Build a linear alcohol molecule.
 
     Parameters
     ----------
-    length : integer
-        Number of carbon atoms
-    name : string, optional
-        Molecule name
-    short : string, optional
-        Molecule short name
+    length : int
+        Number of carbon atoms in the chain.
+    name : str, optional
+        Molecule name.
+    short : str, optional
+        Molecule short name.
     is_h : bool, optional
-        True if hydrogens are needed
+        True to add hydrogens to the carbon skeleton.
 
     Returns
     -------
     mol : Molecule
-        Molecule object
+        Generated molecule object.
     """
     # Initialize Molecule
     mol = Molecule(name, short)
@@ -141,25 +140,25 @@ def alcohol(length, name="alcohol", short="ALC", is_h=True):
 
 
 def ketone(length, pos, name="ketone", short="KET", is_h=True):
-    """This function generates linear ketone molecules.
+    """Build a linear ketone molecule.
 
     Parameters
     ----------
-    length : integer
-        Number of carbon atoms
-    pos : integer
-        Position of the oxygen atom
-    name : string, optional
-        Molecule name
-    short : string, optional
-        Molecule short name
+    length : int
+        Number of carbon atoms in the chain.
+    pos : int
+        One-based carbon index that carries the oxygen atom.
+    name : str, optional
+        Molecule name.
+    short : str, optional
+        Molecule short name.
     is_h : bool
-        True if hydrogens are needed
+        True to add hydrogens to the carbon skeleton.
 
     Returns
     -------
     mol : Molecule
-        Molecule object
+        Generated molecule object.
 
     Raises
     ------
@@ -213,25 +212,26 @@ def ketone(length, pos, name="ketone", short="KET", is_h=True):
 
 
 def tms(name="tms", short="TMS", separation=30, is_si=True, is_hydro=True):
-    """This function generates a trimethylsilyl (TMS) molecule.
+    """Build a trimethylsilyl-like surface fragment.
 
     Parameters
     ----------
-    name : string, optional
-        Molecule name
-    short : string, optional
-        Molecule short name
+    name : str, optional
+        Molecule name.
+    short : str, optional
+        Molecule short name.
     separation : float, optional
-        Sparation of carbon and hydrogen atoms
+        Angular separation of the methyl substituents.
     is_si : bool, optional
-        True if the terminus should be a lone silicon, False for a CH3 group
+        True to keep a terminal silicon atom, False to cap the terminus with a
+        carbon atom instead.
     is_hydro : bool, optional
-        True if the hydrogen atoms should be added
+        True to add hydrogens to the methyl groups.
 
     Returns
     -------
     mol : Molecule
-        Molecule object
+        Generated molecule object.
     """
     # Initialize molecule
     mol = Molecule(name, short)
@@ -272,19 +272,19 @@ def tms(name="tms", short="TMS", separation=30, is_si=True, is_hydro=True):
 
 
 def silanol(name="sl", short="SL"):
-    """This function generates a silanol molecule.
+    """Build a silanol surface fragment.
 
     Parameters
     ----------
-    name : string, optional
-        Molecule name
-    short : string, optional
-        Molecule short name
+    name : str, optional
+        Molecule name.
+    short : str, optional
+        Molecule short name.
 
     Returns
     -------
     mol : Molecule
-        Molecule object
+        Generated molecule object.
     """
     # Initialize molecule
     mol = Molecule(name, short)

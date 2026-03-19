@@ -1,7 +1,7 @@
 ################################################################################
 # Shape Pack                                                                   #
 #                                                                              #
-"""This file contains shape definitions to be cut out from the crystal block."""
+"""Analytical shape definitions used to carve pores from silica blocks."""
 ################################################################################
 
 
@@ -15,12 +15,12 @@ import porems.geometry as geometry
 
 
 class Shape():
-    """This class is a container for individual shape classes.
+    """Base class for analytical pore shapes.
 
     Parameters
     ----------
-    inp : dictionary
-        Dictionary of necessary inputs
+    inp : dict
+        Shape configuration dictionary.
     """
     def __init__(self, inp):
         self._inp = inp
@@ -38,21 +38,20 @@ class Shape():
     # Helper Methods #
     ##################
     def convert(self, data, to_zero=True):
-        """This helper method rotates the given data to match the global central
-        axis and translates it so that the center point is aligned.
+        """Convert coordinates between local and global shape frames.
 
         Parameters
         ----------
         data : list
-            Data input
+            Coordinate-like input to transform.
         to_zero : bool
-            True to convert data towards zero axis, False to convert data from
-            zero axis to central axis.
+            True to transform towards the local reference frame, False to
+            transform back into the global frame.
 
         Returns
         -------
         data : list
-            Converted input
+            Transformed coordinates.
         """
         # Rotate towards main axis to the zero axis
         data = geometry.rotate(data, self._normal, -self._angle if to_zero else self._angle, True)
@@ -64,16 +63,16 @@ class Shape():
         return data
 
     def plot(self, inp=0, num=100, vec=None):
-        """Plot surface and rim.
+        """Plot the surface, rim, and optionally a normal-vector probe.
 
         Parameters
         ----------
         inp : float, optional
-            Position on the axis
-        num : integer, optional
-            Number of points
+            Position on the main axis used for the rim slice.
+        num : int, optional
+            Number of points used for the generated surface grid.
         vec : list, optional
-            Vector on surface to test normal vector
+            Surface point used to visualize the normal vector.
         """
         fig = plt.gcf()
         ax = fig.add_subplot(111, projection="3d")
@@ -96,28 +95,26 @@ class Shape():
     # Getter #
     ##########
     def get_inp(self):
-        """Return full input dictionary.
+        """Return the full shape configuration.
 
         Returns
         -------
-        inp : dictionary
-            Dictionary of all inputs
+        inp : dict
+            Dictionary of all shape inputs.
         """
         return self._inp
 
 
 class Cylinder(Shape):
-    """This class defines a cylindrical shape. Needed inputs are
+    """Cylindrical pore shape.
 
-    * **central** - Central axis
-    * **centroid** - Centroid of block
-    * **length** - Cylinder length
-    * **diameter** - Cylinder diameter
+    Required input keys are ``central``, ``centroid``, ``length``, and
+    ``diameter``.
 
     Parameters
     ----------
-    inp : dictionary
-        Dictionary of necessary inputs
+    inp : dict
+        Shape configuration dictionary.
     """
     def __init__(self, inp):
         # Set centroid
@@ -364,16 +361,14 @@ class Cylinder(Shape):
 
 
 class Sphere(Shape):
-    """This class defines a sphere shape. Needed inputs are
+    """Spherical pore shape.
 
-    * **central** - Central axis
-    * **centroid** - Sphere Centroid
-    * **diameter** - Sphere diameter
+    Required input keys are ``central``, ``centroid``, and ``diameter``.
 
     Parameters
     ----------
-    inp : dictionary
-        Dictionary of necessary inputs
+    inp : dict
+        Shape configuration dictionary.
     """
     def __init__(self, inp):
         # Set centroid
@@ -627,18 +622,15 @@ class Sphere(Shape):
 
 
 class Cuboid(Shape):
-    """This class defines a cuboid shape. Needed inputs are
+    """Rectangular slit-like pore shape.
 
-    * **central** - Central axis
-    * **centroid** - Centroid of block
-    * **length** - Cuboid length
-    * **width** - Cuboid width
-    * **height** - Cuboid height
+    Required input keys are ``central``, ``centroid``, ``length``, ``width``,
+    and ``height``.
 
     Parameters
     ----------
-    inp : dictionary
-        Dictionary of necessary inputs
+    inp : dict
+        Shape configuration dictionary.
     """
     def __init__(self, inp):
         # Set centroid
@@ -798,18 +790,15 @@ class Cuboid(Shape):
 
 
 class Cone(Shape):
-    """This class defines a conical shape. Needed inputs are
+    """Conical transition shape.
 
-    * **central** - Central axis
-    * **centroid** - Centroid of block
-    * **length** - Cone length
-    * **diameter_1** - Cone starting diameter
-    * **diameter_2** - Cone ending diameter
+    Required input keys are ``central``, ``centroid``, ``length``,
+    ``diameter_1``, and ``diameter_2``.
 
     Parameters
     ----------
-    inp : dictionary
-        Dictionary of necessary inputs
+    inp : dict
+        Shape configuration dictionary.
     """
     def __init__(self, inp):
         # Set centroid
