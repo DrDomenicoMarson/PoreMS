@@ -71,6 +71,8 @@ Optimization
 .. autosummary::
     :toctree: generated/
 
+    dice.SearchExecution
+    dice.SearchPolicy
     dice.Dice
     matrix.Matrix
 

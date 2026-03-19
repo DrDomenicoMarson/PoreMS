@@ -20,9 +20,30 @@ An examplary [workflow](https://porems.github.io/PoreMS/workflow.html) has been 
 
 ## Dependencies
 
-PoreMS supports Python 3.5+.
+PoreMS supports Python 3.11-3.14.
 
 Installation requires [numpy](https://numpy.org/), [pandas](https://pandas.pydata.org/) and [matplotlib](https://matplotlib.org/).
+
+## Search Execution Policy
+
+`Dice.find_parallel(...)` has been replaced by `Dice.find(...)`, which uses an explicit execution policy.
+
+```python
+import porems as pms
+
+block = pms.BetaCristobalit().generate([2, 2, 2], "z")
+dice = pms.Dice(block, 0.2, True)
+
+policy = pms.SearchPolicy(
+    execution=pms.SearchExecution.AUTO,
+    processes=4,
+)
+bond_list = dice.find(None, ["Si", "O"], [0.145, 0.165], policy=policy)
+```
+
+`AUTO` uses multiprocessing only when the current `__main__` module is safely importable by worker processes. Otherwise it falls back to serial execution and emits a Python warning.
+
+If you explicitly request `SearchExecution.PROCESSES`, run PoreMS from a file-backed `__main__` entrypoint such as a normal script or `python -m unittest ...`.
 
 
 ## Installation

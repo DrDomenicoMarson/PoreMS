@@ -57,6 +57,32 @@ following code block can be used as a base.
   be performed for both a singular binding site and a geminal binding site.
 
 
+Search execution policy
+-----------------------
+
+Connectivity and proximity searches in PoreMS are controlled through
+``Dice.find(...)`` and an explicit execution policy.
+
+.. code-block:: python
+
+  import porems as pms
+
+  block = pms.BetaCristobalit().generate([2, 2, 2], "z")
+  dice = pms.Dice(block, 0.2, True)
+
+  policy = pms.SearchPolicy(
+      execution=pms.SearchExecution.AUTO,
+      processes=4,
+  )
+  bonds = dice.find(None, ["Si", "O"], [0.145, 0.165], policy=policy)
+
+``AUTO`` uses multiprocessing only when the current ``__main__`` module can be
+re-imported safely by worker processes. Otherwise PoreMS falls back to serial
+execution and emits a Python warning. If ``PROCESSES`` is requested
+explicitly, the caller must use a file-backed ``__main__`` entrypoint such as a
+normal script or ``python -m unittest ...``.
+
+
 Create pore system
 ------------------
 

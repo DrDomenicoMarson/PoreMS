@@ -1,5 +1,5 @@
 from .atom import Atom
-from .dice import Dice
+from .dice import Dice, SearchExecution, SearchPolicy
 from .matrix import Matrix
 from .molecule import Molecule
 from .pattern import BetaCristobalit, AlphaCristobalit
@@ -24,7 +24,7 @@ import porems.utils as utils
 
 __all__ = [
     "Atom", "Molecule", "Store",
-    "Dice", "Matrix",
+    "Dice", "SearchExecution", "SearchPolicy", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
     "Pore", "PoreKit", "PoreCylinder", "PoreSlit", "PoreCapsule", "PoreAmorphCylinder",
     "Cylinder", "Sphere", "Cuboid", "Cone",

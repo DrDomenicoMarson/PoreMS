@@ -5,9 +5,9 @@
     </div>
     <div class=col-md-9 content>
 
-Dice\.find\_parallel
-====================
+SearchPolicy
+============
 
 .. currentmodule:: porems.dice
 
-.. automethod:: Dice.find_parallel
+.. autoclass:: SearchPolicy

@@ -47,7 +47,7 @@ class PoreKit():
         """
         # Dice up block
         dice = pms.Dice(self._block, 0.4, True)
-        self._matrix = pms.Matrix(dice.find_parallel(None, ["Si", "O"], bonds))
+        self._matrix = pms.Matrix(dice.find(None, ["Si", "O"], bonds))
 
         # Create pore object
         self._pore = pms.Pore(self._block, self._matrix)
@@ -409,7 +409,17 @@ class PoreKit():
             del self.sites_shape[20]
             del self._pore.sites_attach_mol[20]
 
-               
+        # Preserve the historical analysis path for systems without interior
+        # siloxane adjustment. In that case diameter/roughness should continue
+        # to use the shape-assigned silicon positions in ``_si_pos_in``.
+        if self._has_interior_hydroxylation_target():
+            self.sites_shape = {
+                shape_id: list(site_ids)
+                for shape_id, site_ids in self.sites_sl_shape.items()
+            }
+        else:
+            self.sites_shape = {}
+
         # Count the numbers of attached siloxane
         self._pore.sites_sl_shape = self.sites_sl_shape
         for i in self.sites_sl_shape:
