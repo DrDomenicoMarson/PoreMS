@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreKit.exterior &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -129,15 +129,16 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreKit.exterior">
 <span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">exterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">res</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hydro</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.exterior" title="Link to this definition">¶</a></dt>
-<dd><p>Optionally create and adjust exterior surface.</p>
+<dd><p>Expose and configure the exterior surface.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>res</strong><span class="classifier">float</span></dt><dd><p>Reservoir length in nm</p>
+<dt><strong>res</strong><span class="classifier">float</span></dt><dd><p>Reservoir length in nanometers added on each side during
+finalization.</p>
 </dd>
-<dt><strong>hydro</strong><span class="classifier">float, optional</span></dt><dd><p>Hydroxilation degree for exterior surface in
+<dt><strong>hydro</strong><span class="classifier">float, optional</span></dt><dd><p>Target hydroxylation degree for the exterior surface in
 <span class="math notranslate nohighlight">\(\frac{\mu\text{mol}}{\text{m}^2}\)</span>
-leave zero for no adjustment</p>
+Leave zero to keep the original exterior hydroxylation.</p>
 </dd>
 </dl>
 </dd>

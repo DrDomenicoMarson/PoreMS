@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Atom &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -128,18 +128,17 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="porems.atom.Atom">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.atom.</span></span><span class="sig-name descname"><span class="pre">Atom</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">residue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.atom.Atom" title="Link to this definition">¶</a></dt>
-<dd><p>This class defines an atom object containing the position, the atom type
-and optionally a specific name.</p>
+<dd><p>Represent a single atom with coordinates and lightweight metadata.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>pos</strong><span class="classifier">list</span></dt><dd><p>Atom position</p>
+<dt><strong>pos</strong><span class="classifier">list</span></dt><dd><p>Cartesian atom position.</p>
 </dd>
-<dt><strong>atom_type</strong><span class="classifier">string</span></dt><dd><p>Atom type as in the periodic table of elements</p>
+<dt><strong>atom_type</strong><span class="classifier">str</span></dt><dd><p>Chemical symbol used for the atom type.</p>
 </dd>
-<dt><strong>name</strong><span class="classifier">string, optional</span></dt><dd><p>Atom name</p>
+<dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>Optional atom label.</p>
 </dd>
-<dt><strong>residue</strong><span class="classifier">integer, optional</span></dt><dd><p>Residue number</p>
+<dt><strong>residue</strong><span class="classifier">int, optional</span></dt><dd><p>Residue index used by structure writers.</p>
 </dd>
 </dl>
 </dd>
@@ -148,7 +147,7 @@ and optionally a specific name.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.atom.Atom.__repr__.html#porems.atom.Atom.__repr__" title="porems.atom.Atom.__repr__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__repr__</span></code></a>()</p></td>
-<td><p>Create a pandas table of the atom data.</p></td>
+<td><p>Return a tabular string representation of the atom.</p></td>
 </tr>
 </tbody>
 </table>
@@ -156,16 +155,16 @@ and optionally a specific name.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.atom.Atom.set_atom_type.html#porems.atom.Atom.set_atom_type" title="porems.atom.Atom.set_atom_type"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_atom_type</span></code></a>(atom_type)</p></td>
-<td><p>Set the atom type.</p></td>
+<td><p>Update the atom type.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.atom.Atom.set_name.html#porems.atom.Atom.set_name" title="porems.atom.Atom.set_name"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_name</span></code></a>(name)</p></td>
-<td><p>Set the atom name.</p></td>
+<td><p>Update the atom name.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.atom.Atom.set_pos.html#porems.atom.Atom.set_pos" title="porems.atom.Atom.set_pos"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_pos</span></code></a>(pos)</p></td>
-<td><p>Set the atom position.</p></td>
+<td><p>Update the atom position.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.atom.Atom.set_residue.html#porems.atom.Atom.set_residue" title="porems.atom.Atom.set_residue"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_residue</span></code></a>(residue)</p></td>
-<td><p>Set the residue index.</p></td>
+<td><p>Update the residue index.</p></td>
 </tr>
 </tbody>
 </table>

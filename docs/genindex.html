@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Index &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="_static/documentation_options.js?v=6c02275b"></script>
     <script src="_static/doctools.js?v=9a2dae69"></script>
@@ -34,7 +34,7 @@
         </button>
         <a class="navbar-brand" href="index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -43,7 +43,7 @@
                 <li><a href="api.html">API</a></li>
                 <li><a href="molecule.html">Molecule</a></li>
                 <li><a href="pore.html">Pore</a></li>
-                <li><a href="workflow.html">Workflow</a></li>
+                <li><a href="slit.html">Slit Prep</a></li>
                 <li><a href="shape_examples.html">Pore shape examples</a></li>
             
             
@@ -130,6 +130,7 @@
  | <a href="#T"><strong>T</strong></a>
  | <a href="#U"><strong>U</strong></a>
  | <a href="#V"><strong>V</strong></a>
+ | <a href="#W"><strong>W</strong></a>
  | <a href="#X"><strong>X</strong></a>
  | <a href="#Y"><strong>Y</strong></a>
  | <a href="#Z"><strong>Z</strong></a>
@@ -230,14 +231,18 @@
         <li><a href="generated/porems.system.PoreSlit.allocation.html#porems.system.PoreSlit.allocation">(porems.system.PoreSlit method)</a>
 </li>
       </ul></li>
+      <li><a href="generated/porems.system.AllocationSummary.html#porems.system.AllocationSummary">AllocationSummary (class in porems.system)</a>
+</li>
       <li><a href="generated/porems.pattern.AlphaCristobalit.html#porems.pattern.AlphaCristobalit">AlphaCristobalit (class in porems.pattern)</a>
 </li>
       <li><a href="generated/porems.pore.Pore.amorph.html#porems.pore.Pore.amorph">amorph() (porems.pore.Pore method)</a>
 </li>
-      <li><a href="generated/porems.geometry.angle.html#porems.geometry.angle">angle() (in module porems.geometry)</a>
+      <li><a href="generated/porems.slit.AmorphousSlitConfig.html#porems.slit.AmorphousSlitConfig">AmorphousSlitConfig (class in porems.slit)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="generated/porems.geometry.angle.html#porems.geometry.angle">angle() (in module porems.geometry)</a>
+</li>
       <li><a href="generated/porems.geometry.angle_azi.html#porems.geometry.angle_azi">angle_azi() (in module porems.geometry)</a>
 </li>
       <li><a href="generated/porems.geometry.angle_polar.html#porems.geometry.angle_polar">angle_polar() (in module porems.geometry)</a>
@@ -275,6 +280,8 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="generated/porems.pattern.BetaCristobalit.html#porems.pattern.BetaCristobalit">BetaCristobalit (class in porems.pattern)</a>
+</li>
+      <li><a href="generated/porems.pore.BindingSite.html#porems.pore.BindingSite">BindingSite (class in porems.pore)</a>
 </li>
       <li><a href="generated/porems.molecule.Molecule.bond.html#porems.molecule.Molecule.bond">bond() (porems.molecule.Molecule method)</a>
 </li>
@@ -322,10 +329,12 @@
 </li>
       <li><a href="generated/porems.molecule.Molecule.com.html#porems.molecule.Molecule.com">com() (porems.molecule.Molecule method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="generated/porems.shape.Cone.html#porems.shape.Cone">Cone (class in porems.shape)</a>
 </li>
+      <li><a href="generated/porems.shape.ConeConfig.html#porems.shape.ConeConfig">ConeConfig (class in porems.shape)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="generated/porems.shape.Cone.convert.html#porems.shape.Cone.convert">convert() (porems.shape.Cone method)</a>
 
       <ul>
@@ -344,7 +353,11 @@
 </li>
       <li><a href="generated/porems.shape.Cuboid.html#porems.shape.Cuboid">Cuboid (class in porems.shape)</a>
 </li>
+      <li><a href="generated/porems.shape.CuboidConfig.html#porems.shape.CuboidConfig">CuboidConfig (class in porems.shape)</a>
+</li>
       <li><a href="generated/porems.shape.Cylinder.html#porems.shape.Cylinder">Cylinder (class in porems.shape)</a>
+</li>
+      <li><a href="generated/porems.shape.CylinderConfig.html#porems.shape.CylinderConfig">CylinderConfig (class in porems.shape)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -422,9 +435,7 @@
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="generated/porems.dice.Dice.find_bond.html#porems.dice.Dice.find_bond">find_bond() (porems.dice.Dice method)</a>
-</li>
-      <li><a href="generated/porems.dice.Dice.find_parallel.html#porems.dice.Dice.find_parallel">find_parallel() (porems.dice.Dice method)</a>
+      <li><a href="generated/porems.dice.Dice.find.html#porems.dice.Dice.find">find() (porems.dice.Dice method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -723,10 +734,10 @@
         <li><a href="generated/porems.shape.Sphere.plot.html#porems.shape.Sphere.plot">(porems.shape.Sphere method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="generated/porems.system.PoreAmorphCylinder.html#porems.system.PoreAmorphCylinder">PoreAmorphCylinder (class in porems.system)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="generated/porems.system.PoreCapsule.html#porems.system.PoreCapsule">PoreCapsule (class in porems.system)</a>
 </li>
       <li><a href="generated/porems.system.PoreCylinder.html#porems.system.PoreCylinder">PoreCylinder (class in porems.system)</a>
@@ -771,6 +782,8 @@
         <li><a href="generated/porems.system.PoreKit.prepare.html#porems.system.PoreKit.prepare">(porems.system.PoreKit method)</a>
 </li>
       </ul></li>
+      <li><a href="generated/porems.slit.prepare_amorphous_slit_surface.html#porems.slit.prepare_amorphous_slit_surface">prepare_amorphous_slit_surface() (in module porems.slit)</a>
+</li>
       <li><a href="generated/porems.molecule.Molecule.put.html#porems.molecule.Molecule.put">put() (porems.molecule.Molecule method)</a>
 </li>
   </ul></td>
@@ -825,6 +838,8 @@
         <li><a href="generated/porems.system.PoreSlit.roughness.html#porems.system.PoreSlit.roughness">(porems.system.PoreSlit method)</a>
 </li>
       </ul></li>
+      <li><a href="generated/porems.system.RoughnessProfile.html#porems.system.RoughnessProfile">RoughnessProfile (class in porems.system)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -832,6 +847,10 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="generated/porems.utils.save.html#porems.utils.save">save() (in module porems.utils)</a>
+</li>
+      <li><a href="generated/porems.dice.SearchExecution.html#porems.dice.SearchExecution">SearchExecution (class in porems.dice)</a>
+</li>
+      <li><a href="generated/porems.dice.SearchPolicy.html#porems.dice.SearchPolicy">SearchPolicy (class in porems.dice)</a>
 </li>
       <li><a href="generated/porems.molecule.Molecule.set_atom_name.html#porems.molecule.Molecule.set_atom_name">set_atom_name() (porems.molecule.Molecule method)</a>
 </li>
@@ -893,6 +912,14 @@
 </li>
       <li><a href="generated/porems.system.PoreKit.shape_sphere.html#porems.system.PoreKit.shape_sphere">shape_sphere() (porems.system.PoreKit method)</a>
 </li>
+      <li><a href="generated/porems.system.ShapeAttachmentSummary.html#porems.system.ShapeAttachmentSummary">ShapeAttachmentSummary (class in porems.system)</a>
+</li>
+      <li><a href="generated/porems.shape.ShapeConfig.html#porems.shape.ShapeConfig">ShapeConfig (class in porems.shape)</a>
+</li>
+      <li><a href="generated/porems.shape.ShapeSection.html#porems.shape.ShapeSection">ShapeSection (class in porems.shape)</a>
+</li>
+      <li><a href="generated/porems.shape.ShapeSpec.html#porems.shape.ShapeSpec">ShapeSpec (class in porems.shape)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="generated/porems.generic.silanol.html#porems.generic.silanol">silanol() (in module porems.generic)</a>
@@ -901,7 +928,13 @@
 </li>
       <li><a href="generated/porems.pore.Pore.sites.html#porems.pore.Pore.sites">sites() (porems.pore.Pore method)</a>
 </li>
+      <li><a href="generated/porems.slit.SlitPreparationReport.html#porems.slit.SlitPreparationReport">SlitPreparationReport (class in porems.slit)</a>
+</li>
+      <li><a href="generated/porems.slit.SlitPreparationResult.html#porems.slit.SlitPreparationResult">SlitPreparationResult (class in porems.slit)</a>
+</li>
       <li><a href="generated/porems.shape.Sphere.html#porems.shape.Sphere">Sphere (class in porems.shape)</a>
+</li>
+      <li><a href="generated/porems.shape.SphereConfig.html#porems.shape.SphereConfig">SphereConfig (class in porems.shape)</a>
 </li>
       <li><a href="generated/porems.matrix.Matrix.split.html#porems.matrix.Matrix.split">split() (porems.matrix.Matrix method)</a>
 </li>
@@ -953,6 +986,14 @@
         <li><a href="generated/porems.system.PoreSlit.surface.html#porems.system.PoreSlit.surface">(porems.system.PoreSlit method)</a>
 </li>
       </ul></li>
+      <li><a href="generated/porems.system.SurfaceAllocationStats.html#porems.system.SurfaceAllocationStats">SurfaceAllocationStats (class in porems.system)</a>
+</li>
+      <li><a href="generated/porems.system.SurfaceAreaSummary.html#porems.system.SurfaceAreaSummary">SurfaceAreaSummary (class in porems.system)</a>
+</li>
+      <li><a href="generated/porems.slit.SurfaceComposition.html#porems.slit.SurfaceComposition">SurfaceComposition (class in porems.slit)</a>
+</li>
+      <li><a href="generated/porems.slit.SurfaceCompositionTarget.html#porems.slit.SurfaceCompositionTarget">SurfaceCompositionTarget (class in porems.slit)</a>
+</li>
       <li><a href="generated/porems.molecule.Molecule.switch_atom_order.html#porems.molecule.Molecule.switch_atom_order">switch_atom_order() (porems.molecule.Molecule method)</a>
 </li>
   </ul></td>
@@ -1021,6 +1062,14 @@
         <li><a href="generated/porems.system.PoreSlit.volume.html#porems.system.PoreSlit.volume">(porems.system.PoreSlit method)</a>
 </li>
       </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="W">W</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="generated/porems.slit.write_bare_amorphous_slit.html#porems.slit.write_bare_amorphous_slit">write_bare_amorphous_slit() (in module porems.slit)</a>
+</li>
   </ul></td>
 </tr></table>
 

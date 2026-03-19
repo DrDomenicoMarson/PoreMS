@@ -90,21 +90,21 @@ Optimization
     matrix.Matrix
 
 
-.. _workflow_api:
+.. _slit_api:
 
-Workflow
---------
+Slit Preparation
+----------------
 
 .. autosummary::
     :toctree: generated/
 
-    workflows.SurfaceCompositionTarget
-    workflows.BareAmorphousSlitConfig
-    workflows.SurfaceComposition
-    workflows.SlitBuildReport
-    workflows.SlitBuildResult
-    workflows.build_periodic_amorphous_slit
-    workflows.write_bare_amorphous_slit_study
+    slit.SurfaceCompositionTarget
+    slit.AmorphousSlitConfig
+    slit.SurfaceComposition
+    slit.SlitPreparationReport
+    slit.SlitPreparationResult
+    slit.prepare_amorphous_slit_surface
+    slit.write_bare_amorphous_slit
 
 
 .. _utils_api:

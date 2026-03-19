@@ -38,8 +38,7 @@ Dice
 
   .. autosummary::
 
-    ~Dice.find_bond
-    ~Dice.find_parallel
+    ~Dice.find
 
 
   .. rubric:: Setter Methods

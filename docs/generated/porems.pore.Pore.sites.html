@@ -6,12 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Pore.sites &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
 <meta charset='utf-8'>
@@ -36,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -129,29 +128,11 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.pore.Pore.sites">
 <span class="sig-prename descclassname"><span class="pre">Pore.</span></span><span class="sig-name descname"><span class="pre">sites</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#porems.pore.Pore.sites" title="Link to this definition">¶</a></dt>
-<dd><p>Create binding site dictionary of the format</p>
-<div class="math notranslate nohighlight">
-\[\begin{split}\boldsymbol{B}=\begin{Bmatrix}
-    si_1:&amp;
-    \begin{Bmatrix}
-        \text{o}: \begin{pmatrix}o_{1,1},\dots o_{1,n}\end{pmatrix}&amp;
-        \text{type}: \text{in/ex}&amp;
-        \text{state}: \text{True/False}
-    \end{Bmatrix}\\
-    \vdots&amp;\vdots\\
-    si_m:&amp;
-    \begin{Bmatrix}
-        \text{o}: \begin{pmatrix}o_{m,1},\dots o_{m,n}\end{pmatrix}&amp;
-        \text{type}: \text{in/ex}&amp;
-        \text{state}: \text{True/False}
-    \end{Bmatrix}
-\end{Bmatrix}\end{split}\]</div>
-<p>with entries</p>
-<ul class="simple">
-<li><p><strong>o</strong> - Unsaturated oxygen atoms bound to silicon atom</p></li>
-<li><p><strong>type</strong> - Exterior “ex” or interior “in” binding site</p></li>
-<li><p><strong>state</strong> - available - True, used - False</p></li>
-</ul>
+<dd><p>Build the internal binding-site registry.</p>
+<p>Each silicon surface site is mapped to a <a class="reference internal" href="porems.pore.BindingSite.html#porems.pore.BindingSite" title="porems.pore.BindingSite"><code class="xref py py-class docutils literal notranslate"><span class="pre">BindingSite</span></code></a>
+containing the currently exposed oxygen atoms, the site type
+(<code class="docutils literal notranslate"><span class="pre">&quot;in&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;ex&quot;</span></code>), and the availability flag updated during
+later attachment steps.</p>
 </dd></dl>
 
 </section>

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Molecule.part_move &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -127,25 +127,23 @@
 <h1>Molecule.part_move<a class="headerlink" href="#molecule-part-move" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.molecule.Molecule.part_move">
-<span class="sig-prename descclassname"><span class="pre">Molecule.</span></span><span class="sig-name descname"><span class="pre">part_move</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bond</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.molecule.Molecule.part_move" title="Link to this definition">¶</a></dt>
-<dd><p>Change the length of a specified bond. Variable <code class="docutils literal notranslate"><span class="pre">atoms</span></code> specifies
-which atoms or rather which part of the molecule needs to be moved for
-this specific bond. The given length is going to be the new bond length,
-<strong>not</strong> by how much the bond length is changed.</p>
-<p>The move vector is determined automatically by the given length and atom
-bond. This vector can also be given manually with no regards to length,
-by setting the variable <code class="docutils literal notranslate"><span class="pre">vec</span></code>.</p>
+<span class="sig-prename descclassname"><span class="pre">Molecule.</span></span><span class="sig-name descname"><span class="pre">part_move</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bond</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.molecule.Molecule.part_move" title="Link to this definition">¶</a></dt>
+<dd><p>Translate part of a molecule to adjust a bond length.</p>
+<p><code class="docutils literal notranslate"><span class="pre">atoms</span></code> selects the atoms that are moved as a rigid fragment. When
+<code class="docutils literal notranslate"><span class="pre">vec</span></code> is omitted, the translation direction is derived from the bond
+between the two atom ids in <code class="docutils literal notranslate"><span class="pre">bond</span></code> and scaled so the bond reaches the
+requested final <code class="docutils literal notranslate"><span class="pre">length</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>bond</strong><span class="classifier">list</span></dt><dd><p>List of two atom ids of the bond to be adjusted</p>
+<dt><strong>bond</strong><span class="classifier">list</span></dt><dd><p>Two atom ids defining the bond to adjust.</p>
 </dd>
-<dt><strong>atoms</strong><span class="classifier">integer, list</span></dt><dd><p>List of atoms that need to be moved by changing the bond length
-(can also be one id)</p>
+<dt><strong>atoms</strong><span class="classifier">int or list</span></dt><dd><p>Atom id or atom ids that are translated as one fragment.</p>
 </dd>
-<dt><strong>length</strong><span class="classifier">float</span></dt><dd><p>New bond length</p>
+<dt><strong>length</strong><span class="classifier">float</span></dt><dd><p>Requested final bond length.</p>
 </dd>
-<dt><strong>vec</strong><span class="classifier">list, optional</span></dt><dd><p>Set this vector to manually define the translation vector</p>
+<dt><strong>vec</strong><span class="classifier">list, optional</span></dt><dd><p>Explicit translation vector. When provided, <code class="docutils literal notranslate"><span class="pre">length</span></code> is ignored
+for the actual displacement direction.</p>
 </dd>
 </dl>
 </dd>

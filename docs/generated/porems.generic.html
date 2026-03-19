@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>porems.generic &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -118,25 +118,24 @@
       
   <section id="module-porems.generic">
 <span id="porems-generic"></span><h1>porems.generic<a class="headerlink" href="#module-porems.generic" title="Link to this heading">¶</a></h1>
-<p>This file contains function for generic molecules  and serves as an exemplary
-molecule generation process.</p>
+<p>Factory helpers for small reusable molecule building blocks.</p>
 <p class="rubric">Functions</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.generic.alcohol.html#porems.generic.alcohol" title="porems.generic.alcohol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">alcohol</span></code></a>(length[, name, short, is_h])</p></td>
-<td><p>This function generates linear alcohol molecules.</p></td>
+<td><p>Build a linear alcohol molecule.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.generic.alkane.html#porems.generic.alkane" title="porems.generic.alkane"><code class="xref py py-obj docutils literal notranslate"><span class="pre">alkane</span></code></a>(length[, name, short, is_h])</p></td>
-<td><p>This function generates linear alkane molecules.</p></td>
+<td><p>Build a linear alkane molecule.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.generic.ketone.html#porems.generic.ketone" title="porems.generic.ketone"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ketone</span></code></a>(length, pos[, name, short, is_h])</p></td>
-<td><p>This function generates linear ketone molecules.</p></td>
+<td><p>Build a linear ketone molecule.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.generic.silanol.html#porems.generic.silanol" title="porems.generic.silanol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">silanol</span></code></a>([name, short])</p></td>
-<td><p>This function generates a silanol molecule.</p></td>
+<td><p>Build a silanol surface fragment.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.generic.tms.html#porems.generic.tms" title="porems.generic.tms"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tms</span></code></a>([name, short, separation, is_si, is_hydro])</p></td>
-<td><p>This function generates a trimethylsilyl (TMS) molecule.</p></td>
+<td><p>Build a trimethylsilyl-like surface fragment.</p></td>
 </tr>
 </tbody>
 </table>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and store a fully periodic bare amorphous silica slit study."""
+"""Prepare and store a fully periodic bare amorphous silica slit."""
 
 
 import argparse
@@ -12,14 +12,14 @@ import porems as pms
 
 @dataclass(frozen=True)
 class CliOptions:
-    """Command-line options for the slit-study builder.
+    """Command-line options for the bare-slit builder.
 
     Parameters
     ----------
     output_dir : str
         Output directory for the stored slit system and metadata files.
     name : str
-        Base name used for the generated study files.
+        Base name used for the generated slit files.
     slit_width_nm : float
         Requested slit width in nanometers.
     repeat_y : int
@@ -46,7 +46,7 @@ class CliOptions:
 
 
 def parse_args(argv=None):
-    """Parse command-line arguments for the slit-study builder.
+    """Parse command-line arguments for the bare-slit builder.
 
     Parameters
     ----------
@@ -59,17 +59,17 @@ def parse_args(argv=None):
         Parsed command-line options.
     """
     parser = argparse.ArgumentParser(
-        description="Build a fully periodic bare amorphous silica slit study."
+        description="Prepare and store a fully periodic bare amorphous silica slit."
     )
     parser.add_argument(
         "--output-dir",
         default=os.path.join("output", "bare_amorphous_silica_slit"),
-        help="Directory used to store the slit system and workflow metadata.",
+        help="Directory used to store the slit system and JSON metadata.",
     )
     parser.add_argument(
         "--name",
         default="bare_amorphous_silica_slit",
-        help="Base name for the generated study files.",
+        help="Base name for the generated slit files.",
     )
     parser.add_argument(
         "--slit-width-nm",
@@ -122,7 +122,7 @@ def parse_args(argv=None):
 
 
 def build_config(options):
-    """Translate command-line options into a slit-workflow configuration.
+    """Translate command-line options into a slit-preparation configuration.
 
     Parameters
     ----------
@@ -131,15 +131,15 @@ def build_config(options):
 
     Returns
     -------
-    config : BareAmorphousSlitConfig
-        Workflow configuration for the slit build.
+    config : AmorphousSlitConfig
+        Preparation configuration for the slit build.
     """
     surface_target = pms.SurfaceCompositionTarget(
         q2_fraction=options.q2_fraction,
         q3_fraction=options.q3_fraction,
         q4_fraction=options.q4_fraction,
     )
-    return pms.BareAmorphousSlitConfig(
+    return pms.AmorphousSlitConfig(
         name=options.name,
         slit_width_nm=options.slit_width_nm,
         repeat_y=options.repeat_y,
@@ -149,7 +149,7 @@ def build_config(options):
 
 
 def main(argv=None):
-    """Build and store the bare amorphous silica slit study.
+    """Prepare and store the bare amorphous silica slit.
 
     Parameters
     ----------
@@ -164,10 +164,10 @@ def main(argv=None):
     options = parse_args(argv)
     output_dir = os.path.abspath(options.output_dir)
     config = build_config(options)
-    result = pms.write_bare_amorphous_slit_study(output_dir, config=config)
+    result = pms.write_bare_amorphous_slit(output_dir, config=config)
     report = result.report
 
-    print(f"Stored study in {output_dir}")
+    print(f"Stored slit in {output_dir}")
     print(
         "Box (nm): "
         f"{report.box_nm[0]:.3f} x {report.box_nm[1]:.3f} x {report.box_nm[2]:.3f}"
@@ -182,9 +182,9 @@ def main(argv=None):
     )
     print(
         "Surface Q2/Q3/Q4 counts: "
-        f"{report.final_surface.q2_sites}/"
-        f"{report.final_surface.q3_sites}/"
-        f"{report.final_surface.q4_sites}"
+        f"{report.prepared_surface.q2_sites}/"
+        f"{report.prepared_surface.q3_sites}/"
+        f"{report.prepared_surface.q4_sites}"
     )
     print(f"Siloxane bridges introduced: {report.siloxane_bridges}")
 
@@ -193,4 +193,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
-    #raise SystemExit(main())

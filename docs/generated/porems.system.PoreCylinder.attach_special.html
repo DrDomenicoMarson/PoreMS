@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreCylinder.attach_special &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -128,25 +128,31 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreCylinder.attach_special">
 <span class="sig-prename descclassname"><span class="pre">PoreCylinder.</span></span><span class="sig-name descname"><span class="pre">attach_special</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mol</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mount</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amount</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'point'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_proxi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_rotate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreCylinder.attach_special" title="Link to this definition">¶</a></dt>
-<dd><p>Special attachment of molecules on the surface.</p>
+<dd><p>Attach molecules at evenly spaced special positions on the cylinder.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>mol</strong><span class="classifier">Molecule</span></dt><dd><p>Molecule object to attach</p>
+<dt><strong>mol</strong><span class="classifier">Molecule</span></dt><dd><p>Molecule to attach.</p>
 </dd>
-<dt><strong>mount</strong><span class="classifier">integer</span></dt><dd><p>Atom id of the molecule that is placed on the surface silicon atom</p>
+<dt><strong>mount</strong><span class="classifier">int</span></dt><dd><p>Atom id on <code class="docutils literal notranslate"><span class="pre">mol</span></code> placed on the selected silicon site.</p>
 </dd>
-<dt><strong>axis</strong><span class="classifier">list</span></dt><dd><p>List of two atom ids of the molecule that define the molecule axis</p>
+<dt><strong>axis</strong><span class="classifier">list</span></dt><dd><p>Two atom ids defining the molecule orientation axis.</p>
 </dd>
-<dt><strong>amount</strong><span class="classifier">int</span></dt><dd><p>Number of molecules to attach</p>
+<dt><strong>amount</strong><span class="classifier">int</span></dt><dd><p>Number of molecules to attach.</p>
 </dd>
-<dt><strong>scale</strong><span class="classifier">float, optional</span></dt><dd><p>Circumference scaling around the molecule position</p>
+<dt><strong>scale</strong><span class="classifier">float, optional</span></dt><dd><p>Effective lateral spacing multiplier for proximity searches.</p>
 </dd>
-<dt><strong>symmetry</strong><span class="classifier">string, optional</span></dt><dd><p>Symmetry option - point, mirror</p>
+<dt><strong>symmetry</strong><span class="classifier">str, optional</span></dt><dd><p>Symmetry option, either <code class="docutils literal notranslate"><span class="pre">&quot;point&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;mirror&quot;</span></code>.</p>
 </dd>
-<dt><strong>is_proxi</strong><span class="classifier">bool, optional</span></dt><dd><p>True to fill binding sites in proximity of filled binding site</p>
+<dt><strong>is_proxi</strong><span class="classifier">bool, optional</span></dt><dd><p>True to consume nearby sites with silanol fills after attachment.</p>
 </dd>
-<dt><strong>is_rotate</strong><span class="classifier">bool, optional</span></dt><dd><p>True to randomly rotate molecule around own axis</p>
+<dt><strong>is_rotate</strong><span class="classifier">bool, optional</span></dt><dd><p>True to allow random rotation around the molecule axis.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the requested symmetry mode is not supported.</p>
 </dd>
 </dl>
 </dd>

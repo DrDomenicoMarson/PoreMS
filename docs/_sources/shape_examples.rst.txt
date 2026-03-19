@@ -1,4 +1,6 @@
-Complex structure with PoreKit() 
+:orphan:
+
+Complex structure with PoreKit()
 ================================
 .. code:: ipython3
 
@@ -41,7 +43,6 @@ occupied by TMS molecules with 6.06 :math:`\mathrm{\mu mol m^{-2}}`.
 .. figure::  /pics/shapes/shape1.pdf
       :align: center
       :width: 70%
-      :name: fig1
 
 Shape 2 (Parallel Pore 5 nm)
 ----------------------------
@@ -78,7 +79,6 @@ Shape 2 (Parallel Pore 5 nm)
 .. figure::  /pics/shapes/shape2.pdf
       :align: center
       :width: 70%
-      :name: fig1
 
 
 Shape 3 (Pore with Connection)
@@ -125,7 +125,6 @@ Shape 3 (Pore with Connection)
 .. figure::  /pics/shapes/shape3.pdf
       :align: center
       :width: 70%
-      :name: fig1
 
 Shape 4 (Pore with different inner surfaces)
 --------------------------------------------
@@ -168,7 +167,6 @@ Shape 4 (Pore with different inner surfaces)
 .. figure::  /pics/shapes/shape4.pdf
       :align: center
       :width: 100%
-      :name: fig1
 
 
 Shape 5 (Pore with different inner surfaces)
@@ -209,5 +207,3 @@ Shape 5 (Pore with different inner surfaces)
 .. figure::  /pics/shapes/shape5.pdf
       :align: center
       :width: 100%
-      :name: fig1
-

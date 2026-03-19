@@ -15,7 +15,7 @@ Online documentation is available at [porems.github.io/PoreMS](https://porems.gi
 
 The docs include an example for generating [molecules](https://porems.github.io/PoreMS/molecule.html) and [pores](https://porems.github.io/PoreMS/pore.html), and an [API reference](https://porems.github.io/PoreMS/api.html). Visit [process](https://porems.github.io/PoreMS/process.html) for an overview of the programs operating principle.
 
-An examplary [workflow](https://porems.github.io/PoreMS/workflow.html) has been provided for using the PoreMS package to create a pore system and run molecular dynamics simulation using [Gromacs](http://www.gromacs.org/).
+The [slit preparation guide](https://porems.github.io/PoreMS/slit.html) shows how to build silica pore systems, control surface chemistry, and export the resulting structure and topology files.
 
 ## Dependencies
 
@@ -45,30 +45,31 @@ bond_list = dice.find(None, ["Si", "O"], [0.145, 0.165], policy=policy)
 If you explicitly request `SearchExecution.PROCESSES`, run PoreMS from a file-backed `__main__` entrypoint such as a normal script or `python -m unittest ...`.
 
 
-## Bare Amorphous Slit Workflow
+## Bare Amorphous Slit Preparation
 
-PoreMS exposes a high-level workflow for building the periodic bare amorphous
-silica slit used in the current local studies.
+PoreMS exposes a high-level slit-preparation API for building periodic bare
+amorphous silica slits with controlled exposed-surface `Q2/Q3/Q4` fractions.
 
 ```python
 import porems as pms
 
-config = pms.BareAmorphousSlitConfig(
+config = pms.AmorphousSlitConfig(
     name="bare_amorphous_silica_slit",
     slit_width_nm=7.0,
     repeat_y=2,
 )
 
-result = pms.build_periodic_amorphous_slit(config)
-print(result.report.final_surface)
+result = pms.prepare_amorphous_slit_surface(config)
+print(result.report.prepared_surface)
 
-pms.write_bare_amorphous_slit_study("output/bare_amorphous_slit", config)
+pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
 ```
 
-`build_periodic_amorphous_slit(...)` returns a `SlitBuildResult` containing the
-generated `PoreKit` system and a structured `SlitBuildReport`.
-`write_bare_amorphous_slit_study(...)` stores the generated structure together
-with a JSON report and workflow notes in the selected output directory.
+`prepare_amorphous_slit_surface(...)` returns a `SlitPreparationResult`
+containing an attach-ready `PoreKit` system and a structured
+`SlitPreparationReport`.
+`write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
+together with a JSON report in the selected output directory.
 
 
 ## Installation

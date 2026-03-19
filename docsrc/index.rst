@@ -19,16 +19,16 @@ Pore Generator for Molecular Simulations
   :align: center
   :width: 100%
 
-This python package generates pore structures to be used in molecular
-simulations. For an overview of the programs operating principle, check out the
-corresponding publication
+This python package generates silica pore structures and surface-functionalized
+models for later analysis or simulation. For an overview of the programs
+operating principle, check out the corresponding publication
 **Kraus et al.** (doi:`10.1080/08927022.2020.1871478 <https://doi.org/10.1080/08927022.2020.1871478>`_).
 Additionally, tutorials for generating
 `molecules <molecule.html>`_ and `pores <pore.html>`_ are provided.
 
-Check out an exemplary `workflow <workflow.html>`_ for using the PoreMS package
-to create a pore system and run molecular dynamics simulation using
-`Gromacs <http://www.gromacs.org/>`_.
+Check out the `slit preparation guide <slit.html>`_ for using the PoreMS
+package to create pore systems, control surface chemistry, and export the
+resulting build artifacts.
 
 To see the code, report a bug or contribute, please visit the
 `github repository <https://github.com/Ajax23/PoreMS>`_.

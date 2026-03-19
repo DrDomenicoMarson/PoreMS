@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Cuboid &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -128,18 +128,13 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="porems.shape.Cuboid">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.shape.</span></span><span class="sig-name descname"><span class="pre">Cuboid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inp</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.shape.Cuboid" title="Link to this definition">¶</a></dt>
-<dd><p>This class defines a cuboid shape. Needed inputs are</p>
-<ul class="simple">
-<li><p><strong>central</strong> - Central axis</p></li>
-<li><p><strong>centroid</strong> - Centroid of block</p></li>
-<li><p><strong>length</strong> - Cuboid length</p></li>
-<li><p><strong>width</strong> - Cuboid width</p></li>
-<li><p><strong>height</strong> - Cuboid height</p></li>
-</ul>
+<dd><p>Rectangular slit-like pore shape.</p>
+<p>Required input keys are <code class="docutils literal notranslate"><span class="pre">central</span></code>, <code class="docutils literal notranslate"><span class="pre">centroid</span></code>, <code class="docutils literal notranslate"><span class="pre">length</span></code>, <code class="docutils literal notranslate"><span class="pre">width</span></code>,
+and <code class="docutils literal notranslate"><span class="pre">height</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>inp</strong><span class="classifier">dictionary</span></dt><dd><p>Dictionary of necessary inputs</p>
+<dt><strong>inp</strong><span class="classifier">CuboidConfig</span></dt><dd><p>Shape configuration dataclass.</p>
 </dd>
 </dl>
 </dd>
@@ -156,10 +151,10 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.shape.Cuboid.convert.html#porems.shape.Cuboid.convert" title="porems.shape.Cuboid.convert"><code class="xref py py-obj docutils literal notranslate"><span class="pre">convert</span></code></a>(data[, to_zero])</p></td>
-<td><p>This helper method rotates the given data to match the global central axis and translates it so that the center point is aligned.</p></td>
+<td><p>Convert coordinates between local and global shape frames.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.shape.Cuboid.plot.html#porems.shape.Cuboid.plot" title="porems.shape.Cuboid.plot"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot</span></code></a>([inp, num, vec])</p></td>
-<td><p>Plot surface and rim.</p></td>
+<td><p>Plot the surface, rim, and optionally a normal-vector probe.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.shape.Cuboid.rim.html#porems.shape.Cuboid.rim" title="porems.shape.Cuboid.rim"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rim</span></code></a>(z[, num])</p></td>
 <td><p>Return x and y values for given length.</p></td>
@@ -190,7 +185,7 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.shape.Cuboid.get_inp.html#porems.shape.Cuboid.get_inp" title="porems.shape.Cuboid.get_inp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_inp</span></code></a>()</p></td>
-<td><p>Return full input dictionary.</p></td>
+<td><p>Return the full shape configuration as a serializable dictionary.</p></td>
 </tr>
 </tbody>
 </table>

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreSlit.roughness &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -129,14 +129,11 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreSlit.roughness">
 <span class="sig-prename descclassname"><span class="pre">PoreSlit.</span></span><span class="sig-name descname"><span class="pre">roughness</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreSlit.roughness" title="Link to this definition">¶</a></dt>
-<dd><p>Calculate surface roughness. In the case of a cylindrical pore one can
-visualize pulling the pore apart, thus flattening the interior surface.
-The roughness is then determined by calculating the standard deviation
-of the binding site silicon atoms peaks and valleys.</p>
-<p>It is therefore enough to calculate the distances towards a specific
-axis, which in this case will be the central axis. The mean value
-<span class="math notranslate nohighlight">\(\bar r\)</span> of the silicon distances <span class="math notranslate nohighlight">\(r_i\)</span> of silicon
-<span class="math notranslate nohighlight">\(i\)</span> towards the pore center, is calculated by</p>
+<dd><p>Return the surface roughness of the pore surfaces.</p>
+<p>Roughness is calculated as the root-mean-square deviation of the
+tracked silicon-site radii from the mean radius of each shape. When
+reservoirs are present, an exterior roughness value is reported as
+well.</p>
 <div class="math notranslate nohighlight">
 \[\bar r=\frac1n\sum_{i=1}^nr_i\]</div>
 <p>with the number of silicon atoms <span class="math notranslate nohighlight">\(n\)</span>. This mean value is used in
@@ -146,7 +143,7 @@ the square root roughness calculation</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>roughness</strong><span class="classifier">float</span></dt><dd><p>Surface roughness</p>
+<dt><strong>roughness</strong><span class="classifier">RoughnessProfile</span></dt><dd><p>Roughness values for the interior shapes and exterior surface.</p>
 </dd>
 </dl>
 </dd>

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Store.grid &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -127,15 +127,15 @@
 <h1>Store.grid<a class="headerlink" href="#store-grid" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.store.Store.grid">
-<span class="sig-prename descclassname"><span class="pre">Store.</span></span><span class="sig-name descname"><span class="pre">grid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{'om':</span> <span class="pre">-0.64,</span> <span class="pre">'si':</span> <span class="pre">1.28}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.store.Store.grid" title="Link to this definition">¶</a></dt>
-<dd><p>Store the <strong>grid.itp</strong> file containing the necessary parameters and
-charges of the grid molecules.</p>
+<span class="sig-prename descclassname"><span class="pre">Store.</span></span><span class="sig-name descname"><span class="pre">grid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.store.Store.grid" title="Link to this definition">¶</a></dt>
+<dd><p>Write the <code class="docutils literal notranslate"><span class="pre">grid.itp</span></code> topology template for silica grid atoms.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>name</strong><span class="classifier">string, optional</span></dt><dd><p>Filename</p>
+<dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>Output filename. Defaults to <code class="docutils literal notranslate"><span class="pre">grid.itp</span></code>.</p>
 </dd>
-<dt><strong>charges</strong><span class="classifier">dictionary, optional</span></dt><dd><p>Dictionary of charges for silicon and oxygen atoms</p>
+<dt><strong>charges</strong><span class="classifier">dict, optional</span></dt><dd><p>Charge mapping containing <code class="docutils literal notranslate"><span class="pre">&quot;si&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;om&quot;</span></code> entries for the
+silicon and oxygen grid atoms.</p>
 </dd>
 </dl>
 </dd>

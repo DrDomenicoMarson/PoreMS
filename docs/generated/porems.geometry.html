@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>porems.geometry &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -119,7 +119,7 @@
       
   <section id="module-porems.geometry">
 <span id="porems-geometry"></span><h1>porems.geometry<a class="headerlink" href="#module-porems.geometry" title="Link to this heading">¶</a></h1>
-<p>Here basic geometric functions are noted.</p>
+<p>Vector and coordinate-geometry helpers used across the package.</p>
 <p class="rubric">Functions</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
@@ -139,16 +139,16 @@
 <td><p>Calculate the dot product of two vectors <span class="math notranslate nohighlight">\(\boldsymbol{a},\boldsymbol{b}\in\mathbb{R}^n\)</span></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.geometry.length.html#porems.geometry.length" title="porems.geometry.length"><code class="xref py py-obj docutils literal notranslate"><span class="pre">length</span></code></a>(vec)</p></td>
-<td><p>Calculate the length of a vector <span class="math notranslate nohighlight">\(\boldsymbol{a}\in\mathbb{R}^n\)</span></p></td>
+<td><p>Calculate the Euclidean length of a vector <span class="math notranslate nohighlight">\(\boldsymbol{a}\in\mathbb{R}^n\)</span></p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.geometry.main_axis.html#porems.geometry.main_axis" title="porems.geometry.main_axis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">main_axis</span></code></a>(inp[, dim])</p></td>
-<td><p>Return the three-dimensional unit-vector of the main axes.</p></td>
+<td><p>Return the requested Cartesian basis vector.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.geometry.rotate.html#porems.geometry.rotate" title="porems.geometry.rotate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rotate</span></code></a>(data, axis, angle, is_deg[, dim])</p></td>
 <td><p>Rotate a vector <span class="math notranslate nohighlight">\(\boldsymbol{a}\in\mathbb{R}^3\)</span> along an axis <span class="math notranslate nohighlight">\(\boldsymbol{b}\in\mathbb{R}^3\)</span> with angle <span class="math notranslate nohighlight">\(\alpha\in\mathbb{R}\)</span>.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.geometry.unit.html#porems.geometry.unit" title="porems.geometry.unit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unit</span></code></a>(vec)</p></td>
-<td><p>Transform a vector <span class="math notranslate nohighlight">\(\boldsymbol{a}\in\mathbb{R}^n\)</span> into a unit vector</p></td>
+<td><p>Transform a vector <span class="math notranslate nohighlight">\(\boldsymbol{a}\in\mathbb{R}^n\)</span> into a unit vector.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.geometry.vector.html#porems.geometry.vector" title="porems.geometry.vector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vector</span></code></a>(pos_a, pos_b)</p></td>
 <td><p>Calculate the vector between to two positions <span class="math notranslate nohighlight">\(\boldsymbol{a},\boldsymbol{b}\in\mathbb{R}^n\)</span></p></td>

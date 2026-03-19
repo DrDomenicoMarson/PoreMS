@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreKit.add_shape &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -128,19 +128,28 @@
 <h1>PoreKit.add_shape<a class="headerlink" href="#porekit-add-shape" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreKit.add_shape">
-<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">add_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">section</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{'x':</span> <span class="pre">[],</span> <span class="pre">'y':</span> <span class="pre">[],</span> <span class="pre">'z':</span> <span class="pre">[]}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hydro</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.add_shape" title="Link to this definition">¶</a></dt>
-<dd><p>Add shape to pore system for drilling.</p>
+<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">add_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">section</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hydro</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.add_shape" title="Link to this definition">¶</a></dt>
+<dd><p>Register one pore shape for drilling and later analysis.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>shape</strong><span class="classifier">list</span></dt><dd><p>Shape type (pos 0) and shape (pos 1)</p>
+<dt><strong>shape</strong><span class="classifier">ShapeSpec</span></dt><dd><p>Typed shape entry containing the shape identifier and object.</p>
 </dd>
-<dt><strong>section</strong><span class="classifier">dictionary, optional</span></dt><dd><p>Range of shape from start x,y,z-length to end x,y,z-length,
-leave empty for whole range - mainly used to assign
-silanol groups to the shapes</p>
+<dt><strong>section</strong><span class="classifier">ShapeSection or dict, optional</span></dt><dd><p>Optional coordinate ranges used to assign interior sites to this
+shape after preparation.</p>
 </dd>
-<dt><strong>hydro</strong><span class="classifier">float, optional, TEMPORARY</span></dt><dd><p>Hydroxilation degree for interior surface in
+<dt><strong>hydro</strong><span class="classifier">float, optional</span></dt><dd><p>Target hydroxylation degree for the interior surface in
 <span class="math notranslate nohighlight">\(\frac{\mu\text{mol}}{\text{m}^2}\)</span></p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>TypeError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">shape</span></code> is not a <a class="reference internal" href="porems.shape.ShapeSpec.html#porems.shape.ShapeSpec" title="porems.shape.ShapeSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.shape.ShapeSpec</span></code></a> or
+when <code class="docutils literal notranslate"><span class="pre">section</span></code> is not a <a class="reference internal" href="porems.shape.ShapeSection.html#porems.shape.ShapeSection" title="porems.shape.ShapeSection"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.shape.ShapeSection</span></code></a> or
+mapping.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when an unsupported shape type is provided.</p>
 </dd>
 </dl>
 </dd>

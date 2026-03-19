@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreAmorphCylinder.diameter &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -129,9 +129,9 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreAmorphCylinder.diameter">
 <span class="sig-prename descclassname"><span class="pre">PoreAmorphCylinder.</span></span><span class="sig-name descname"><span class="pre">diameter</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreAmorphCylinder.diameter" title="Link to this definition">¶</a></dt>
-<dd><p>Calculate true diameter after drilling and preparation. This
-is done by determining the mean value <span class="math notranslate nohighlight">\(\bar r\)</span> of the silicon
-distances <span class="math notranslate nohighlight">\(r_i\)</span> of silicon <span class="math notranslate nohighlight">\(i\)</span> towards the shape center</p>
+<dd><p>Return the effective pore diameter after preparation.</p>
+<p>The diameter is estimated from the mean radial distance of the tracked
+interior silicon positions relative to each shape axis or centroid.</p>
 <div class="math notranslate nohighlight">
 \[\bar r=\frac1n\sum_{i=1}^nr_i\]</div>
 <p>with the number of silicon atoms <span class="math notranslate nohighlight">\(n\)</span>. The diameter is then</p>
@@ -140,7 +140,7 @@ distances <span class="math notranslate nohighlight">\(r_i\)</span> of silicon <
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>diameter</strong><span class="classifier">list</span></dt><dd><p>List of shape diameters after preparation</p>
+<dt><strong>diameter</strong><span class="classifier">list</span></dt><dd><p>Effective diameters for each configured shape.</p>
 </dd>
 </dl>
 </dd>

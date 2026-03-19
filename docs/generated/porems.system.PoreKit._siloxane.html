@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreKit._siloxane &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -127,15 +127,14 @@
 <h1>PoreKit._siloxane<a class="headerlink" href="#porekit-siloxane" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreKit._siloxane">
-<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">_siloxane</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">site_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slx_dist</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0.497,</span> <span class="pre">0.517]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit._siloxane" title="Link to this definition">¶</a></dt>
-<dd><p>Attach siloxane bridges using function
-<a class="reference internal" href="porems.pore.Pore.siloxane.html#porems.pore.Pore.siloxane" title="porems.pore.Pore.siloxane"><code class="xref py py-func docutils literal notranslate"><span class="pre">porems.pore.Pore.siloxane()</span></code></a>.</p>
+<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">_siloxane</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">site_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slx_dist</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit._siloxane" title="Link to this definition">¶</a></dt>
+<dd><p>Adjust hydroxylation by introducing siloxane bridges.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>site_type</strong><span class="classifier">string</span></dt><dd><p>Site type - interior <strong>in</strong>, exterior <strong>ex</strong></p>
+<dt><strong>site_type</strong><span class="classifier">str</span></dt><dd><p>Site family, either interior <code class="docutils literal notranslate"><span class="pre">&quot;in&quot;</span></code> or exterior <code class="docutils literal notranslate"><span class="pre">&quot;ex&quot;</span></code>.</p>
 </dd>
-<dt><strong>slx_dist</strong><span class="classifier">list, optional</span></dt><dd><p>Silicon atom distance to search for partners in proximity</p>
+<dt><strong>slx_dist</strong><span class="classifier">list, optional</span></dt><dd><p>Accepted silicon-silicon distance interval for bridge formation.</p>
 </dd>
 </dl>
 </dd>

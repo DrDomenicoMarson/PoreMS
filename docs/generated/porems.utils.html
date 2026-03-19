@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>porems.utils &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -119,21 +119,21 @@
       
   <section id="module-porems.utils">
 <span id="porems-utils"></span><h1>porems.utils<a class="headerlink" href="#module-porems.utils" title="Link to this heading">¶</a></h1>
-<p>Here popular basic methods are noted.</p>
+<p>Small filesystem, timing, and unit-conversion helpers.</p>
 <p class="rubric">Functions</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.utils.column.html#porems.utils.column" title="porems.utils.column"><code class="xref py py-obj docutils literal notranslate"><span class="pre">column</span></code></a>(data)</p></td>
-<td><p>Convert given row list matrix into column list matrix</p></td>
+<td><p>Transpose a nested row-major list into column-major form.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.utils.copy.html#porems.utils.copy" title="porems.utils.copy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">copy</span></code></a>(source, target)</p></td>
-<td><p>Copy a specified file to a specified location.</p></td>
+<td><p>Copy a file to a new location.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.utils.load.html#porems.utils.load" title="porems.utils.load"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load</span></code></a>(link)</p></td>
-<td><p>Load pickled object from the specified folder.</p></td>
+<td><p>Load a pickled object from disk.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.utils.mkdirp.html#porems.utils.mkdirp" title="porems.utils.mkdirp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mkdirp</span></code></a>(directory)</p></td>
-<td><p>Create directory if it does not exist.</p></td>
+<td><p>Create a directory when it does not exist already.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.utils.mmol_g_to_mumol_m2.html#porems.utils.mmol_g_to_mumol_m2" title="porems.utils.mmol_g_to_mumol_m2"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mmol_g_to_mumol_m2</span></code></a>(c, SBET)</p></td>
 <td><p>Convert the concentration <span class="math notranslate nohighlight">\(\frac{\text{mmol}}{\text{g}}\)</span> to <span class="math notranslate nohighlight">\(\frac{\mu\text{mol}}{\text{m}^2}\)</span>.</p></td>
@@ -151,16 +151,16 @@
 <td><p>Convert the concentration in <span class="math notranslate nohighlight">\(\frac{\mu\text{mol}}{\text{m}^2}\)</span> to number of molecules.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.utils.replace.html#porems.utils.replace" title="porems.utils.replace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">replace</span></code></a>(file_link, old, new)</p></td>
-<td><p>Replace a given string in a file.</p></td>
+<td><p>Replace text in a file in place.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.utils.save.html#porems.utils.save" title="porems.utils.save"><code class="xref py py-obj docutils literal notranslate"><span class="pre">save</span></code></a>(obj, link)</p></td>
-<td><p>Save an object using pickle in the specified link.</p></td>
+<td><p>Serialize an object with pickle.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.utils.tic.html#porems.utils.tic" title="porems.utils.tic"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tic</span></code></a>()</p></td>
-<td><p>MATLAB tic replica - return current time.</p></td>
+<td><p>Return the current wall-clock time.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.utils.toc.html#porems.utils.toc" title="porems.utils.toc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">toc</span></code></a>(t[, message, is_print])</p></td>
-<td><p>MATLAB toc replica - return time difference to tic and alternatively print a message.</p></td>
+<td><p>Return the elapsed wall-clock time since <a class="reference internal" href="porems.utils.tic.html#porems.utils.tic" title="porems.utils.tic"><code class="xref py py-func docutils literal notranslate"><span class="pre">tic()</span></code></a>.</p></td>
 </tr>
 </tbody>
 </table>

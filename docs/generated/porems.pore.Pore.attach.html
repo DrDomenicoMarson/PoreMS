@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Pore.attach &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -127,40 +127,49 @@
 <h1>Pore.attach<a class="headerlink" href="#pore-attach" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.pore.Pore.attach">
-<span class="sig-prename descclassname"><span class="pre">Pore.</span></span><span class="sig-name descname"><span class="pre">attach</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mol</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mount</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sites</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amount</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trials</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">site_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'in'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_proxi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_random</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_rotate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.pore.Pore.attach" title="Link to this definition">¶</a></dt>
-<dd><p>Attach molecules on the surface.</p>
+<span class="sig-prename descclassname"><span class="pre">Pore.</span></span><span class="sig-name descname"><span class="pre">attach</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mol</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mount</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sites</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amount</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trials</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">site_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'in'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_proxi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_random</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_rotate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_g</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.pore.Pore.attach" title="Link to this definition">¶</a></dt>
+<dd><p>Attach molecules to available pore surface sites.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>mol</strong><span class="classifier">Molecule</span></dt><dd><p>Molecule object to attach</p>
+<dt><strong>mol</strong><span class="classifier">Molecule</span></dt><dd><p>Molecule to attach.</p>
 </dd>
-<dt><strong>mount</strong><span class="classifier">integer</span></dt><dd><p>Atom id of the molecule that is placed on the surface silicon atom</p>
+<dt><strong>mount</strong><span class="classifier">int</span></dt><dd><p>Atom id on <code class="docutils literal notranslate"><span class="pre">mol</span></code> placed onto the selected silicon site.</p>
 </dd>
-<dt><strong>axis</strong><span class="classifier">list</span></dt><dd><p>List of two atom ids of the molecule that define the molecule axis</p>
+<dt><strong>axis</strong><span class="classifier">list</span></dt><dd><p>Two atom ids defining the molecule orientation axis.</p>
 </dd>
-<dt><strong>sites</strong><span class="classifier">list</span></dt><dd><p>List of silicon ids of which binding sites should be picked</p>
+<dt><strong>sites</strong><span class="classifier">list</span></dt><dd><p>Silicon site ids from which attachment positions are chosen.</p>
 </dd>
-<dt><strong>amount</strong><span class="classifier">int</span></dt><dd><p>Number of molecules to attach</p>
+<dt><strong>amount</strong><span class="classifier">int</span></dt><dd><p>Number of molecules to attach.</p>
 </dd>
-<dt><strong>scale</strong><span class="classifier">float, optional</span></dt><dd><p>Circumference scaling around the molecule position</p>
+<dt><strong>scale</strong><span class="classifier">float, optional</span></dt><dd><p>Effective lateral spacing multiplier for proximity searches.</p>
 </dd>
-<dt><strong>trials</strong><span class="classifier">integer, optional</span></dt><dd><p>Number of trials picking a random site</p>
+<dt><strong>trials</strong><span class="classifier">int, optional</span></dt><dd><p>Number of random site-selection attempts per molecule.</p>
 </dd>
-<dt><strong>pos_list</strong><span class="classifier">list, optional</span></dt><dd><p>List of positions (cartesian) to find nearest available binding site for</p>
+<dt><strong>pos_list</strong><span class="classifier">list, optional</span></dt><dd><p>Explicit Cartesian target positions used to pick nearest free sites.</p>
 </dd>
-<dt><strong>site_type</strong><span class="classifier">string, optional</span></dt><dd><p>Site type - interior <strong>in</strong>, exterior <strong>ex</strong></p>
+<dt><strong>site_type</strong><span class="classifier">str, optional</span></dt><dd><p>Site family, either interior <code class="docutils literal notranslate"><span class="pre">&quot;in&quot;</span></code> or exterior <code class="docutils literal notranslate"><span class="pre">&quot;ex&quot;</span></code>.</p>
 </dd>
-<dt><strong>is_proxi</strong><span class="classifier">bool, optional</span></dt><dd><p>True to fill binding sites in proximity of filled binding site</p>
+<dt><strong>is_proxi</strong><span class="classifier">bool, optional</span></dt><dd><p>True to consume nearby sites with silanol fills after attachment.</p>
 </dd>
-<dt><strong>is_random</strong><span class="classifier">bool, optional</span></dt><dd><p>True to randomly pick a binding site from given list</p>
+<dt><strong>is_random</strong><span class="classifier">bool, optional</span></dt><dd><p>True to choose sites randomly from <code class="docutils literal notranslate"><span class="pre">sites</span></code>.</p>
 </dd>
-<dt><strong>is_rotate</strong><span class="classifier">bool, optional</span></dt><dd><p>True to randomly rotate molecule around own axis</p>
+<dt><strong>is_rotate</strong><span class="classifier">bool, optional</span></dt><dd><p>True to allow random rotation around the molecule axis before
+placement.</p>
+</dd>
+<dt><strong>is_g</strong><span class="classifier">bool, optional</span></dt><dd><p>True to allow geminal surface sites as mounting positions.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>mol_list</strong><span class="classifier">list</span></dt><dd><p>List of molecule objects that are attached on the surface</p>
+<dt><strong>mol_list</strong><span class="classifier">list</span></dt><dd><p>Attached molecule copies in placement order.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the requested site type is not supported.</p>
 </dd>
 </dl>
 </dd>

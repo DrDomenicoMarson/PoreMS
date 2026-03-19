@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Store.job &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -128,17 +128,17 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.store.Store.job">
 <span class="sig-prename descclassname"><span class="pre">Store.</span></span><span class="sig-name descname"><span class="pre">job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.store.Store.job" title="Link to this definition">¶</a></dt>
-<dd><p>Create job file to run with Antechamber. A shell file and a tleap
-file are created with all necessary commands to create a topology from a
-pdb file. For the conversion to GROMACS file format the python package
-<strong>ParmED</strong> needs to be installed.</p>
+<dd><p>Write Antechamber helper scripts for the current molecule.</p>
+<p>A shell job file and a matching <code class="docutils literal notranslate"><span class="pre">tleap</span></code> input are generated from the
+bundled templates. They can be used to derive force-field parameters
+for standalone molecules outside the pore workflow.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>name</strong><span class="classifier">string, optional</span></dt><dd><p>Filename</p>
+<dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>Base filename for the generated helper files.</p>
 </dd>
-<dt><strong>master</strong><span class="classifier">string, optional</span></dt><dd><p>Set name for master job file if needed (practical for running
-multiple topology generations)</p>
+<dt><strong>master</strong><span class="classifier">str, optional</span></dt><dd><p>Optional master shell script to which execution commands for the
+generated job are appended.</p>
 </dd>
 </dl>
 </dd>

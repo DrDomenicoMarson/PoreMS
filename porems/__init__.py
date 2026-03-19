@@ -31,14 +31,14 @@ from .shape import (
     Cone,
 )
 from .store import Store
-from .workflows import (
+from .slit import (
     SurfaceCompositionTarget,
-    BareAmorphousSlitConfig,
+    AmorphousSlitConfig,
     SurfaceComposition,
-    SlitBuildReport,
-    SlitBuildResult,
-    build_periodic_amorphous_slit,
-    write_bare_amorphous_slit_study,
+    SlitPreparationReport,
+    SlitPreparationResult,
+    prepare_amorphous_slit_surface,
+    write_bare_amorphous_slit,
 )
 
 import porems.database as db
@@ -57,8 +57,8 @@ __all__ = [
     "ShapeConfig", "CylinderConfig", "SphereConfig", "CuboidConfig", "ConeConfig",
     "ShapeSection", "ShapeSpec",
     "Cylinder", "Sphere", "Cuboid", "Cone",
-    "SurfaceCompositionTarget", "BareAmorphousSlitConfig",
-    "SurfaceComposition", "SlitBuildReport", "SlitBuildResult",
-    "build_periodic_amorphous_slit", "write_bare_amorphous_slit_study",
+    "SurfaceCompositionTarget", "AmorphousSlitConfig",
+    "SurfaceComposition", "SlitPreparationReport", "SlitPreparationResult",
+    "prepare_amorphous_slit_surface", "write_bare_amorphous_slit",
     "db", "gen", "geom", "utils"
 ]

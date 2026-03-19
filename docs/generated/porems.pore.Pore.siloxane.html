@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Pore.siloxane &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -127,25 +127,35 @@
 <h1>Pore.siloxane<a class="headerlink" href="#pore-siloxane" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.pore.Pore.siloxane">
-<span class="sig-prename descclassname"><span class="pre">Pore.</span></span><span class="sig-name descname"><span class="pre">siloxane</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sites</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amount</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slx_dist</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0.497,</span> <span class="pre">0.517]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trials</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">site_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'in'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.pore.Pore.siloxane" title="Link to this definition">¶</a></dt>
-<dd><p>Attach siloxane bridges on the surface similar to Krishna et al.
-(2009). Here silicon atoms of silanol groups wich are at least 0.31 nm
-near each other can be converted to siloxan bridges, by removing one
-oxygen atom of the silanol groups and moving the other at the center of
-the two.</p>
+<span class="sig-prename descclassname"><span class="pre">Pore.</span></span><span class="sig-name descname"><span class="pre">siloxane</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sites</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amount</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slx_dist</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trials</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">site_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'in'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.pore.Pore.siloxane" title="Link to this definition">¶</a></dt>
+<dd><p>Convert neighboring silanol sites into siloxane bridges.</p>
+<p>Candidate silicon pairs are searched within <code class="docutils literal notranslate"><span class="pre">slx_dist</span></code> and, when
+available, converted from two hydroxylated sites into one bridging
+siloxane oxygen placed between them.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>sites</strong><span class="classifier">list</span></dt><dd><p>List of silicon ids of which binding sites should be picked</p>
+<dt><strong>sites</strong><span class="classifier">list</span></dt><dd><p>Silicon site ids considered for bridge formation.</p>
 </dd>
-<dt><strong>amount</strong><span class="classifier">int</span></dt><dd><p>Number of molecules to attach</p>
+<dt><strong>amount</strong><span class="classifier">int</span></dt><dd><p>Number of bridges to attempt.</p>
 </dd>
-<dt><strong>slx_dist</strong><span class="classifier">list</span></dt><dd><p>Silicon atom distance bounds to search for parters in proximity
-[lower, upper]</p>
+<dt><strong>slx_dist</strong><span class="classifier">list</span></dt><dd><p>Accepted silicon-silicon distance interval <code class="docutils literal notranslate"><span class="pre">[lower,</span> <span class="pre">upper]</span></code>.</p>
 </dd>
-<dt><strong>trials</strong><span class="classifier">integer, optional</span></dt><dd><p>Number of trials picking a random site</p>
+<dt><strong>trials</strong><span class="classifier">int, optional</span></dt><dd><p>Number of random pair-selection attempts per bridge.</p>
 </dd>
-<dt><strong>site_type</strong><span class="classifier">string, optional</span></dt><dd><p>Site type - interior <strong>in</strong>, exterior <strong>ex</strong></p>
+<dt><strong>site_type</strong><span class="classifier">str, optional</span></dt><dd><p>Site family, either interior <code class="docutils literal notranslate"><span class="pre">&quot;in&quot;</span></code> or exterior <code class="docutils literal notranslate"><span class="pre">&quot;ex&quot;</span></code>.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>mol_list</strong><span class="classifier">list</span></dt><dd><p>Added siloxane bridge molecules.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the requested site type is not supported.</p>
 </dd>
 </dl>
 </dd>

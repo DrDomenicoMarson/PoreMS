@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreKit.shape_cone &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -127,26 +127,26 @@
 <h1>PoreKit.shape_cone<a class="headerlink" href="#porekit-shape-cone" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreKit.shape_cone">
-<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">shape_cone</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">diam_1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diam_2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">centroid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">central</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0,</span> <span class="pre">0,</span> <span class="pre">1]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.shape_cone" title="Link to this definition">¶</a></dt>
-<dd><p>Add cone shape</p>
+<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">shape_cone</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">diam_1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diam_2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">centroid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">central</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.shape_cone" title="Link to this definition">¶</a></dt>
+<dd><p>Create a conical drilling shape.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>diam_1</strong><span class="classifier">float</span></dt><dd><p>Cone first diameter</p>
+<dt><strong>diam_1</strong><span class="classifier">float</span></dt><dd><p>First cone diameter in nanometers.</p>
 </dd>
-<dt><strong>diam_2</strong><span class="classifier">float</span></dt><dd><p>Cone second diameter</p>
+<dt><strong>diam_2</strong><span class="classifier">float</span></dt><dd><p>Second cone diameter in nanometers.</p>
 </dd>
-<dt><strong>length</strong><span class="classifier">float, optional</span></dt><dd><p>length of cylindrical shape leave zero for full length</p>
+<dt><strong>length</strong><span class="classifier">float, optional</span></dt><dd><p>Cone length in nanometers. Use zero for the full box length.</p>
 </dd>
-<dt><strong>centroid</strong><span class="classifier">list, optional</span></dt><dd><p>Cone centroid - leave zero for system centroid</p>
+<dt><strong>centroid</strong><span class="classifier">list, optional</span></dt><dd><p>Cone centroid. Defaults to the system centroid.</p>
 </dd>
-<dt><strong>central</strong><span class="classifier">list, optional</span></dt><dd><p>Central axis for cone</p>
+<dt><strong>central</strong><span class="classifier">list, optional</span></dt><dd><p>Central axis for cone. Defaults to the z-axis.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>shape</strong><span class="classifier">list</span></dt><dd><p>Shape type (pos 0) and shape (pos 1)</p>
+<dt><strong>shape</strong><span class="classifier">ShapeSpec</span></dt><dd><p>Shape entry ready for <a class="reference internal" href="porems.system.PoreKit.add_shape.html#porems.system.PoreKit.add_shape" title="porems.system.PoreKit.add_shape"><code class="xref py py-meth docutils literal notranslate"><span class="pre">add_shape()</span></code></a>.</p>
 </dd>
 </dl>
 </dd>

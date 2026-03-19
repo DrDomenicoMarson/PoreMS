@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Matrix.bound &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -128,8 +128,8 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.matrix.Matrix.bound">
 <span class="sig-prename descclassname"><span class="pre">Matrix.</span></span><span class="sig-name descname"><span class="pre">bound</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_bonds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'eq'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.matrix.Matrix.bound" title="Link to this definition">¶</a></dt>
-<dd><p>Return a list of atoms with the specified number of bonds. Possible
-<code class="docutils literal notranslate"><span class="pre">logic</span></code> arguments are</p>
+<dd><p>Return atoms matching a bond-count predicate.</p>
+<p>Supported <code class="docutils literal notranslate"><span class="pre">logic</span></code> arguments are</p>
 <ul class="simple">
 <li><p><strong>eq</strong> - Equals</p></li>
 <li><p><strong>lt</strong> - Less than</p></li>
@@ -138,15 +138,22 @@
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>num_bonds</strong><span class="classifier">int</span></dt><dd><p>Number of bonds to search for</p>
+<dt><strong>num_bonds</strong><span class="classifier">int</span></dt><dd><p>Number of bonds to compare against.</p>
 </dd>
-<dt><strong>logic</strong><span class="classifier">string, optional</span></dt><dd><p>Logic statement</p>
+<dt><strong>logic</strong><span class="classifier">str, optional</span></dt><dd><p>Comparison operator.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>atoms</strong><span class="classifier">list</span></dt><dd><p>List of atom ids with the number of specified bonds</p>
+<dt><strong>atoms</strong><span class="classifier">list</span></dt><dd><p>Atom ids that satisfy the requested predicate.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">logic</span></code> is not one of <code class="docutils literal notranslate"><span class="pre">&quot;eq&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;lt&quot;</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">&quot;gt&quot;</span></code>.</p>
 </dd>
 </dl>
 </dd>

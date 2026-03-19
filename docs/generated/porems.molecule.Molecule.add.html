@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Molecule.add &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -127,34 +127,31 @@
 <h1>Molecule.add<a class="headerlink" href="#molecule-add" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.molecule.Molecule.add">
-<span class="sig-prename descclassname"><span class="pre">Molecule.</span></span><span class="sig-name descname"><span class="pre">add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atom_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bond</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_deg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">residue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.molecule.Molecule.add" title="Link to this definition">¶</a></dt>
-<dd><p>Add a new atom in polar coordinates. The <code class="docutils literal notranslate"><span class="pre">pos</span></code> input is either
-an atom id, that determines is the bond-start,
-or a vector for a specific position.</p>
-<p>If the polar coordinates are dependent on a bond vector as an axis,
-the <code class="docutils literal notranslate"><span class="pre">bond</span></code> variable must be set. The coordinate system is then
-transformed to the bond axis. If this variable is set to an empty list,
-then the given coordinates are assumed to be dependent on the z-axis.</p>
+<span class="sig-prename descclassname"><span class="pre">Molecule.</span></span><span class="sig-name descname"><span class="pre">add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atom_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bond</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_deg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">residue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.molecule.Molecule.add" title="Link to this definition">¶</a></dt>
+<dd><p>Add a new atom using spherical coordinates relative to a reference.</p>
+<p><code class="docutils literal notranslate"><span class="pre">pos</span></code> defines the coordinate origin, either as an atom id or as an
+explicit Cartesian vector. When <code class="docutils literal notranslate"><span class="pre">bond</span></code> is given, its direction is used
+as the local axis before applying <code class="docutils literal notranslate"><span class="pre">r</span></code>, <code class="docutils literal notranslate"><span class="pre">theta</span></code>, and <code class="docutils literal notranslate"><span class="pre">phi</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>atom_type</strong><span class="classifier">string</span></dt><dd><p>Atom type</p>
+<dt><strong>atom_type</strong><span class="classifier">str</span></dt><dd><p>Atom type of the new atom.</p>
 </dd>
-<dt><strong>pos</strong><span class="classifier">integer, list</span></dt><dd><p>Position of the atom</p>
+<dt><strong>pos</strong><span class="classifier">int or list</span></dt><dd><p>Reference atom id or Cartesian origin.</p>
 </dd>
-<dt><strong>bond</strong><span class="classifier">list, optional</span></dt><dd><p>Bond axis</p>
+<dt><strong>bond</strong><span class="classifier">list, optional</span></dt><dd><p>Optional two-atom bond defining the local axis orientation.</p>
 </dd>
-<dt><strong>r</strong><span class="classifier">float, optional</span></dt><dd><p>Bond length</p>
+<dt><strong>r</strong><span class="classifier">float, optional</span></dt><dd><p>Radial distance from <code class="docutils literal notranslate"><span class="pre">pos</span></code>.</p>
 </dd>
-<dt><strong>theta</strong><span class="classifier">float, optional</span></dt><dd><p>Azimuthal angle</p>
+<dt><strong>theta</strong><span class="classifier">float, optional</span></dt><dd><p>Polar rotation angle.</p>
 </dd>
-<dt><strong>phi</strong><span class="classifier">float, optional</span></dt><dd><p>Polar angle</p>
+<dt><strong>phi</strong><span class="classifier">float, optional</span></dt><dd><p>Azimuthal rotation angle.</p>
 </dd>
-<dt><strong>is_deg</strong><span class="classifier">bool, optional</span></dt><dd><p>True if the input of the angles in degree</p>
+<dt><strong>is_deg</strong><span class="classifier">bool, optional</span></dt><dd><p>True if <code class="docutils literal notranslate"><span class="pre">theta</span></code> and <code class="docutils literal notranslate"><span class="pre">phi</span></code> are given in degrees.</p>
 </dd>
-<dt><strong>name</strong><span class="classifier">string, optional</span></dt><dd><p>Optionally set a unique atom name</p>
+<dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>Optional explicit atom name.</p>
 </dd>
-<dt><strong>residue</strong><span class="classifier">integer, optional</span></dt><dd><p>Residue number</p>
+<dt><strong>residue</strong><span class="classifier">int, optional</span></dt><dd><p>Residue index stored on the new atom.</p>
 </dd>
 </dl>
 </dd>

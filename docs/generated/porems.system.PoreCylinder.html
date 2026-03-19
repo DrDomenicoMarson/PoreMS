@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreCylinder &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -128,19 +128,18 @@
 <h1>PoreCylinder<a class="headerlink" href="#porecylinder" title="Link to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="porems.system.PoreCylinder">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.system.</span></span><span class="sig-name descname"><span class="pre">PoreCylinder</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diam</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">res</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hydro</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0,</span> <span class="pre">0]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreCylinder" title="Link to this definition">¶</a></dt>
-<dd><p>This class carves a cylindrical pore system out of a
-<span class="math notranslate nohighlight">\(\beta\)</span>-cristobalite block.</p>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.system.</span></span><span class="sig-name descname"><span class="pre">PoreCylinder</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diam</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">res</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hydro</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreCylinder" title="Link to this definition">¶</a></dt>
+<dd><p>Convenience builder for a cylindrical pore in <span class="math notranslate nohighlight">\(\beta\)</span>-cristobalite.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>size</strong><span class="classifier">list</span></dt><dd><p>Size of the silicon-oxygen-grid</p>
+<dt><strong>size</strong><span class="classifier">list</span></dt><dd><p>Replication counts of the silica pattern.</p>
 </dd>
-<dt><strong>diam</strong><span class="classifier">float</span></dt><dd><p>Cylinder diameter</p>
+<dt><strong>diam</strong><span class="classifier">float</span></dt><dd><p>Cylinder diameter in nanometers.</p>
 </dd>
-<dt><strong>res</strong><span class="classifier">float, optional</span></dt><dd><p>Reservoir size on each side</p>
+<dt><strong>res</strong><span class="classifier">float, optional</span></dt><dd><p>Reservoir size on each side in nanometers.</p>
 </dd>
-<dt><strong>hydro</strong><span class="classifier">list, optional</span></dt><dd><p>Hydroxilation degree for interior and exterior of the pore in
+<dt><strong>hydro</strong><span class="classifier">list, optional</span></dt><dd><p>Hydroxylation degree for interior and exterior of the pore in
 <span class="math notranslate nohighlight">\(\frac{\mu\text{mol}}{\text{m}^2}\)</span></p>
 </dd>
 </dl>
@@ -149,7 +148,7 @@
 <p class="rubric">Examples</p>
 <p>Following example generates a cylindrical pore with a diameter of 4nm,
 reservoirs of 5nm on each side and a surface functionalized with TMS</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">porems</span> <span class="k">as</span> <span class="nn">pms</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">porems</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pms</span>
 
 <span class="n">pore</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">PoreCylinder</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
 
@@ -165,10 +164,10 @@ reservoirs of 5nm on each side and a surface functionalized with TMS</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.system.PoreCylinder.attach.html#porems.system.PoreCylinder.attach" title="porems.system.PoreCylinder.attach"><code class="xref py py-obj docutils literal notranslate"><span class="pre">attach</span></code></a>(mol, mount, axis, amount[, ...])</p></td>
-<td><p>Attach molecule on the surface.</p></td>
+<td><p>Attach a molecule to interior or exterior pore sites.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.system.PoreCylinder.attach_special.html#porems.system.PoreCylinder.attach_special" title="porems.system.PoreCylinder.attach_special"><code class="xref py py-obj docutils literal notranslate"><span class="pre">attach_special</span></code></a>(mol, mount, axis, amount[, ...])</p></td>
-<td><p>Special attachment of molecules on the surface.</p></td>
+<td><p>Attach molecules at evenly spaced special positions on the cylinder.</p></td>
 </tr>
 </tbody>
 </table>
@@ -176,34 +175,34 @@ reservoirs of 5nm on each side and a surface functionalized with TMS</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.system.PoreCylinder.allocation.html#porems.system.PoreCylinder.allocation" title="porems.system.PoreCylinder.allocation"><code class="xref py py-obj docutils literal notranslate"><span class="pre">allocation</span></code></a>()</p></td>
-<td><p>Calculate molecule allocation on the surface.</p></td>
+<td><p>Return surface allocation statistics for all attached molecules.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.system.PoreCylinder.box.html#porems.system.PoreCylinder.box" title="porems.system.PoreCylinder.box"><code class="xref py py-obj docutils literal notranslate"><span class="pre">box</span></code></a>()</p></td>
-<td><p>Return the box size of the pore block.</p></td>
+<td><p>Return the final simulation box dimensions.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.system.PoreCylinder.centroid.html#porems.system.PoreCylinder.centroid" title="porems.system.PoreCylinder.centroid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">centroid</span></code></a>()</p></td>
-<td><p>Return pore centroid.</p></td>
+<td><p>Return the pore centroid.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.system.PoreCylinder.diameter.html#porems.system.PoreCylinder.diameter" title="porems.system.PoreCylinder.diameter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">diameter</span></code></a>()</p></td>
-<td><p>Calculate true diameter after drilling and preparation.</p></td>
+<td><p>Return the effective pore diameter after preparation.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.system.PoreCylinder.reservoir.html#porems.system.PoreCylinder.reservoir" title="porems.system.PoreCylinder.reservoir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reservoir</span></code></a>()</p></td>
 <td><p>Return the reservoir length.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.system.PoreCylinder.roughness.html#porems.system.PoreCylinder.roughness" title="porems.system.PoreCylinder.roughness"><code class="xref py py-obj docutils literal notranslate"><span class="pre">roughness</span></code></a>()</p></td>
-<td><p>Calculate surface roughness.</p></td>
+<td><p>Return the surface roughness of the pore surfaces.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.system.PoreCylinder.shape.html#porems.system.PoreCylinder.shape" title="porems.system.PoreCylinder.shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shape</span></code></a>()</p></td>
-<td><p>Return the pore shape for analysis using PoreAna.</p></td>
+<td><p>Return the configured shape definitions.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.system.PoreCylinder.surface.html#porems.system.PoreCylinder.surface" title="porems.system.PoreCylinder.surface"><code class="xref py py-obj docutils literal notranslate"><span class="pre">surface</span></code></a>([is_sum])</p></td>
-<td><p>Calculate pore surface and exterior surface.</p></td>
+<td><p>Return interior and exterior surface areas of the pore system.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.system.PoreCylinder.table.html#porems.system.PoreCylinder.table" title="porems.system.PoreCylinder.table"><code class="xref py py-obj docutils literal notranslate"><span class="pre">table</span></code></a>([decimals])</p></td>
-<td><p>Create properties as pandas table for easy viewing.</p></td>
+<td><p>Return a tabular summary of the pore geometry and chemistry.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.system.PoreCylinder.volume.html#porems.system.PoreCylinder.volume" title="porems.system.PoreCylinder.volume"><code class="xref py py-obj docutils literal notranslate"><span class="pre">volume</span></code></a>([is_sum])</p></td>
-<td><p>Calculate pore volume.</p></td>
+<td><p>Return the pore volume derived from the prepared geometry.</p></td>
 </tr>
 </tbody>
 </table>
@@ -211,13 +210,13 @@ reservoirs of 5nm on each side and a surface functionalized with TMS</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.system.PoreCylinder.finalize.html#porems.system.PoreCylinder.finalize" title="porems.system.PoreCylinder.finalize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">finalize</span></code></a>()</p></td>
-<td><p>Finalize pore system.</p></td>
+<td><p>Finalize the pore by saturating remaining sites and boxing it.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="porems.system.PoreCylinder.store.html#porems.system.PoreCylinder.store" title="porems.system.PoreCylinder.store"><code class="xref py py-obj docutils literal notranslate"><span class="pre">store</span></code></a>([link, sort_list])</p></td>
-<td><p>Store pore system and all necessary files for simulation at given link.</p></td>
+<td><p>Write the finalized pore system and companion simulation files.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.system.PoreCylinder.yml.html#porems.system.PoreCylinder.yml" title="porems.system.PoreCylinder.yml"><code class="xref py py-obj docutils literal notranslate"><span class="pre">yml</span></code></a>([link])</p></td>
-<td><p>Save yaml file with properties necessary for analysis.</p></td>
+<td><p>Write a YAML summary of the pore geometry and chemistry.</p></td>
 </tr>
 </tbody>
 </table>

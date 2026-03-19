@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Pore.prepare &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -128,15 +128,12 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.pore.Pore.prepare">
 <span class="sig-prename descclassname"><span class="pre">Pore.</span></span><span class="sig-name descname"><span class="pre">prepare</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#porems.pore.Pore.prepare" title="Link to this definition">¶</a></dt>
-<dd><p>For the purpose of ensuring chemical propriety, the carved out
-surface needs to be processed based on a set of rules as proposed by
-Coasne et al. (2008).</p>
-<p>First, all unsaturated silicon atoms are to be removed. Next, silicon
-atoms with three unsaturated oxygen bonds are eliminated. Finally, now
-unbound oxygen atoms must be deleted. The resulting surface has fully
-saturated silicon atoms with a maximum of two unsaturated oxygen bonds.</p>
-<p>These unsaturated oxygens will be used as binding sites to connect
-molecules that are to be placed on the surface.</p>
+<dd><p>Prepare the carved silica surface for later functionalization.</p>
+<p>The preparation follows the pore-surface cleanup rules used throughout
+PoreMS: undercoordinated silicon atoms are removed, silicon atoms with
+excessive dangling oxygen neighbors are stripped, and the remaining
+unsaturated oxygen atoms become attachment handles for later surface
+chemistry.</p>
 </dd></dl>
 
 </section>

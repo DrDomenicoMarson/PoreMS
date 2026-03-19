@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Dice &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -129,10 +129,9 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="porems.dice.Dice">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.dice.</span></span><span class="sig-name descname"><span class="pre">Dice</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mol</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_pbc</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.dice.Dice" title="Link to this definition">¶</a></dt>
-<dd><p>This class splits the molecule into smaller sub boxes and provides
-parallelized functions for pair-search.</p>
+<dd><p>Partition a molecule into cubes for local pair searches.</p>
 <p>The aim is reducing the workload on search algorithms for atom pairs.
-Normally the computational effort would be</p>
+A naive neighbor search would scale as</p>
 <div class="math notranslate nohighlight">
 \[\mathcal O(n^2)\]</div>
 <p>with the number of atoms <span class="math notranslate nohighlight">\(n\)</span>, because each atom has to be compared
@@ -145,22 +144,24 @@ angles are constant, the number of atoms in each cube are a constant
 <span class="math notranslate nohighlight">\(b\)</span>. The computational effort for each atom is thus a constant</p>
 <div class="math notranslate nohighlight">
 \[\mathcal O(27\cdot b^2)\]</div>
-<p>Therefore, the computational effort for an entire search scales linear with
-the number of cubes. For example, doubling the cristobalite block size only
-increases the effort eightfold.</p>
-<p>Furthermore, the search is easily parallelizable, since no communication is
-needed between the subprocesses that each cover a set of cubes. The effort
-therefore has an ideal speedup.</p>
+<p>Therefore, the computational effort for an entire search scales linearly
+with the number of cubes. For example, doubling the cristobalite block size
+only increases the effort eightfold.</p>
+<p>Furthermore, the search can be parallelized across multiple processes,
+since no communication is needed between the subprocesses that each cover
+a set of cubes. Use <a class="reference internal" href="porems.dice.Dice.find.html#porems.dice.Dice.find" title="porems.dice.Dice.find"><code class="xref py py-meth docutils literal notranslate"><span class="pre">find()</span></code></a> together with <a class="reference internal" href="porems.dice.SearchPolicy.html#porems.dice.SearchPolicy" title="porems.dice.SearchPolicy"><code class="xref py py-class docutils literal notranslate"><span class="pre">SearchPolicy</span></code></a> to
+control whether the search runs serially or via a process pool.</p>
 <p>Note that the cube size must be strictly greater than the intended
 bond length searches.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>mol</strong><span class="classifier">Molecule</span></dt><dd><p>Molecule to be divided</p>
+<dt><strong>mol</strong><span class="classifier">Molecule</span></dt><dd><p>Molecule to be divided into cubes.</p>
 </dd>
-<dt><strong>size</strong><span class="classifier">float</span></dt><dd><p>Cube edge size</p>
+<dt><strong>size</strong><span class="classifier">float</span></dt><dd><p>Cube edge size.</p>
 </dd>
-<dt><strong>is_pbc</strong><span class="classifier">bool</span></dt><dd><p>True if periodic boundary conditions are needed</p>
+<dt><strong>is_pbc</strong><span class="classifier">bool</span></dt><dd><p>True when periodic boundary conditions should be applied during
+neighbor lookups.</p>
 </dd>
 </dl>
 </dd>
@@ -211,11 +212,8 @@ bond length searches.</p>
 <p class="rubric">Search</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="porems.dice.Dice.find_bond.html#porems.dice.Dice.find_bond" title="porems.dice.Dice.find_bond"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_bond</span></code></a>(cube_list, atom_type, distance)</p></td>
-<td><p>Search for a bond in the given cubes.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="porems.dice.Dice.find_parallel.html#porems.dice.Dice.find_parallel" title="porems.dice.Dice.find_parallel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_parallel</span></code></a>(cube_list, atom_type, distance)</p></td>
-<td><p>Parallelized bond search of function <a class="reference internal" href="porems.dice.Dice.find_bond.html#porems.dice.Dice.find_bond" title="porems.dice.Dice.find_bond"><code class="xref py py-func docutils literal notranslate"><span class="pre">find_bond()</span></code></a>.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="porems.dice.Dice.find.html#porems.dice.Dice.find" title="porems.dice.Dice.find"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find</span></code></a>([cube_list, atom_type, distance, policy])</p></td>
+<td><p>Search for atom pairs using the requested execution policy.</p></td>
 </tr>
 </tbody>
 </table>
@@ -243,7 +241,7 @@ bond length searches.</p>
 <td><p>Return the list of atoms in each cube.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="porems.dice.Dice.get_size.html#porems.dice.Dice.get_size" title="porems.dice.Dice.get_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_size</span></code></a>()</p></td>
-<td><p>Return the cubes size.</p></td>
+<td><p>Return the cube size.</p></td>
 </tr>
 </tbody>
 </table>

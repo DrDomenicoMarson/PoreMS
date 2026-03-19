@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>PoreCylinder.allocation &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -36,7 +36,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -45,7 +45,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -129,18 +129,14 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreCylinder.allocation">
 <span class="sig-prename descclassname"><span class="pre">PoreCylinder.</span></span><span class="sig-name descname"><span class="pre">allocation</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreCylinder.allocation" title="Link to this definition">¶</a></dt>
-<dd><p>Calculate molecule allocation on the surface. Using interior and
-exterior surfaces, the allocation rates can be determined by counting
-the number of used molecules on the surfaces.</p>
-<p>Using the conversion function <a class="reference internal" href="porems.utils.mols_to_mumol_m2.html#porems.utils.mols_to_mumol_m2" title="porems.utils.mols_to_mumol_m2"><code class="xref py py-func docutils literal notranslate"><span class="pre">porems.utils.mols_to_mumol_m2()</span></code></a>, the
-number of molecules is converted to concentration in
+<dd><p>Return surface allocation statistics for all attached molecules.</p>
+<p>The reported values include absolute counts, densities per square
+nanometer, and densities converted to
 <span class="math notranslate nohighlight">\(\frac{\mu\text{mol}}{\text{m}^2}\)</span>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>alloc</strong><span class="classifier">dictionary</span></dt><dd><p>Dictionary containing the surface allocation of all molecules in
-number of molecules, <span class="math notranslate nohighlight">\(\frac{\text{mols}}{\text{nm}^2}\)</span> and
-<span class="math notranslate nohighlight">\(\frac{\mu\text{mol}}{\text{m}^2}\)</span></p>
+<dt><strong>alloc</strong><span class="classifier">dict[str, AllocationSummary]</span></dt><dd><p>Surface allocation statistics grouped by molecule short name.</p>
 </dd>
 </dl>
 </dd>

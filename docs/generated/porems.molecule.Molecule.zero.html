@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Molecule.zero &#8212; PoreMS 0.4.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
@@ -35,7 +35,7 @@
         </button>
         <a class="navbar-brand" href="../index.html">
           PoreMS</a>
-        <span class="navbar-text navbar-version pull-left"><b>0.4</b></span>
+        <span class="navbar-text navbar-version pull-left"><b>0.4.0</b></span>
       </div>
 
         <div class="collapse navbar-collapse nav-collapse">
@@ -44,7 +44,7 @@
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
                 <li><a href="../pore.html">Pore</a></li>
-                <li><a href="../workflow.html">Workflow</a></li>
+                <li><a href="../slit.html">Slit Prep</a></li>
                 <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
@@ -127,21 +127,18 @@
 <h1>Molecule.zero<a class="headerlink" href="#molecule-zero" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.molecule.Molecule.zero">
-<span class="sig-prename descclassname"><span class="pre">Molecule.</span></span><span class="sig-name descname"><span class="pre">zero</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pos</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0,</span> <span class="pre">0,</span> <span class="pre">0]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.molecule.Molecule.zero" title="Link to this definition">¶</a></dt>
-<dd><p>Move whole the molecule, so that the minimal coordinate
-between all atoms is zero in all dimensions, or rather the values of the
-position variable <code class="docutils literal notranslate"><span class="pre">pos</span></code>. This function is basically setting
-the zero point of the coordinate system to <code class="docutils literal notranslate"><span class="pre">pos</span></code>.</p>
+<span class="sig-prename descclassname"><span class="pre">Molecule.</span></span><span class="sig-name descname"><span class="pre">zero</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pos</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.molecule.Molecule.zero" title="Link to this definition">¶</a></dt>
+<dd><p>Translate the molecule so its minimum coordinate matches <code class="docutils literal notranslate"><span class="pre">pos</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>pos</strong><span class="classifier">list, optional</span></dt><dd><p>Vector of the zero point of the coordinate system</p>
+<dt><strong>pos</strong><span class="classifier">list, optional</span></dt><dd><p>New lower coordinate corner. Defaults to the origin.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>vec</strong><span class="classifier">list</span></dt><dd><p>Vector used for the translation</p>
+<dt><strong>vec</strong><span class="classifier">list</span></dt><dd><p>Translation vector applied to the molecule.</p>
 </dd>
 </dl>
 </dd>
