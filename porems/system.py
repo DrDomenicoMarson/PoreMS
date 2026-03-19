@@ -14,6 +14,8 @@ import pandas as pd
 import porems as pms
 import numpy as np
 
+from porems.shape import ConeConfig, CuboidConfig, CylinderConfig, ShapeSection, ShapeSpec, SphereConfig
+
 
 _VALID_SHAPE_TYPES = {"CYLINDER", "SLIT", "SPHERE", "CONE"}
 _VALID_ATTACH_INPUTS = {"num", "molar", "percent"}
@@ -39,12 +41,12 @@ class _ShapeAnalysis:
     x_max: float | None = None
 
     @classmethod
-    def from_shape(cls, shape_id, shape):
+    def from_shape(cls, shape_id, shape_spec):
         """Build analysis metadata from one stored shape entry."""
-        shape_type, shape_obj = shape[0], shape[1]
-        inp = shape_obj.get_inp()
-        centroid = inp["centroid"]
-        extent = inp["diameter"] if shape_type == "SPHERE" else inp["length"]
+        shape_type = shape_spec.shape_type
+        config = shape_spec.shape.get_config()
+        centroid = list(config.centroid)
+        extent = config.diameter if shape_type == "SPHERE" else config.length
         z_padding = 0 if shape_type == "SPHERE" else 0.1
 
         rotated_centroid = None
@@ -61,10 +63,10 @@ class _ShapeAnalysis:
             shape_id=shape_id,
             shape_type=shape_type,
             centroid=centroid,
-            central=inp["central"],
+            central=list(config.central),
             extent=extent,
-            diameter=inp.get("diameter"),
-            diameter_1=inp.get("diameter_1"),
+            diameter=getattr(config, "diameter", None),
+            diameter_1=getattr(config, "diameter_1", None),
             z_min=centroid[2] - extent / 2 + z_padding,
             z_max=centroid[2] + extent / 2 - z_padding,
             rotated_centroid=rotated_centroid,
@@ -196,9 +198,9 @@ class PoreKit():
 
         Parameters
         ----------
-        shape : list
-            Two-item shape entry containing the shape type and shape object.
-        section : dict, optional
+        shape : ShapeSpec
+            Typed shape entry containing the shape identifier and object.
+        section : ShapeSection or dict, optional
             Optional coordinate ranges used to assign interior sites to this
             shape after preparation.
         hydro : float, optional
@@ -207,21 +209,24 @@ class PoreKit():
 
         Raises
         ------
+        TypeError
+            Raised when ``shape`` is not a :class:`porems.shape.ShapeSpec` or
+            when ``section`` is not a :class:`porems.shape.ShapeSection` or
+            mapping.
         ValueError
             Raised when an unsupported shape type is provided.
         """
-        section = {"x": [], "y": [], "z": []} if section is None else section
-        self._validate_shape_type(shape[0])
+        if not isinstance(shape, ShapeSpec):
+            raise TypeError("shape must be provided as a ShapeSpec instance.")
+
+        section_spec = self._coerce_shape_section(section) if section is not None else shape.section
+        self._validate_shape_type(shape.shape_type)
 
         # Process user input
-        coord_id = {"x": 0, "y": 1, "z": 2}
-        ranges = {}
-        for coord, sec in section.items():
-            ranges[coord_id[coord]] = sec if sec else [0, self._box[coord_id[coord]]]
+        shape = ShapeSpec(shape.shape_type, shape.shape, section_spec)
         self._hydro["in"].append(hydro)
 
         # Append to shape list
-        shape.append(ranges)
         self._shapes.append(shape)
 
     def shape_cylinder(self, diam, length=0, centroid=None, central=None):
@@ -240,7 +245,7 @@ class PoreKit():
 
         Returns
         -------
-        shape : list
+        shape : ShapeSpec
             Shape entry ready for :meth:`add_shape`.
         """
         central = [0, 0, 1] if central is None else central
@@ -250,9 +255,16 @@ class PoreKit():
         length = length if length else self._box[2]
 
         # Define shape
-        cylinder = pms.Cylinder({"centroid": centroid, "central": central, "length": length, "diameter": diam-0.5})  # Preparation precaution
+        cylinder = pms.Cylinder(
+            CylinderConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                length=length,
+                diameter=diam-0.5,
+            )
+        )  # Preparation precaution
 
-        return ["CYLINDER", cylinder]
+        return ShapeSpec("CYLINDER", cylinder)
 
     def shape_slit(self, height, length=0, centroid=None, central=None):
         """Create a slit-pore drilling shape.
@@ -270,7 +282,7 @@ class PoreKit():
 
         Returns
         -------
-        shape : list
+        shape : ShapeSpec
             Shape entry ready for :meth:`add_shape`.
         """
         central = [0, 0, 1] if central is None else central
@@ -280,9 +292,17 @@ class PoreKit():
         length = length if length else self._box[2]
 
         # Define shape
-        cuboid = pms.Cuboid({"centroid": centroid, "central": central, "length": length, "width": self._box[0], "height": height-0.5})  # Preparation precaution
+        cuboid = pms.Cuboid(
+            CuboidConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                length=length,
+                width=self._box[0],
+                height=height-0.5,
+            )
+        )  # Preparation precaution
 
-        return ["SLIT", cuboid]
+        return ShapeSpec("SLIT", cuboid)
 
     def shape_sphere(self, diameter, centroid=None, central=None):
         """Create a spherical drilling shape.
@@ -298,7 +318,7 @@ class PoreKit():
 
         Returns
         -------
-        shape : list
+        shape : ShapeSpec
             Shape entry ready for :meth:`add_shape`.
         """
         central = [0, 0, 1] if central is None else central
@@ -307,9 +327,15 @@ class PoreKit():
         centroid = centroid if centroid else self.centroid()
 
         # Define shape
-        sphere = pms.Sphere({"centroid": centroid, "central": central, "diameter": diameter})
+        sphere = pms.Sphere(
+            SphereConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                diameter=diameter,
+            )
+        )
 
-        return ["SPHERE", sphere]
+        return ShapeSpec("SPHERE", sphere)
 
     def shape_cone(self, diam_1, diam_2, length=0, centroid=None, central=None):
         """Create a conical drilling shape.
@@ -329,7 +355,7 @@ class PoreKit():
 
         Returns
         -------
-        shape : list
+        shape : ShapeSpec
             Shape entry ready for :meth:`add_shape`.
         """
         central = [0, 0, 1] if central is None else central
@@ -339,9 +365,17 @@ class PoreKit():
         length = length if length else self._box[2]
 
         # Define shape
-        cone = pms.Cone({"centroid": centroid, "central": central, "length": length, "diameter_1": diam_1-0.5, "diameter_2": diam_2-0.5})  # Preparation precaution
+        cone = pms.Cone(
+            ConeConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                length=length,
+                diameter_1=diam_1-0.5,
+                diameter_2=diam_2-0.5,
+            )
+        )  # Preparation precaution
 
-        return ["CONE", cone]
+        return ShapeSpec("CONE", cone)
 
     def _has_interior_hydroxylation_target(self):
         """Check whether the interior surface hydroxylation should be adjusted.
@@ -367,6 +401,36 @@ class PoreKit():
             self.sites_shape[i] = []
             self._pore.sites_attach_mol[i] = {}
 
+    def _shape_config(self, shape_spec):
+        """Return the typed configuration for one stored shape.
+
+        Parameters
+        ----------
+        shape_spec : ShapeSpec
+            Stored shape entry.
+
+        Returns
+        -------
+        config : ShapeConfig
+            Typed shape configuration.
+        """
+        return shape_spec.shape.get_config()
+
+    def _shape_ranges(self, shape_spec):
+        """Return normalized section ranges for one stored shape.
+
+        Parameters
+        ----------
+        shape_spec : ShapeSpec
+            Stored shape entry.
+
+        Returns
+        -------
+        ranges : dict
+            Axis-index mapping used for section checks.
+        """
+        return shape_spec.section.to_ranges(self._box)
+
     def _validate_shape_type(self, shape_type):
         """Validate a shape identifier.
 
@@ -384,6 +448,27 @@ class PoreKit():
             raise ValueError(
                 f"Unsupported shape type '{shape_type}'. Expected one of: {sorted(_VALID_SHAPE_TYPES)}."
             )
+
+    def _coerce_shape_section(self, section):
+        """Normalize section input to a typed shape-section dataclass.
+
+        Parameters
+        ----------
+        section : ShapeSection or dict or None
+            Section description used for interior-site assignment.
+
+        Returns
+        -------
+        shape_section : ShapeSection
+            Normalized section dataclass.
+
+        Raises
+        ------
+        TypeError
+            Raised when ``section`` is neither ``None``, a
+            :class:`porems.shape.ShapeSection`, nor a mapping.
+        """
+        return ShapeSection.from_dict(section)
 
     def _validate_attachment_request(self, site_type, inp):
         """Validate attachment input modes.
@@ -589,8 +674,12 @@ class PoreKit():
         """
         # Carve out shape
         del_list = []
-        for shape in self._shapes:
-            del_list += [atom_id for atom_id, atom in enumerate(self._block.get_atom_list()) if shape[1].is_in(atom.get_pos())]
+        for shape_spec in self._shapes:
+            del_list += [
+                atom_id
+                for atom_id, atom in enumerate(self._block.get_atom_list())
+                if shape_spec.shape.is_in(atom.get_pos())
+            ]
         self._matrix.strip(del_list)
 
         # Prepare pore surface
@@ -601,7 +690,7 @@ class PoreKit():
         site_list = self._pore.get_sites()
 
         # Check if sections are given
-        self._sections = [shape[2] for shape in self._shapes]
+        self._sections = [self._shape_ranges(shape_spec) for shape_spec in self._shapes]
         self._is_section = False
         for section in self._sections:
             if not section=={0: [0, self._box[0]], 1: [0, self._box[1]], 2: [0, self._box[2]]}:
@@ -624,22 +713,42 @@ class PoreKit():
                 # Check distance to shape centroid
                 lengths = []
                 for k in range(len(self._shapes)):
-                    if self._shapes[k][1].get_inp()["central"]==[0,0,1]:
-                        try:
-                            self._shapes[k][1].get_inp()["diameter_1"]
-                            dia = (self._shapes[k][1].get_inp()["diameter_1"] + self._shapes[k][1].get_inp()["diameter_2"])/2
-                            lengths.append(pms.geom.length(pms.geom.vector(self._shapes[k][1].get_inp()["centroid"][:2], pos[:2]))/(0.5*dia))
-                        except (KeyError, TypeError):
-                            lengths.append(pms.geom.length(pms.geom.vector(self._shapes[k][1].get_inp()["centroid"][:2], pos[:2]))/(0.5*self._shapes[k][1].get_inp()["diameter"]))
-                    if self._shapes[k][1].get_inp()["central"]==[0,1,0]:
-                        centroid = self._shapes[k][1].get_inp()["centroid"]
-                        lengths.append(pms.geom.length(pms.geom.vector([centroid[0], centroid[2]], [pos[0],pos[2]]))/(0.5*self._shapes[k][1].get_inp()["diameter"]))
-                    if self._shapes[k][1].get_inp()["central"]==[1,0,0]:
-                        centroid = self._shapes[k][1].get_inp()["centroid"]
-                        lengths.append(pms.geom.length(pms.geom.vector([centroid[1], centroid[2]], [pos[0],pos[2]]))/(0.5*self._shapes[k][1].get_inp()["diameter"]))
-                    if self._shapes[k][1].get_inp()["central"]==[1,1,0]:
-                        centroid = self._shapes[k][1].get_inp()["centroid"]
-                        lengths.append(pms.geom.length(pms.geom.vector([centroid[-1]], [pos[-1]]))/(0.5*self._shapes[k][1].get_inp()["diameter"]))
+                    shape_config = self._shape_config(self._shapes[k])
+                    if shape_config.central == (0, 0, 1):
+                        if isinstance(shape_config, ConeConfig):
+                            dia = (shape_config.diameter_1 + shape_config.diameter_2) / 2
+                            lengths.append(
+                                pms.geom.length(
+                                    pms.geom.vector(shape_config.centroid[:2], pos[:2])
+                                ) / (0.5 * dia)
+                            )
+                        else:
+                            lengths.append(
+                                pms.geom.length(
+                                    pms.geom.vector(shape_config.centroid[:2], pos[:2])
+                                ) / (0.5 * shape_config.diameter)
+                            )
+                    if shape_config.central == (0, 1, 0):
+                        centroid = shape_config.centroid
+                        lengths.append(
+                            pms.geom.length(
+                                pms.geom.vector([centroid[0], centroid[2]], [pos[0], pos[2]])
+                            ) / (0.5 * shape_config.diameter)
+                        )
+                    if shape_config.central == (1, 0, 0):
+                        centroid = shape_config.centroid
+                        lengths.append(
+                            pms.geom.length(
+                                pms.geom.vector([centroid[1], centroid[2]], [pos[0], pos[2]])
+                            ) / (0.5 * shape_config.diameter)
+                        )
+                    if shape_config.central == (1, 1, 0):
+                        centroid = shape_config.centroid
+                        lengths.append(
+                            pms.geom.length(
+                                pms.geom.vector([centroid[-1]], [pos[-1]])
+                            ) / (0.5 * shape_config.diameter)
+                        )
                 
                 # Fin minimal length id                            
                 min_len_id = lengths.index(min(lengths))
@@ -649,18 +758,24 @@ class PoreKit():
                     for _k in range(len(self._shapes)):
                         # Check if position within section
                         for sec_idx, section in enumerate(self._sections):
-                            if self._shapes[sec_idx][1].get_inp()["central"]==[0,0,1] :
+                            section_config = self._shape_config(self._shapes[sec_idx])
+                            if section_config.central == (0, 0, 1):
                                 is_in = []
                                 for dim in range(3):
                                     if dim == 2:
-                                        is_in.append(self._shapes[sec_idx][1].is_in(pos))
+                                        is_in.append(self._shapes[sec_idx].shape.is_in(pos))
                                     else:
-                                        try:
-                                            self._shapes[sec_idx][1].get_inp()["diameter_1"]
-                                            dia = (self._shapes[sec_idx][1].get_inp()["diameter_1"] + self._shapes[sec_idx][1].get_inp()["diameter_2"])/2
-                                            is_in.append(pos[dim]>=self._shapes[sec_idx][1].get_inp()["centroid"][dim]-dia/2 and pos[dim]<=self._shapes[sec_idx][1].get_inp()["centroid"][dim]+dia/2)
-                                        except (KeyError, TypeError):
-                                            is_in.append(pos[dim]>=self._shapes[sec_idx][1].get_inp()["centroid"][dim]-self._shapes[sec_idx][1].get_inp()["diameter"]/2 and pos[dim]<=self._shapes[sec_idx][1].get_inp()["centroid"][dim]+self._shapes[sec_idx][1].get_inp()["diameter"]/2)
+                                        if isinstance(section_config, ConeConfig):
+                                            dia = (section_config.diameter_1 + section_config.diameter_2) / 2
+                                            is_in.append(
+                                                pos[dim] >= section_config.centroid[dim] - dia / 2
+                                                and pos[dim] <= section_config.centroid[dim] + dia / 2
+                                            )
+                                        else:
+                                            is_in.append(
+                                                pos[dim] >= section_config.centroid[dim] - section_config.diameter / 2
+                                                and pos[dim] <= section_config.centroid[dim] + section_config.diameter / 2
+                                            )
                                 if sum(is_in)==3:
                                     min_len_id = sec_idx
             else:
@@ -670,7 +785,7 @@ class PoreKit():
             self._si_pos_in[min_len_id].append(pos)
 
             # Add normal vector to pore site list
-            site_list[site]["normal"] = self._shapes[min_len_id][1].normal
+            site_list[site]["normal"] = self._shapes[min_len_id].shape.normal
 
         # Add normal vector to exterior pore site list
         for site in self._site_ex:
@@ -1161,14 +1276,14 @@ class PoreKit():
         surface = self.surface(is_sum=False)
 
         # Fill properties for each shape
-        for i, shape in enumerate(self._shapes):
+        for i, shape_spec in enumerate(self._shapes):
             shape_id = "shape_"+"%02i"%i
             self._yml[shape_id] = {}
-            self._yml[shape_id]["shape"] = shape[0]
-            self._yml[shape_id]["parameter"] = shape[1].get_inp().copy()
-            if shape[0]=="CYLINDER":
+            self._yml[shape_id]["shape"] = shape_spec.shape_type
+            self._yml[shape_id]["parameter"] = shape_spec.shape.get_inp().copy()
+            if shape_spec.shape_type=="CYLINDER":
                 self._yml[shape_id]["parameter"]["diameter"] += 0.5
-            elif shape[0]=="SLIT":
+            elif shape_spec.shape_type=="SLIT":
                 self._yml[shape_id]["parameter"]["height"] += 0.5
             self._yml[shape_id]["diameter"] = diameter[i]
             self._yml[shape_id]["roughness"] = roughness["in"][i]
@@ -1288,19 +1403,56 @@ class PoreKit():
 
         # Calculate volumes
         volume = []
-        for i, shape in enumerate(self._shapes):
-            centroid = self._shapes[i][1].get_inp()["centroid"]
-            if not shape[0]=="SPHERE":
-                length = self._shapes[i][1].get_inp()["length"]
-            if shape[0]=="CYLINDER":
-                volume.append(pms.Cylinder({"centroid": centroid, "central": [0, 0, 1], "length": length, "diameter": diam[i]}).volume())
-            elif shape[0]=="SLIT":
-                volume.append(pms.Cuboid({"centroid": centroid, "central": [0, 0, 1], "length": length, "width": self._box[0], "height": diam[i]}).volume())
-            elif shape[0]=="SPHERE":
-                volume.append(pms.Sphere({"centroid": centroid, "central": [0, 0, 1], "diameter": diam[i]}).volume())
-            if shape[0]=="CONE":
-                diam_cone =  [self._shapes[i][1].get_inp()["diameter_1"],self._shapes[i][1].get_inp()["diameter_2"]]
-                volume.append(pms.Cone({"centroid": centroid, "central": [0, 0, 1], "length": length, "diameter_1": diam_cone[0], "diameter_2": diam_cone[1]}).volume())
+        for i, shape_spec in enumerate(self._shapes):
+            shape_config = self._shape_config(shape_spec)
+            centroid = shape_config.centroid
+            if shape_spec.shape_type != "SPHERE":
+                length = shape_config.length
+            if shape_spec.shape_type == "CYLINDER":
+                volume.append(
+                    pms.Cylinder(
+                        CylinderConfig(
+                            centroid=centroid,
+                            central=(0, 0, 1),
+                            length=length,
+                            diameter=diam[i],
+                        )
+                    ).volume()
+                )
+            elif shape_spec.shape_type == "SLIT":
+                volume.append(
+                    pms.Cuboid(
+                        CuboidConfig(
+                            centroid=centroid,
+                            central=(0, 0, 1),
+                            length=length,
+                            width=self._box[0],
+                            height=diam[i],
+                        )
+                    ).volume()
+                )
+            elif shape_spec.shape_type == "SPHERE":
+                volume.append(
+                    pms.Sphere(
+                        SphereConfig(
+                            centroid=centroid,
+                            central=(0, 0, 1),
+                            diameter=diam[i],
+                        )
+                    ).volume()
+                )
+            if shape_spec.shape_type == "CONE":
+                volume.append(
+                    pms.Cone(
+                        ConeConfig(
+                            centroid=centroid,
+                            central=(0, 0, 1),
+                            length=length,
+                            diameter_1=shape_config.diameter_1,
+                            diameter_2=shape_config.diameter_2,
+                        )
+                    ).volume()
+                )
 
         return sum(volume) if is_sum else volume
 
@@ -1329,19 +1481,56 @@ class PoreKit():
 
         # Interior surface
         surf_in = []
-        for i, shape in enumerate(self._shapes):
-            centroid = self._shapes[i][1].get_inp()["centroid"]
-            if not shape[0]=="SPHERE":
-                length = self._shapes[i][1].get_inp()["length"]
-            if shape[0]=="CYLINDER":
-                surf_in.append(pms.Cylinder({"centroid": centroid, "central": [0, 0, 1], "length": length, "diameter": diam[i]}).surface())
-            elif shape[0]=="SLIT":
-                surf_in.append(pms.Cuboid({"centroid": centroid, "central": [0, 0, 1], "length": length, "width": self._box[0], "height": diam[i]}).surface()/2)
-            elif shape[0]=="SPHERE":
-                surf_in.append(pms.Sphere({"centroid": centroid, "central": [0, 0, 1], "diameter": diam[i]}).surface())
-            if shape[0]=="CONE":
-                diam_cone =  [self._shapes[i][1].get_inp()["diameter_1"],self._shapes[i][1].get_inp()["diameter_2"]]
-                surf_in.append(pms.Cone({"centroid": centroid, "central": [0, 0, 1],"length": length, "diameter_1": diam_cone[0], "diameter_2": diam_cone[1]}).surface())
+        for i, shape_spec in enumerate(self._shapes):
+            shape_config = self._shape_config(shape_spec)
+            centroid = shape_config.centroid
+            if shape_spec.shape_type != "SPHERE":
+                length = shape_config.length
+            if shape_spec.shape_type == "CYLINDER":
+                surf_in.append(
+                    pms.Cylinder(
+                        CylinderConfig(
+                            centroid=centroid,
+                            central=(0, 0, 1),
+                            length=length,
+                            diameter=diam[i],
+                        )
+                    ).surface()
+                )
+            elif shape_spec.shape_type == "SLIT":
+                surf_in.append(
+                    pms.Cuboid(
+                        CuboidConfig(
+                            centroid=centroid,
+                            central=(0, 0, 1),
+                            length=length,
+                            width=self._box[0],
+                            height=diam[i],
+                        )
+                    ).surface() / 2
+                )
+            elif shape_spec.shape_type == "SPHERE":
+                surf_in.append(
+                    pms.Sphere(
+                        SphereConfig(
+                            centroid=centroid,
+                            central=(0, 0, 1),
+                            diameter=diam[i],
+                        )
+                    ).surface()
+                )
+            if shape_spec.shape_type == "CONE":
+                surf_in.append(
+                    pms.Cone(
+                        ConeConfig(
+                            centroid=centroid,
+                            central=(0, 0, 1),
+                            length=length,
+                            diameter_1=shape_config.diameter_1,
+                            diameter_2=shape_config.diameter_2,
+                        )
+                    ).surface()
+                )
 
         # Exterior surface
         sections_ex = [0, 0]
@@ -1353,13 +1542,13 @@ class PoreKit():
 
         surf_ex = []
         for section in sections_ex:
-            if self._shapes[section][0]=="CYLINDER":
+            if self._shapes[section].shape_type=="CYLINDER":
                 surf_ex.append(self._box[0]*self._box[1]-math.pi*(diam[section]/2)**2)
-            elif self._shapes[section][0]=="SLIT":
+            elif self._shapes[section].shape_type=="SLIT":
                 surf_ex.append(self._box[0]*(self._box[1]-diam[section]))
-            elif self._shapes[section][0]=="SPHERE":
+            elif self._shapes[section].shape_type=="SPHERE":
                 surf_ex.append(self._box[0]*self._box[1]-math.pi*(diam[section]/2)**2)
-            if self._shapes[section][0]=="CONE":
+            if self._shapes[section].shape_type=="CONE":
                 surf_ex.append(0)
 
         return {"in": sum(surf_in) if is_sum else surf_in,"ex": sum(surf_ex) if is_sum else surf_ex}
@@ -1458,7 +1647,8 @@ class PoreKit():
         Returns
         -------
         pore_shape : list
-            Shape entries used to drill and analyze the pore.
+            :class:`porems.shape.ShapeSpec` entries used to drill and analyze
+            the pore.
         """
         return self._shapes
 

@@ -488,7 +488,15 @@ class UserModelCase(unittest.TestCase):
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 45, True))
 
-        cylinder = pms.Cylinder({"centroid": centroid, "central": central, "length": 3, "diameter": 4})
+        cylinder = pms.Cylinder(
+            pms.CylinderConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                length=3,
+                diameter=4,
+            )
+        )
+        self.assertIsInstance(cylinder.get_config(), pms.CylinderConfig)
 
         # Properties
         self.assertEqual(round(cylinder.volume(), 4), 37.6991)
@@ -529,7 +537,14 @@ class UserModelCase(unittest.TestCase):
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
 
-        sphere = pms.Sphere({"centroid": centroid, "central": central, "diameter": 4})
+        sphere = pms.Sphere(
+            pms.SphereConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                diameter=4,
+            )
+        )
+        self.assertIsInstance(sphere.get_config(), pms.SphereConfig)
 
         # Properties
         self.assertEqual(round(sphere.volume(), 4), 33.5103)
@@ -566,7 +581,16 @@ class UserModelCase(unittest.TestCase):
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
 
-        cuboid = pms.Cuboid({"centroid": centroid, "central": central, "length": 10, "width": 6, "height": 4})
+        cuboid = pms.Cuboid(
+            pms.CuboidConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                length=10,
+                width=6,
+                height=4,
+            )
+        )
+        self.assertIsInstance(cuboid.get_config(), pms.CuboidConfig)
 
         # Properties
         self.assertEqual(round(cuboid.volume(), 4), 240)
@@ -599,7 +623,16 @@ class UserModelCase(unittest.TestCase):
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 45, True))
 
-        cone = pms.Cone({"centroid": centroid, "central": central, "length": 6, "diameter_1": 4, "diameter_2": 1})
+        cone = pms.Cone(
+            pms.ConeConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                length=6,
+                diameter_1=4,
+                diameter_2=1,
+            )
+        )
+        self.assertIsInstance(cone.get_config(), pms.ConeConfig)
 
         # Properties
         self.assertEqual(round(cone.volume(), 4), 32.9867)
@@ -653,7 +686,14 @@ class UserModelCase(unittest.TestCase):
 
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
-        cylinder = pms.Cylinder({"centroid": centroid, "central": central, "length": 6, "diameter": 4})
+        cylinder = pms.Cylinder(
+            pms.CylinderConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                length=6,
+                diameter=4,
+            )
+        )
         del_list = [atom_id for atom_id, atom in enumerate(block.get_atom_list()) if cylinder.is_in(atom.get_pos())]
         matrix.strip(del_list)
 
@@ -681,7 +721,14 @@ class UserModelCase(unittest.TestCase):
 
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
-        cylinder = pms.Cylinder({"centroid": centroid, "central": central, "length": 6, "diameter": 4})
+        cylinder = pms.Cylinder(
+            pms.CylinderConfig(
+                centroid=tuple(centroid),
+                central=tuple(central),
+                length=6,
+                diameter=4,
+            )
+        )
         del_list = [atom_id for atom_id, atom in enumerate(block.get_atom_list()) if cylinder.is_in(atom.get_pos())]
         matrix.strip(del_list)
 
@@ -855,8 +902,20 @@ class UserModelCase(unittest.TestCase):
         pore.structure(pms.BetaCristobalit().generate([5, 5, 10], "z"))
         pore.build()
         pore.exterior(5, hydro=0.4)
+        invalid_shape = pms.ShapeSpec(
+            "DOTA",
+            pms.Cylinder(
+                pms.CylinderConfig(
+                    centroid=(3.5, 3.5, 5.0),
+                    central=(0.0, 0.0, 1.0),
+                    length=10,
+                    diameter=1.5,
+                )
+            ),
+        )
         with self.assertRaisesRegex(ValueError, "shape type"):
-            pore.add_shape(["DOTA", None], hydro=0.4)
+            pore.add_shape(invalid_shape, hydro=0.4)
+        self.assertIsInstance(pore.shape_cylinder(2, 10, [3.5, 3.5, 5]), pms.ShapeSpec)
         pore.add_shape(pore.shape_cylinder(2, 10, [3.5, 3.5, 5]), hydro=0.4)
         pore.add_shape(pore.shape_cylinder(2, 10, [1.5, 1.5, 5]), hydro=0.4)
         with self.assertWarnsRegex(RuntimeWarning, unassigned_warning):
@@ -871,9 +930,9 @@ class UserModelCase(unittest.TestCase):
         pore.structure(pms.BetaCristobalit().generate([7, 7, 10], "z"))
         pore.build()
         pore.exterior(5, hydro=0.4)
-        pore.add_shape(pore.shape_cylinder(6, 4, [3.5, 3.5, 2]), section={"x": [], "y": [], "z": [0,  4]}, hydro=0.4)
-        pore.add_shape(pore.shape_cone(4.5, 3, 2,  [3.5, 3.5, 5]), section={"x": [], "y": [], "z": [4,  6]}, hydro=0.4)
-        pore.add_shape(pore.shape_cylinder(4, 4, [3.5, 3.5, 8]), section={"x": [], "y": [], "z": [6, 10]}, hydro=0.4)
+        pore.add_shape(pore.shape_cylinder(6, 4, [3.5, 3.5, 2]), section=pms.ShapeSection(z=(0, 4)), hydro=0.4)
+        pore.add_shape(pore.shape_cone(4.5, 3, 2,  [3.5, 3.5, 5]), section=pms.ShapeSection(z=(4, 6)), hydro=0.4)
+        pore.add_shape(pore.shape_cylinder(4, 4, [3.5, 3.5, 8]), section=pms.ShapeSection(z=(6, 10)), hydro=0.4)
         with self.assertWarnsRegex(RuntimeWarning, unassigned_warning):
             pore.prepare()
         pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in")

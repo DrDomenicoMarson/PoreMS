@@ -6,7 +6,19 @@ from .molecule import Molecule
 from .pattern import BetaCristobalit, AlphaCristobalit
 from .pore import Pore
 from .system import PoreKit, PoreCylinder, PoreSlit, PoreCapsule, PoreAmorphCylinder
-from .shape import Cylinder, Sphere, Cuboid, Cone
+from .shape import (
+    ShapeConfig,
+    CylinderConfig,
+    SphereConfig,
+    CuboidConfig,
+    ConeConfig,
+    ShapeSection,
+    ShapeSpec,
+    Cylinder,
+    Sphere,
+    Cuboid,
+    Cone,
+)
 from .store import Store
 from .workflows import (
     SurfaceCompositionTarget,
@@ -29,6 +41,8 @@ __all__ = [
     "Dice", "SearchExecution", "SearchPolicy", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
     "Pore", "PoreKit", "PoreCylinder", "PoreSlit", "PoreCapsule", "PoreAmorphCylinder",
+    "ShapeConfig", "CylinderConfig", "SphereConfig", "CuboidConfig", "ConeConfig",
+    "ShapeSection", "ShapeSpec",
     "Cylinder", "Sphere", "Cuboid", "Cone",
     "SurfaceCompositionTarget", "BareAmorphousSlitConfig",
     "SurfaceComposition", "SlitBuildReport", "SlitBuildResult",

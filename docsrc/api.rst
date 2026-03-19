@@ -56,6 +56,13 @@ Shape
 .. autosummary::
     :toctree: generated/
 
+    shape.ShapeConfig
+    shape.ShapeSection
+    shape.ShapeSpec
+    shape.CylinderConfig
+    shape.SphereConfig
+    shape.CuboidConfig
+    shape.ConeConfig
     shape.Shape
     shape.Cylinder
     shape.Sphere

@@ -5,6 +5,7 @@
 ################################################################################
 
 
+from dataclasses import dataclass, field, fields
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,24 +15,262 @@ import porems.utils as utils
 import porems.geometry as geometry
 
 
+def _coerce_vector3(name, value):
+    """Normalize a three-dimensional coordinate-like input."""
+    if len(value) != 3:
+        raise ValueError(f"{name} must contain exactly three coordinates.")
+    return tuple(value)
+
+
+def _serialize_config_value(value):
+    """Convert config values into list-based serializable representations."""
+    if isinstance(value, tuple):
+        return list(value)
+    return value
+
+
+@dataclass(frozen=True)
+class ShapeConfig:
+    """Shared orientation data for analytical pore shapes.
+
+    Parameters
+    ----------
+    centroid : tuple
+        Shape centroid in Cartesian coordinates.
+    central : tuple
+        Main axis of the shape in Cartesian coordinates.
+    """
+
+    centroid: tuple[float, float, float]
+    central: tuple[float, float, float]
+
+    def __post_init__(self):
+        """Normalize the stored vectors to three-dimensional tuples."""
+        object.__setattr__(self, "centroid", _coerce_vector3("centroid", self.centroid))
+        object.__setattr__(self, "central", _coerce_vector3("central", self.central))
+
+    def to_dict(self):
+        """Return a serializable dict representation of the configuration.
+
+        Returns
+        -------
+        config : dict
+            Dictionary representation of the configuration values.
+        """
+        return {
+            field_info.name: _serialize_config_value(getattr(self, field_info.name))
+            for field_info in fields(self)
+        }
+
+
+@dataclass(frozen=True)
+class CylinderConfig(ShapeConfig):
+    """Configuration for :class:`Cylinder`.
+
+    Parameters
+    ----------
+    centroid : tuple
+        Shape centroid in Cartesian coordinates.
+    central : tuple
+        Main axis of the cylinder.
+    length : float
+        Cylinder length in nanometers.
+    diameter : float
+        Cylinder diameter in nanometers.
+    """
+
+    length: float
+    diameter: float
+
+
+@dataclass(frozen=True)
+class SphereConfig(ShapeConfig):
+    """Configuration for :class:`Sphere`.
+
+    Parameters
+    ----------
+    centroid : tuple
+        Shape centroid in Cartesian coordinates.
+    central : tuple
+        Main axis used for orientation.
+    diameter : float
+        Sphere diameter in nanometers.
+    """
+
+    diameter: float
+
+
+@dataclass(frozen=True)
+class CuboidConfig(ShapeConfig):
+    """Configuration for :class:`Cuboid`.
+
+    Parameters
+    ----------
+    centroid : tuple
+        Shape centroid in Cartesian coordinates.
+    central : tuple
+        Main axis used for orientation.
+    length : float
+        Cuboid length in nanometers.
+    width : float
+        Cuboid width in nanometers.
+    height : float
+        Cuboid height in nanometers.
+    """
+
+    length: float
+    width: float
+    height: float
+
+
+@dataclass(frozen=True)
+class ConeConfig(ShapeConfig):
+    """Configuration for :class:`Cone`.
+
+    Parameters
+    ----------
+    centroid : tuple
+        Shape centroid in Cartesian coordinates.
+    central : tuple
+        Main axis of the cone.
+    length : float
+        Cone length in nanometers.
+    diameter_1 : float
+        Diameter at the first end of the cone in nanometers.
+    diameter_2 : float
+        Diameter at the second end of the cone in nanometers.
+    """
+
+    length: float
+    diameter_1: float
+    diameter_2: float
+
+
+@dataclass(frozen=True)
+class ShapeSection:
+    """Optional coordinate windows used to assign sites to one shape.
+
+    Parameters
+    ----------
+    x : tuple, optional
+        Inclusive ``(min, max)`` range along the x-axis.
+    y : tuple, optional
+        Inclusive ``(min, max)`` range along the y-axis.
+    z : tuple, optional
+        Inclusive ``(min, max)`` range along the z-axis.
+    """
+
+    x: tuple[float, float] | None = None
+    y: tuple[float, float] | None = None
+    z: tuple[float, float] | None = None
+
+    def __post_init__(self):
+        """Normalize optional axis ranges to tuples."""
+        for axis_name in ("x", "y", "z"):
+            axis_range = getattr(self, axis_name)
+            if axis_range is None:
+                continue
+            if len(axis_range) != 2:
+                raise ValueError(f"ShapeSection.{axis_name} must contain exactly two bounds.")
+            object.__setattr__(self, axis_name, tuple(axis_range))
+
+    @classmethod
+    def from_dict(cls, section):
+        """Build a section specification from a mapping.
+
+        Parameters
+        ----------
+        section : dict or ShapeSection or None
+            Section mapping using ``x``, ``y``, and ``z`` keys.
+
+        Returns
+        -------
+        shape_section : ShapeSection
+            Normalized section dataclass.
+        """
+        if section is None:
+            return cls()
+        if isinstance(section, cls):
+            return section
+        if not isinstance(section, dict):
+            raise TypeError("section must be a ShapeSection, dict, or None.")
+
+        kwargs = {}
+        for axis_name in ("x", "y", "z"):
+            axis_range = section.get(axis_name)
+            kwargs[axis_name] = tuple(axis_range) if axis_range else None
+        return cls(**kwargs)
+
+    def to_ranges(self, box):
+        """Return the normalized axis-range mapping.
+
+        Parameters
+        ----------
+        box : list
+            Simulation-box dimensions used as defaults for omitted axes.
+
+        Returns
+        -------
+        ranges : dict
+            Axis-index mapping used by the pore allocation code.
+        """
+        axis_ranges = {0: self.x, 1: self.y, 2: self.z}
+        return {
+            axis_id: list(bounds) if bounds is not None else [0, box[axis_id]]
+            for axis_id, bounds in axis_ranges.items()
+        }
+
+
+@dataclass(frozen=True)
+class ShapeSpec:
+    """Typed shape entry used by :class:`porems.system.PoreKit`.
+
+    Parameters
+    ----------
+    shape_type : str
+        Shape identifier such as ``"CYLINDER"`` or ``"SLIT"``.
+    shape : Shape
+        Configured analytical shape object.
+    section : ShapeSection, optional
+        Optional section constraint used during interior-site assignment.
+    """
+
+    shape_type: str
+    shape: "Shape"
+    section: ShapeSection = field(default_factory=ShapeSection)
+
+
+def _coerce_shape_config(inp, config_type):
+    """Validate that a typed shape configuration was provided."""
+    if isinstance(inp, config_type):
+        return inp
+    raise TypeError(
+        f"{config_type.__name__} input must be provided as a {config_type.__name__} instance."
+    )
+
+
 class Shape():
     """Base class for analytical pore shapes.
 
     Parameters
     ----------
-    inp : dict
-        Shape configuration dictionary.
+    inp : ShapeConfig
+        Shape configuration dataclass.
     """
     def __init__(self, inp):
-        self._inp = inp
+        self._config = _coerce_shape_config(inp, self._config_type)
+        self._inp = self._config.to_dict()
 
         # Calculate angle and normal vector for rotation
-        self._angle = geometry.angle(inp["central"], geometry.main_axis("z"))
-        self._normal = geometry.cross_product(inp["central"], geometry.main_axis("z"))
+        self._angle = geometry.angle(self._config.central, geometry.main_axis("z"))
+        self._normal = geometry.cross_product(self._config.central, geometry.main_axis("z"))
 
         # Calculate distance towards central axis start
-        self._dist_start = geometry.vector(self._centroid, inp["centroid"])
-        self._dist_zero = geometry.vector(geometry.rotate(inp["centroid"], self._normal, -self._angle, True), self._centroid)
+        self._dist_start = geometry.vector(self._centroid, self._config.centroid)
+        self._dist_zero = geometry.vector(
+            geometry.rotate(self._config.centroid, self._normal, -self._angle, True),
+            self._centroid,
+        )
 
 
     ##################
@@ -95,14 +334,24 @@ class Shape():
     # Getter #
     ##########
     def get_inp(self):
-        """Return the full shape configuration.
+        """Return the full shape configuration as a serializable dictionary.
 
         Returns
         -------
         inp : dict
             Dictionary of all shape inputs.
         """
-        return self._inp
+        return self._config.to_dict()
+
+    def get_config(self):
+        """Return the typed shape configuration.
+
+        Returns
+        -------
+        config : ShapeConfig
+            Dataclass describing the configured shape geometry.
+        """
+        return self._config
 
 
 class Cylinder(Shape):
@@ -113,15 +362,18 @@ class Cylinder(Shape):
 
     Parameters
     ----------
-    inp : dict
-        Shape configuration dictionary.
+    inp : CylinderConfig
+        Shape configuration dataclass.
     """
+    _config_type = CylinderConfig
+
     def __init__(self, inp):
+        config = _coerce_shape_config(inp, self._config_type)
         # Set centroid
-        self._centroid = [0, 0, inp["length"]/2]
+        self._centroid = [0, 0, config.length/2]
 
         # Call super class
-        super(Cylinder, self).__init__(inp)
+        super(Cylinder, self).__init__(config)
 
 
     ############
@@ -367,9 +619,11 @@ class Sphere(Shape):
 
     Parameters
     ----------
-    inp : dict
-        Shape configuration dictionary.
+    inp : SphereConfig
+        Shape configuration dataclass.
     """
+    _config_type = SphereConfig
+
     def __init__(self, inp):
         # Set centroid
         self._centroid = [0, 0, 0]
@@ -629,15 +883,18 @@ class Cuboid(Shape):
 
     Parameters
     ----------
-    inp : dict
-        Shape configuration dictionary.
+    inp : CuboidConfig
+        Shape configuration dataclass.
     """
+    _config_type = CuboidConfig
+
     def __init__(self, inp):
+        config = _coerce_shape_config(inp, self._config_type)
         # Set centroid
-        self._centroid = [inp["width"]/2, inp["height"]/2, inp["length"]/2]
+        self._centroid = [config.width/2, config.height/2, config.length/2]
 
         # Call super class
-        super(Cuboid, self).__init__(inp)
+        super(Cuboid, self).__init__(config)
 
 
     ############
@@ -797,15 +1054,18 @@ class Cone(Shape):
 
     Parameters
     ----------
-    inp : dict
-        Shape configuration dictionary.
+    inp : ConeConfig
+        Shape configuration dataclass.
     """
+    _config_type = ConeConfig
+
     def __init__(self, inp):
+        config = _coerce_shape_config(inp, self._config_type)
         # Set centroid
-        self._centroid = [0, 0, inp["length"]/2]
+        self._centroid = [0, 0, config.length/2]
 
         # Call super class
-        super(Cone, self).__init__(inp)
+        super(Cone, self).__init__(config)
 
 
     ############
