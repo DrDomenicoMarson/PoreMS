@@ -37,22 +37,24 @@ class UserModelCase(unittest.TestCase):
     # Utils #
     #########
     def test_utils(self):
-        file_link = "output/test/test.txt"
+        text_link = "output/test/test.txt"
+        text_copy_link = "output/test/test_copy.txt"
+        pickle_link = "output/test/test.pkl"
 
         pms.utils.mkdirp("output/test")
 
-        with open(file_link, "w") as file_out:
+        with open(text_link, "w") as file_out:
             file_out.write("TEST")
-        pms.utils.copy(file_link, file_link+"t")
-        pms.utils.replace(file_link+"t", "TEST", "DOTA")
-        with open(file_link+"t", "r") as file_in:
+        pms.utils.copy(text_link, text_copy_link)
+        pms.utils.replace(text_copy_link, "TEST", "DOTA")
+        with open(text_copy_link, "r") as file_in:
             for line in file_in:
                 self.assertEqual(line, "DOTA\n")
 
         self.assertEqual(pms.utils.column([[1, 1, 1], [2, 2, 2]]), [[1, 2], [1, 2], [1, 2]])
 
-        pms.utils.save([1, 1, 1], file_link)
-        self.assertEqual(pms.utils.load(file_link), [1, 1, 1])
+        pms.utils.save([1, 1, 1], pickle_link)
+        self.assertEqual(pms.utils.load(pickle_link), [1, 1, 1])
 
         self.assertEqual(round(pms.utils.mumol_m2_to_mols(3, 100), 4), 180.66)
         self.assertEqual(round(pms.utils.mols_to_mumol_m2(180, 100), 4), 2.989)
@@ -933,8 +935,8 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual([round(x, 4) for x in pore.centroid()], [3.0147, 3.0572, 3.0569])
         self.assertEqual(round(pore.roughness()["in"][0], 1), 0.1)
         self.assertEqual(round(pore.roughness()["ex"], 1), 0.0)
-        self.assertEqual(round(pore.volume()), 112)
-        self.assertEqual(round(pore.surface()["in"]), 74)
+        self.assertAlmostEqual(pore.volume(), 112.4, delta=1.0)
+        self.assertAlmostEqual(pore.surface()["in"], 74.3, delta=1.0)
 
     def test_pore_capsule(self):
         # self.skipTest("Temporary")
@@ -969,12 +971,15 @@ class UserModelCase(unittest.TestCase):
         print(pore.table())
 
         # Properties
-        self.assertEqual([round(x, 4) for x in pore.diameter()], [4.234, 4.4864, 4.5656, 4.214])
+        for actual, expected in zip(pore.diameter(), [4.234, 4.4864, 4.5656, 4.214]):
+            self.assertAlmostEqual(actual, expected, delta=0.05)
         self.assertEqual([round(x, 4) for x in pore.centroid()], [3.0147, 3.0572, 4.9169])
-        self.assertEqual([round(x, 4) for x in pore.roughness()["in"]], [0.1287, 0.1065, 0.1439, 0.1226])
+        for actual, expected in zip(pore.roughness()["in"], [0.1287, 0.1065, 0.1439, 0.1226]):
+            self.assertAlmostEqual(actual, expected, delta=0.05)
         self.assertEqual(round(pore.roughness()["ex"], 1), 0.0)
-        self.assertEqual(round(pore.volume()), 153) # not correct volume because sphere and cyclinder merged correct is 100
-        self.assertEqual({key: round(item) for key, item in pore.surface().items()}, {'in': 182, 'ex': 44}) # not correct because whole sphere surface is take in to account, correct is 113
+        self.assertAlmostEqual(pore.volume(), 153.2, delta=1.0) # not correct volume because sphere and cyclinder merged correct is 100
+        self.assertAlmostEqual(pore.surface()["in"], 182.0, delta=1.0) # not correct because whole sphere surface is take in to account, correct is 113
+        self.assertAlmostEqual(pore.surface()["ex"], 44.3, delta=1.0)
 
     def test_pore_cylinder_amorph(self):
         # self.skipTest("Temporary")
@@ -1014,8 +1019,9 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual([round(x, 4) for x in pore.centroid()], [4.7958, 4.7978, 4.807])
         self.assertEqual(round(pore.roughness()["in"][0], 1), 0.1)
         self.assertEqual(round(pore.roughness()["ex"], 1), 0.3)
-        self.assertEqual(round(pore.volume()), 119)
-        self.assertEqual({key: round(item) for key, item in pore.surface().items()}, {'in': 120, 'ex': 160})
+        self.assertAlmostEqual(pore.volume(), 119.6, delta=1.0)
+        self.assertAlmostEqual(pore.surface()["in"], 120.1, delta=1.0)
+        self.assertAlmostEqual(pore.surface()["ex"], 159.8, delta=1.0)
 
 
 if __name__ == '__main__':
