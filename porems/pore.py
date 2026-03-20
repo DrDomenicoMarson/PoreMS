@@ -67,6 +67,76 @@ class BindingSite:
         return self.oxygen_count == 2
 
 
+@dataclass(frozen=True)
+class SurfaceEditRecord:
+    """One tracked surface-edit event recorded during preparation.
+
+    Parameters
+    ----------
+    atom_id : int
+        Atom identifier affected by the edit.
+    atom_type : str
+        Atom type of the affected atom.
+    reason : str
+        Reason code describing why the atom was removed or inserted.
+    neighbor_ids : tuple[int, ...], optional
+        Atom identifiers bonded to the edited atom at the time of the event.
+    """
+
+    atom_id: int
+    atom_type: str
+    reason: str
+    neighbor_ids: tuple[int, ...] = ()
+
+
+@dataclass
+class SurfacePreparationDiagnostics:
+    """Surface-cleanup and scaffold-validation counters.
+
+    Parameters
+    ----------
+    stripped_undercoordinated_si : int, optional
+        Number of silicon atoms removed because they lost at least one bond
+        relative to the original connectivity matrix.
+    stripped_excess_surface_oxygen_si : int, optional
+        Number of silicon atoms removed because three or more exposed oxygen
+        handles remained on the same site during cleanup.
+    removed_orphan_oxygen : int, optional
+        Number of zero-bond oxygen atoms removed from the active matrix.
+    removed_invalid_oxygen : int, optional
+        Number of oxygen atoms removed because their active connectivity no
+        longer matched a valid silica surface or scaffold role.
+    removed_orphan_silicon : int, optional
+        Number of zero-bond silicon atoms removed from the active matrix.
+    inserted_bridge_oxygen : int, optional
+        Number of bridge oxygens inserted during later siloxane editing.
+    final_surface_oxygen_handles : int, optional
+        Number of valid one-coordinate surface oxygen handles present on the
+        final prepared slit surface.
+    final_framework_oxygen : int, optional
+        Number of valid two-coordinate framework oxygens present in the final
+        active scaffold.
+    """
+
+    stripped_undercoordinated_si: int = 0
+    stripped_excess_surface_oxygen_si: int = 0
+    removed_orphan_oxygen: int = 0
+    removed_invalid_oxygen: int = 0
+    removed_orphan_silicon: int = 0
+    inserted_bridge_oxygen: int = 0
+    final_surface_oxygen_handles: int = 0
+    final_framework_oxygen: int = 0
+
+    @property
+    def stripped_silicon_total(self):
+        """Return the total number of stripped silicon atoms."""
+        return (
+            self.stripped_undercoordinated_si
+            + self.stripped_excess_surface_oxygen_si
+            + self.removed_orphan_silicon
+        )
+
+
 class Pore():
     """Prepared pore block with editable binding sites.
 
@@ -96,8 +166,204 @@ class Pore():
         self._oxygen_ex = []
         self._sites = {}
         self.sites_attach_mol = {}
+        self._objectified_atoms = set()
+        self._surface_edit_history = []
+        self._surface_preparation_diagnostics = SurfacePreparationDiagnostics()
 
         self._mol_dict = {"block": {}, "in": {}, "ex": {}}
+
+    def _reset_surface_preparation_tracking(self):
+        """Reset internal surface-edit provenance and diagnostics."""
+        self._surface_edit_history = []
+        self._surface_preparation_diagnostics = SurfacePreparationDiagnostics()
+
+    def _record_surface_edit(self, atom_id, reason):
+        """Store one surface-edit event and update diagnostics counters.
+
+        Parameters
+        ----------
+        atom_id : int
+            Atom identifier affected by the edit.
+        reason : str
+            Reason code describing the edit.
+        """
+        atom_type = self._block.get_atom_type(atom_id)
+        neighbor_ids = ()
+        if atom_id in self._matrix.get_matrix():
+            neighbor_ids = tuple(self._matrix.get_matrix()[atom_id]["atoms"])
+
+        self._surface_edit_history.append(
+            SurfaceEditRecord(
+                atom_id=atom_id,
+                atom_type=atom_type,
+                reason=reason,
+                neighbor_ids=neighbor_ids,
+            )
+        )
+
+        diagnostics = self._surface_preparation_diagnostics
+        if reason == "undercoordinated_si":
+            diagnostics.stripped_undercoordinated_si += 1
+        elif reason == "excess_surface_oxygen_si":
+            diagnostics.stripped_excess_surface_oxygen_si += 1
+        elif reason == "orphan_oxygen":
+            diagnostics.removed_orphan_oxygen += 1
+        elif reason == "invalid_oxygen":
+            diagnostics.removed_invalid_oxygen += 1
+        elif reason == "orphan_silicon":
+            diagnostics.removed_orphan_silicon += 1
+        elif reason == "inserted_bridge_oxygen":
+            diagnostics.inserted_bridge_oxygen += 1
+
+    def _remove_atoms(self, atoms, reason):
+        """Remove active atoms from the matrix and record the change.
+
+        Parameters
+        ----------
+        atoms : list[int]
+            Atom identifiers that should be removed from the active matrix.
+        reason : str
+            Reason code recorded for each removed atom.
+        """
+        atoms = sorted({atom for atom in atoms if atom in self._matrix.get_matrix()})
+        if not atoms:
+            return
+        for atom_id in atoms:
+            self._record_surface_edit(atom_id, reason)
+        self._matrix.remove(atoms)
+
+    def _surface_handle_oxygen_ids(self):
+        """Return oxygen atoms that currently behave as surface handles.
+
+        Returns
+        -------
+        oxygen_ids : list[int]
+            Degree-one oxygen atoms bonded to exactly one silicon atom.
+        """
+        oxygen_ids = []
+        for atom_id, props in self._matrix.get_matrix().items():
+            if self._block.get_atom_type(atom_id) != "O":
+                continue
+            if len(props["atoms"]) != 1:
+                continue
+            if self._block.get_atom_type(props["atoms"][0]) != "Si":
+                continue
+            oxygen_ids.append(atom_id)
+        return oxygen_ids
+
+    def _framework_oxygen_ids(self):
+        """Return oxygen atoms that qualify as framework oxygens.
+
+        Returns
+        -------
+        oxygen_ids : list[int]
+            Degree-two oxygen atoms bonded to two silicon atoms.
+        """
+        oxygen_ids = []
+        for atom_id, props in self._matrix.get_matrix().items():
+            if self._block.get_atom_type(atom_id) != "O":
+                continue
+            if len(props["atoms"]) != 2:
+                continue
+            if all(self._block.get_atom_type(neighbor) == "Si" for neighbor in props["atoms"]):
+                oxygen_ids.append(atom_id)
+        return oxygen_ids
+
+    def _invalid_oxygen_ids(self):
+        """Return oxygen atoms whose active connectivity is chemically invalid.
+
+        Returns
+        -------
+        invalid_groups : tuple[list[int], list[int]]
+            Two lists containing orphan oxygens and other invalid oxygens.
+        """
+        orphan_oxygen = []
+        invalid_oxygen = []
+        for atom_id, props in self._matrix.get_matrix().items():
+            if self._block.get_atom_type(atom_id) != "O":
+                continue
+
+            degree = len(props["atoms"])
+            neighbor_types = [self._block.get_atom_type(neighbor) for neighbor in props["atoms"]]
+            if degree == 0:
+                orphan_oxygen.append(atom_id)
+            elif degree == 1 and neighbor_types == ["Si"]:
+                continue
+            elif degree == 2 and all(atom_type == "Si" for atom_type in neighbor_types):
+                continue
+            else:
+                invalid_oxygen.append(atom_id)
+
+        return orphan_oxygen, invalid_oxygen
+
+    def _orphan_silicon_ids(self):
+        """Return silicon atoms that no longer have active bonded neighbors.
+
+        Returns
+        -------
+        silicon_ids : list[int]
+            Zero-bond silicon atoms present in the active matrix.
+        """
+        return [
+            atom_id
+            for atom_id, props in self._matrix.get_matrix().items()
+            if self._block.get_atom_type(atom_id) == "Si" and len(props["atoms"]) == 0
+        ]
+
+    def _silicon_with_excess_surface_oxygen(self):
+        """Return silicon atoms carrying three or more surface oxygen handles.
+
+        Returns
+        -------
+        silicon_ids : list[int]
+            Silicon identifiers that currently own at least three degree-one
+            oxygen handles.
+        """
+        if not self._surface_handle_oxygen_ids():
+            return []
+
+        si_count = Counter(
+            sum(
+                [self._matrix.get_matrix()[atom]["atoms"] for atom in self._surface_handle_oxygen_ids()],
+                [],
+            )
+        )
+        return sorted(si for si, count in si_count.items() if count >= 3)
+
+    def refresh_surface_preparation_diagnostics(self):
+        """Refresh the final surface/scaffold counts stored in diagnostics."""
+        diagnostics = self._surface_preparation_diagnostics
+        diagnostics.final_surface_oxygen_handles = len(self._surface_handle_oxygen_ids())
+        diagnostics.final_framework_oxygen = len(self._framework_oxygen_ids())
+
+    def validate_scaffold_atoms(self, atoms):
+        """Validate scaffold atoms before they are exported as one-atom residues.
+
+        Parameters
+        ----------
+        atoms : list[int]
+            Active scaffold atom identifiers that are about to be objectified.
+
+        Raises
+        ------
+        ValueError
+            Raised when an atom does not match a valid scaffold role.
+        """
+        framework_oxygen = set(self._framework_oxygen_ids())
+        for atom_id in atoms:
+            if atom_id not in self._matrix.get_matrix():
+                raise ValueError(f"Scaffold atom {atom_id} is not present in the active matrix.")
+
+            atom_type = self._block.get_atom_type(atom_id)
+            if atom_type == "O":
+                if atom_id not in framework_oxygen:
+                    raise ValueError(
+                        f"Scaffold oxygen {atom_id} cannot be exported as OM because it is not a valid two-coordinate framework oxygen."
+                    )
+            elif atom_type != "Si":
+                raise ValueError(
+                    f"Unsupported scaffold atom type '{atom_type}' for objectification."
+                )
 
 
     ###########
@@ -112,18 +378,43 @@ class Pore():
         unsaturated oxygen atoms become attachment handles for later surface
         chemistry.
         """
-        # Remove unsaturated silicon atoms
-        for atom, props in self._matrix.get_matrix().items():
-            if self._block.get_atom_type(atom)=="Si":
-                if len(props["atoms"]) < props["bonds"]:
-                    self._matrix.strip(atom)
+        self._reset_surface_preparation_tracking()
 
-        # Remove silicon atoms with three unsaturated oxygen atoms
-        while 3 in Counter(sum([self._matrix.get_matrix()[atom]["atoms"] for atom in self._matrix.bound(1)], [])).values():
-            si_count = Counter(sum([self._matrix.get_matrix()[atom]["atoms"] for atom in self._matrix.bound(1)], []))
-            for si, count in si_count.items():
-                if count >= 3:
-                    self._matrix.strip(si)
+        while True:
+            changed = False
+
+            undercoordinated_si = [
+                atom_id
+                for atom_id, props in self._matrix.get_matrix().items()
+                if self._block.get_atom_type(atom_id) == "Si"
+                and len(props["atoms"]) < props["bonds"]
+            ]
+            if undercoordinated_si:
+                self._remove_atoms(undercoordinated_si, "undercoordinated_si")
+                changed = True
+
+            excess_surface_oxygen_si = self._silicon_with_excess_surface_oxygen()
+            if excess_surface_oxygen_si:
+                self._remove_atoms(excess_surface_oxygen_si, "excess_surface_oxygen_si")
+                changed = True
+
+            orphan_oxygen, invalid_oxygen = self._invalid_oxygen_ids()
+            if orphan_oxygen:
+                self._remove_atoms(orphan_oxygen, "orphan_oxygen")
+                changed = True
+            if invalid_oxygen:
+                self._remove_atoms(invalid_oxygen, "invalid_oxygen")
+                changed = True
+
+            orphan_silicon = self._orphan_silicon_ids()
+            if orphan_silicon:
+                self._remove_atoms(orphan_silicon, "orphan_silicon")
+                changed = True
+
+            if not changed:
+                break
+
+        self.refresh_surface_preparation_diagnostics()
 
     def amorph(self, dist=0.05, accept=None, trials=100):
         """Randomly displace bonded atoms to roughen the local structure.
@@ -193,6 +484,8 @@ class Pore():
         add_list = []
         break_list = []
         for si in si_list:
+            if si not in bound_list:
+                continue
             # Run through bound oxygen atoms
             for o in bound_list[si]["atoms"]:
                 # Calculate bond vector
@@ -231,7 +524,7 @@ class Pore():
 
         # Add atoms to exterior oxygen list
         self.prepare()
-        self._oxygen_ex = self._matrix.bound(1)
+        self._oxygen_ex = self._surface_handle_oxygen_ids()
 
     def _site_search_molecule(self, sites):
         """Create a zero-based temporary molecule for local site searches.
@@ -262,7 +555,7 @@ class Pore():
         later attachment steps.
         """
         # Get list of surface oxygen atoms
-        oxygen_list = self._matrix.bound(1)
+        oxygen_list = self._surface_handle_oxygen_ids()
         connect = self._matrix.get_matrix()
 
         # Create binding site dictionary
@@ -433,7 +726,7 @@ class Pore():
                     self._mol_dict[site_type][mol_temp.get_short()].append(mol_temp)
 
                     # Remove bonds of occupied binding site
-                    self._matrix.strip([si] + self._sites[si].oxygen_ids)
+                    self._matrix.remove([si] + self._sites[si].oxygen_ids)
 
                     # Recursively fill sites in proximity with silanol and geminal silanol
                     if is_proxi:
@@ -544,7 +837,7 @@ class Pore():
 
                 # Remove oxygen atom and if not geminal delete site
                 for si_id in si:
-                    self._matrix.strip(self._sites[si_id].oxygen_ids[0])
+                    self._matrix.remove(self._sites[si_id].oxygen_ids[0])
                     if self._sites[si_id].is_geminal:
                         self._sites[si_id].oxygen_ids.pop(0)
                     else:
@@ -589,11 +882,16 @@ class Pore():
         mol_list : list
             One-atom molecule objects created from the selected atoms.
         """
+        self.validate_scaffold_atoms(atoms)
+
         # Initialize
         mol_list = []
 
         # Run through all remaining atoms with a bond or more
         for atom_id in atoms:
+            if atom_id in self._objectified_atoms:
+                continue
+
             # Get atom object
             atom = self._block.get_atom_list()[atom_id]
 
@@ -610,6 +908,7 @@ class Pore():
             if not mol.get_short() in self._mol_dict["block"]:
                 self._mol_dict["block"][mol.get_short()] = []
             self._mol_dict["block"][mol.get_short()].append(mol)
+            self._objectified_atoms.add(atom_id)
 
         # Output
         return mol_list
@@ -726,6 +1025,28 @@ class Pore():
                 mol_dict[key].extend(item)
 
         return mol_dict
+
+    def get_surface_preparation_diagnostics(self):
+        """Return a snapshot of the surface-preparation diagnostics.
+
+        Returns
+        -------
+        diagnostics : SurfacePreparationDiagnostics
+            Surface-cleanup and scaffold-validation counters collected for the
+            current pore.
+        """
+        return copy.deepcopy(self._surface_preparation_diagnostics)
+
+    def get_surface_edit_history(self):
+        """Return the recorded surface-edit provenance entries.
+
+        Returns
+        -------
+        history : list[SurfaceEditRecord]
+            Chronological list of surface-edit records collected during
+            preparation and later bridge insertion.
+        """
+        return list(self._surface_edit_history)
 
     def get_site_dict(self):
         """Return molecules grouped by site family.

@@ -1143,10 +1143,12 @@ class PoreKit():
                     summary.increment("SLG")
         
         # Objectify grid
-        non_grid = self._matrix.bound(1)+list(site_list.keys())
+        non_grid = self._pore._surface_handle_oxygen_ids() + list(site_list.keys())
         bonded = self._matrix.bound(0, "gt")
         grid_atoms = [atom for atom in bonded if not atom in non_grid]
+        self._pore.validate_scaffold_atoms(grid_atoms)
         self._pore.objectify(grid_atoms)
+        self._pore.refresh_surface_preparation_diagnostics()
 
     ##############
     # Attachment #

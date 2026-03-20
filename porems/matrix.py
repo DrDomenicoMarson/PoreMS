@@ -77,8 +77,12 @@ class Matrix:
         atom_b : int
             Second atom id.
         """
-        self._matrix[atom_a]["atoms"].remove(atom_b)
-        self._matrix[atom_b]["atoms"].remove(atom_a)
+        if atom_a not in self._matrix or atom_b not in self._matrix:
+            return
+        if atom_b in self._matrix[atom_a]["atoms"]:
+            self._matrix[atom_a]["atoms"].remove(atom_b)
+        if atom_a in self._matrix[atom_b]["atoms"]:
+            self._matrix[atom_b]["atoms"].remove(atom_a)
 
     def strip(self, atoms):
         """Remove all bonds of a specified atom from the connection matrix.
@@ -93,9 +97,26 @@ class Matrix:
 
         # Split all bonds
         for atom_a in atoms:
+            if atom_a not in self._matrix:
+                continue
             atoms_b = self._matrix[atom_a]["atoms"][:]
             for atom_b in atoms_b:
                 self.split(atom_a, atom_b)
+
+    def remove(self, atoms):
+        """Remove one atom or several atoms from the active connectivity matrix.
+
+        Parameters
+        ----------
+        atoms : list or int
+            Atom id or list of atom ids that should be disconnected and removed
+            from the active matrix.
+        """
+        atoms = [atoms] if isinstance(atoms, int) else atoms
+        self.strip(atoms)
+        for atom in atoms:
+            if atom in self._matrix:
+                del self._matrix[atom]
 
     def add(self, atom_a, atom_b):
         """Add a bond between two atoms.

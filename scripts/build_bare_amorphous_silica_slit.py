@@ -118,6 +118,14 @@ def main():
         f"{report.final_surface.t3_sites}"
     )
     print(f"Siloxane bridges introduced: {report.siloxane_bridges}")
+    print(
+        "Surface diagnostics: "
+        f"stripped Si={report.preparation_diagnostics.stripped_silicon_total}, "
+        f"orphan O removed={report.preparation_diagnostics.removed_orphan_oxygen}, "
+        f"bridge O inserted={report.preparation_diagnostics.inserted_bridge_oxygen}, "
+        f"final handles={report.preparation_diagnostics.final_surface_oxygen_handles}, "
+        f"final framework O={report.preparation_diagnostics.final_framework_oxygen}"
+    )
 
     return 0
 

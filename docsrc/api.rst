@@ -28,6 +28,7 @@ Pore
     :toctree: generated/
 
     pore.BindingSite
+    pore.SurfacePreparationDiagnostics
     pore.Pore
     system.ShapeAttachmentSummary
     system.RoughnessProfile

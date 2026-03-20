@@ -47,9 +47,12 @@ Si atoms in the sample. For bare slits, ``T2`` and ``T3`` remain zero.
 ``prepare_amorphous_slit_surface(...)`` returns a
 ``SlitPreparationResult`` containing an attach-ready ``PoreKit`` system and a
 ``SlitPreparationReport`` with the converted alpha-aware target, the prepared
-bare surface, and the final surface composition. ``write_bare_amorphous_slit(...)`` finalizes the prepared slit and
-stores the main structure files together with a JSON report. Object backups are
-written only when ``write_object_files=True`` is requested explicitly.
+bare surface, the final surface composition, and surface-preparation
+diagnostics such as stripped silicon counts, removed orphan oxygens, inserted
+bridge oxygens, and the final valid surface/scaffold oxygen counts.
+``write_bare_amorphous_slit(...)`` finalizes the prepared slit and stores the
+main structure files together with a JSON report. Object backups are written
+only when ``write_object_files=True`` is requested explicitly.
 
 The slit-preparation API is designed for the periodic bare-silica slit builder:
 
@@ -65,7 +68,10 @@ Functionalized Amorphous Slit Preparation
 
 Exact functionalized targets use the same experimental target object together
 with a silane attachment definition. ``T2`` states are created from geminal
-sites and ``T3`` states from single sites.
+sites and ``T3`` states from single sites. In this slit path, siloxane bridges
+introduced during Q-state editing are folded back into the silica scaffold as
+regular framework oxygens instead of being exported as standalone ``SLX``
+residues.
 
 .. code-block:: python
 

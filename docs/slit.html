@@ -167,9 +167,12 @@ Si atoms in the sample. For bare slits, <code class="docutils literal notranslat
 <p><code class="docutils literal notranslate"><span class="pre">prepare_amorphous_slit_surface(...)</span></code> returns a
 <code class="docutils literal notranslate"><span class="pre">SlitPreparationResult</span></code> containing an attach-ready <code class="docutils literal notranslate"><span class="pre">PoreKit</span></code> system and a
 <code class="docutils literal notranslate"><span class="pre">SlitPreparationReport</span></code> with the converted alpha-aware target, the prepared
-bare surface, and the final surface composition. <code class="docutils literal notranslate"><span class="pre">write_bare_amorphous_slit(...)</span></code> finalizes the prepared slit and
-stores the main structure files together with a JSON report. Object backups are
-written only when <code class="docutils literal notranslate"><span class="pre">write_object_files=True</span></code> is requested explicitly.</p>
+bare surface, the final surface composition, and surface-preparation
+diagnostics such as stripped silicon counts, removed orphan oxygens, inserted
+bridge oxygens, and the final valid surface/scaffold oxygen counts.
+<code class="docutils literal notranslate"><span class="pre">write_bare_amorphous_slit(...)</span></code> finalizes the prepared slit and stores the
+main structure files together with a JSON report. Object backups are written
+only when <code class="docutils literal notranslate"><span class="pre">write_object_files=True</span></code> is requested explicitly.</p>
 <p>The slit-preparation API is designed for the periodic bare-silica slit builder:</p>
 <ul class="simple">
 <li><p>zero exterior sites after preparation</p></li>
@@ -183,7 +186,10 @@ written only when <code class="docutils literal notranslate"><span class="pre">w
 <h2>Functionalized Amorphous Slit Preparation<a class="headerlink" href="#functionalized-amorphous-slit-preparation" title="Link to this heading">¶</a></h2>
 <p>Exact functionalized targets use the same experimental target object together
 with a silane attachment definition. <code class="docutils literal notranslate"><span class="pre">T2</span></code> states are created from geminal
-sites and <code class="docutils literal notranslate"><span class="pre">T3</span></code> states from single sites.</p>
+sites and <code class="docutils literal notranslate"><span class="pre">T3</span></code> states from single sites. In this slit path, siloxane bridges
+introduced during Q-state editing are folded back into the silica scaffold as
+regular framework oxygens instead of being exported as standalone <code class="docutils literal notranslate"><span class="pre">SLX</span></code>
+residues.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">porems</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pms</span>
 
 <span class="n">slit_config</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">AmorphousSlitConfig</span><span class="p">(</span>

@@ -4,7 +4,7 @@ from .dice import Dice
 from .matrix import Matrix
 from .molecule import Molecule
 from .pattern import BetaCristobalit, AlphaCristobalit
-from .pore import BindingSite, Pore
+from .pore import BindingSite, SurfacePreparationDiagnostics, Pore
 from .system import (
     ShapeAttachmentSummary,
     RoughnessProfile,
@@ -57,7 +57,7 @@ __all__ = [
     "Atom", "Molecule", "Store",
     "Dice", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
-    "BindingSite", "Pore",
+    "BindingSite", "SurfacePreparationDiagnostics", "Pore",
     "ShapeAttachmentSummary", "RoughnessProfile", "SurfaceAreaSummary", "SurfaceAllocationStats", "AllocationSummary",
     "PoreKit", "PoreCylinder", "PoreSlit", "PoreCapsule", "PoreAmorphCylinder",
     "ShapeConfig", "CylinderConfig", "SphereConfig", "CuboidConfig", "ConeConfig",

@@ -36,6 +36,59 @@ def experimental_target_from_surface(surface_target, alpha, alpha_override=None)
     )
 
 
+class SurfacePreparationValidationCase(unittest.TestCase):
+    def test_prepare_removes_orphan_oxygen_from_active_matrix(self):
+        mol = pms.Molecule("orphan_oxygen")
+        mol.add("O", [0.0, 0.0, 0.0], name="OM1")
+        matrix = pms.Matrix([[0, []]])
+        pore = pms.Pore(mol, matrix)
+
+        pore.prepare()
+
+        self.assertNotIn(0, matrix.get_matrix())
+        self.assertEqual(
+            pore.get_surface_preparation_diagnostics().removed_orphan_oxygen,
+            1,
+        )
+
+    def test_prepare_removes_invalid_oxygen_connectivity(self):
+        mol = pms.Molecule("invalid_oxygen")
+        mol.add("O", [0.0, 0.0, 0.0], name="OM1")
+        mol.add("H", [0.1, 0.0, 0.0], name="H1")
+        matrix = pms.Matrix([[0, [1]]])
+        pore = pms.Pore(mol, matrix)
+
+        pore.prepare()
+
+        self.assertNotIn(0, matrix.get_matrix())
+        self.assertEqual(
+            pore.get_surface_preparation_diagnostics().removed_invalid_oxygen,
+            1,
+        )
+
+    def test_objectify_accepts_only_valid_framework_oxygen(self):
+        valid = pms.Molecule("valid_framework_oxygen")
+        valid.add("O", [0.0, 0.0, 0.0], name="OM1")
+        valid.add("Si", [0.16, 0.0, 0.0], name="SI1")
+        valid.add("Si", [-0.16, 0.0, 0.0], name="SI2")
+        valid_matrix = pms.Matrix([[0, [1, 2]]])
+        valid_pore = pms.Pore(valid, valid_matrix)
+
+        mols = valid_pore.objectify([0])
+
+        self.assertEqual(len(mols), 1)
+        self.assertEqual(mols[0].get_short(), "OM")
+
+        invalid = pms.Molecule("invalid_framework_oxygen")
+        invalid.add("O", [0.0, 0.0, 0.0], name="OM1")
+        invalid.add("Si", [0.16, 0.0, 0.0], name="SI1")
+        invalid_matrix = pms.Matrix([[0, [1]]])
+        invalid_pore = pms.Pore(invalid, invalid_matrix)
+
+        with self.assertRaises(ValueError):
+            invalid_pore.objectify([0])
+
+
 class AmorphousSlitPreparationCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -118,6 +171,10 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertEqual(sorted(self.prepared_result.system._pore.sites_sl_shape), [0])
 
     def test_prepared_surface_composition_matches_target(self):
+        expected_alpha_auto = (
+            self.prepared_report.prepared_surface.total_surface_si
+            / slit_mod._active_silicon_count(self.prepared_result.system)
+        )
         self.assertEqual(self.prepared_report.final_surface, self.prepared_report.target_surface)
         self.assertEqual(self.prepared_report.prepared_surface, self.prepared_report.target_surface)
         self.assertEqual(self.prepared_report.prepared_surface.total_surface_si, 954)
@@ -128,7 +185,7 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertEqual(self.prepared_report.prepared_surface.t3_sites, 0)
         self.assertFalse(self.prepared_report.used_surface_tolerance)
         self.assertAlmostEqual(self.prepared_report.surface_fraction_tolerance, 0.005)
-        self.assertAlmostEqual(self.prepared_report.alpha_auto, 954 / 40000, places=8)
+        self.assertAlmostEqual(self.prepared_report.alpha_auto, expected_alpha_auto, places=8)
         self.assertEqual(self.prepared_report.alpha_effective, 1.0)
         self.assertEqual(
             self.prepared_report.derived_surface_target,
@@ -149,6 +206,25 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
             self.prepared_report.derived_surface_target.q4_fraction,
             delta=1e-3,
         )
+        self.assertEqual(
+            self.prepared_report.preparation_diagnostics.final_surface_oxygen_handles,
+            self.prepared_report.final_surface.q3_sites
+            + 2 * self.prepared_report.final_surface.q2_sites,
+        )
+        self.assertEqual(
+            self.prepared_report.preparation_diagnostics.final_framework_oxygen,
+            len(self.prepared_result.system._pore.get_mol_dict()["OM"]),
+        )
+        self.assertGreater(
+            self.prepared_report.preparation_diagnostics.stripped_silicon_total,
+            0,
+        )
+        self.assertGreater(
+            self.prepared_report.preparation_diagnostics.removed_orphan_oxygen,
+            0,
+        )
+        self.assertEqual(self.prepared_report.preparation_diagnostics.inserted_bridge_oxygen, 235)
+        self.assertNotIn("SLX", self.prepared_result.system._pore.get_mol_dict())
 
     def test_repeat_y_one_reaches_requested_surface_target(self):
         result = pms.prepare_amorphous_slit_surface(
@@ -249,13 +325,13 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
 
     def test_bridge_algebra_matches_q_state_changes(self):
         cases = [
-            ((2, 2), (-2, 2, 0)),
-            ((2, 1), (-1, 0, 1)),
-            ((1, 1), (0, -2, 2)),
+            ((2, 2), (-2, 2, 0), (1, 0)),
+            ((2, 1), (-1, 0, 1), (1, 1)),
+            ((1, 1), (0, -2, 2), (1, 2)),
         ]
 
-        for pair_counts, expected_delta in cases:
-            with self.subTest(pair_counts=pair_counts):
+        for pair_counts, expected_delta, expected_objectified in cases:
+            with self.subTest(pair_counts=pair_counts, expected_objectified=expected_objectified):
                 config = pms.AmorphousSlitConfig(
                     name="bridge_algebra_case",
                     repeat_y=1,
@@ -273,6 +349,8 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
                 pair = slit_mod._find_pair(sites, adjacency, *pair_counts)
 
                 self.assertIsNotNone(pair)
+                om_before = len(system._pore.get_mol_dict().get("OM", []))
+                si_before = len(system._pore.get_mol_dict().get("SI", []))
                 slit_mod._bridge_pair(system, pair)
                 slit_mod._consume_pair(adjacency, pair)
 
@@ -283,6 +361,15 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
                 self.assertEqual(after.q2_sites - before.q2_sites, expected_delta[0])
                 self.assertEqual(after.q3_sites - before.q3_sites, expected_delta[1])
                 self.assertEqual(after.q4_sites - before.q4_sites, expected_delta[2])
+                self.assertEqual(
+                    len(system._pore.get_mol_dict().get("OM", [])) - om_before,
+                    expected_objectified[0],
+                )
+                self.assertEqual(
+                    len(system._pore.get_mol_dict().get("SI", [])) - si_before,
+                    expected_objectified[1],
+                )
+                self.assertNotIn("SLX", system._pore.get_mol_dict())
 
     def test_tolerance_fallback_selects_nearest_realizable_target(self):
         config = pms.AmorphousSlitConfig(
@@ -399,7 +486,7 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertEqual(data["siloxane_distance_range_nm"], [0.4, 0.65])
         self.assertEqual(data["surface_fraction_tolerance"], 0.005)
         self.assertFalse(data["used_surface_tolerance"])
-        self.assertAlmostEqual(data["alpha_auto"], 954 / 40000, places=8)
+        self.assertAlmostEqual(data["alpha_auto"], self.stored_report.alpha_auto, places=8)
         self.assertEqual(data["alpha_effective"], 1.0)
         self.assertEqual(
             data["final_surface"]["q2_sites"],
@@ -412,6 +499,10 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertEqual(
             data["final_surface"]["q4_sites"],
             self.stored_report.final_surface.q4_sites,
+        )
+        self.assertEqual(
+            data["preparation_diagnostics"]["inserted_bridge_oxygen"],
+            self.stored_report.preparation_diagnostics.inserted_bridge_oxygen,
         )
         self.assertFalse(
             os.path.exists(
@@ -462,7 +553,12 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertIsInstance(self.prepared_result, pms.SlitPreparationResult)
         self.assertIsInstance(self.prepared_report, pms.SlitPreparationReport)
         self.assertIsInstance(self.prepared_report.prepared_surface, pms.SiliconStateComposition)
+        self.assertIsInstance(
+            self.prepared_report.preparation_diagnostics,
+            pms.SurfacePreparationDiagnostics,
+        )
         self.assertTrue(hasattr(pms, "SiliconStateFractions"))
+        self.assertTrue(hasattr(pms, "SurfacePreparationDiagnostics"))
         self.assertTrue(hasattr(pms, "SilaneAttachmentConfig"))
         self.assertTrue(hasattr(pms, "FunctionalizedAmorphousSlitConfig"))
         self.assertTrue(hasattr(pms, "FunctionalizedSlitResult"))
@@ -505,6 +601,7 @@ class FunctionalizedAmorphousSlitCase(unittest.TestCase):
         self.assertEqual(result.report.final_surface, result.report.target_surface)
         self.assertEqual(len(result.system._pore.get_site_dict()["in"]["TMSG"]), 3)
         self.assertEqual(len(result.system._pore.get_site_dict()["in"]["TMS"]), 4)
+        self.assertNotIn("SLX", result.system._pore.get_mol_dict())
 
     def test_functionalized_tolerance_fallback_selects_nearest_realizable_target(self):
         target = pms.ExperimentalSiliconStateTarget(

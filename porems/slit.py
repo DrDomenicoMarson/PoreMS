@@ -312,6 +312,9 @@ class SlitPreparationReport:
     final_surface : SiliconStateComposition
         Final post-grafting surface composition. For bare slits this is
         identical to ``prepared_surface``.
+    preparation_diagnostics : SurfacePreparationDiagnostics
+        Surface-cleanup and bridge-insertion diagnostics collected across
+        preparation, Q-state editing, and optional grafting.
     """
 
     name: str
@@ -332,6 +335,7 @@ class SlitPreparationReport:
     target_surface: SiliconStateComposition
     prepared_surface: SiliconStateComposition
     final_surface: SiliconStateComposition
+    preparation_diagnostics: pms.SurfacePreparationDiagnostics
 
 
 @dataclass
@@ -1028,8 +1032,8 @@ def _find_pair(sites, adjacency, first_count, second_count):
     return None
 
 
-def _siloxane_bridge_molecule(kit, pair):
-    """Create the siloxane bridge molecule for a specific silicon pair.
+def _siloxane_bridge_position(kit, pair):
+    """Return the bridged oxygen position for a specific silicon pair.
 
     Parameters
     ----------
@@ -1040,33 +1044,15 @@ def _siloxane_bridge_molecule(kit, pair):
 
     Returns
     -------
-    molecule : Molecule
-        Positioned siloxane bridge molecule.
+    position : list[float]
+        Bridging oxygen position.
     """
-    molecule = pms.Molecule("siloxane", "SLX")
-    molecule.add("O", [0, 0, 0], name="OM1")
-    molecule.add("O", 0, r=0.09, name="OM1")
-
-    molecule_axis = molecule.bond(0, 1)
-    molecule.rotate(
-        pms.geom.cross_product(molecule_axis, [0, 0, 1]),
-        pms.geom.angle(molecule_axis, [0, 0, 1]),
-    )
-    molecule.zero()
-
     pos_a = kit._pore.get_block().pos(pair[0])
     pos_b = kit._pore.get_block().pos(pair[1])
     center_pos = [pos_a[dim] + (pos_b[dim] - pos_a[dim]) / 2 for dim in range(3)]
 
     surface_axis = kit._pore.get_sites()[pair[0]].normal(center_pos)
-    molecule.rotate(
-        pms.geom.cross_product([0, 0, 1], surface_axis),
-        -pms.geom.angle([0, 0, 1], surface_axis),
-    )
-    molecule.move(0, center_pos)
-    molecule.delete(0)
-
-    return molecule
+    return [center_pos[dim] + 0.09 * surface_axis[dim] for dim in range(3)]
 
 
 def _bridge_pair(kit, pair):
@@ -1088,20 +1074,28 @@ def _bridge_pair(kit, pair):
     if pair[0] not in sites or pair[1] not in sites:
         raise ValueError("Cannot bridge a silicon pair that is no longer present in the site dictionary.")
 
-    molecule = _siloxane_bridge_molecule(kit, pair)
-    if "SLX" not in kit._pore._mol_dict["in"]:
-        kit._pore._mol_dict["in"]["SLX"] = []
-    kit._pore._mol_dict["in"]["SLX"].append(molecule)
-    if molecule.get_short() not in kit._sort_list:
-        kit._sort_list.append(molecule.get_short())
+    bridge_position = _siloxane_bridge_position(kit, pair)
+    block = kit._pore.get_block()
+    bridge_atom_id = block.get_num()
+    block.add("O", bridge_position, name="OM1")
+    kit._matrix.add(pair[0], bridge_atom_id)
+    kit._matrix.add(pair[1], bridge_atom_id)
+    kit._matrix.get_matrix()[bridge_atom_id]["bonds"] = 2
+    kit._pore._record_surface_edit(bridge_atom_id, "inserted_bridge_oxygen")
+    kit._pore.objectify([bridge_atom_id])
 
+    newly_condensed_si = []
     for site_id in pair:
         oxygen_id = sites[site_id].oxygen_ids[0]
-        kit._matrix.strip(oxygen_id)
+        kit._matrix.remove(oxygen_id)
         if sites[site_id].is_geminal:
             sites[site_id].oxygen_ids.pop(0)
         else:
+            newly_condensed_si.append(site_id)
             del sites[site_id]
+
+    if newly_condensed_si:
+        kit._pore.objectify(newly_condensed_si)
 
     return 1
 
@@ -1134,6 +1128,7 @@ def _refresh_single_slit_tracking(kit, total_surface_si, composition):
         Current five-state slit surface composition.
     """
     sites = kit._pore.get_sites()
+    kit._pore.refresh_surface_preparation_diagnostics()
     available_site_in = sorted(
         site for site, data in sites.items() if data.site_type == "in" and data.is_available
     )
@@ -1145,7 +1140,7 @@ def _refresh_single_slit_tracking(kit, total_surface_si, composition):
     kit.sites_shape = {0: available_site_in}
     kit._pore.sites_sl_shape = {0: available_site_in}
 
-    siloxane_num = len(kit._pore.get_site_dict()["in"].get("SLX", []))
+    siloxane_num = kit._pore.get_surface_preparation_diagnostics().inserted_bridge_oxygen
     kit._pore.sites_attach_mol = {
         0: pms.ShapeAttachmentSummary(
             single_silanol_sites=composition.q3_sites,
@@ -1491,6 +1486,7 @@ def _build_report(
     system = target_attempt.system
     system._pore.set_name(config.name)
     wall_thickness = (system.box()[1] - config.slit_width_nm) / 2
+    diagnostics = system._pore.get_surface_preparation_diagnostics()
 
     return SlitPreparationReport(
         name=config.name,
@@ -1511,6 +1507,7 @@ def _build_report(
         target_surface=target_attempt.target_surface,
         prepared_surface=target_attempt.prepared_surface,
         final_surface=target_attempt.final_surface,
+        preparation_diagnostics=diagnostics,
     )
 
 

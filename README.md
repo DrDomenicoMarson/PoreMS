@@ -52,10 +52,16 @@ pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
 
 `prepare_amorphous_slit_surface(...)` returns a `SlitPreparationResult`
 containing an attach-ready `PoreKit` system and a structured
-`SlitPreparationReport`.
+`SlitPreparationReport`, including surface-preparation diagnostics such as
+stripped silicon counts, removed orphan oxygens, inserted bridge oxygens, and
+the final valid surface/scaffold oxygen counts.
 `write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
 together with a JSON report in the selected output directory. Object backups are
 written only when `write_object_files=True` is requested explicitly.
+
+In the slit exact-target path, custom siloxane bridge oxygens are folded back
+into the silica scaffold representation and exported as regular scaffold oxygen
+atoms rather than as standalone `SLX` residues.
 
 For exact functionalized targets, use `prepare_functionalized_amorphous_slit_surface(...)`
 with the same `ExperimentalSiliconStateTarget` and a `SilaneAttachmentConfig`.
