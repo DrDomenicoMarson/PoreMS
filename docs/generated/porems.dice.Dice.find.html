@@ -127,8 +127,8 @@
 <h1>Dice.find<a class="headerlink" href="#dice-find" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.dice.Dice.find">
-<span class="sig-prename descclassname"><span class="pre">Dice.</span></span><span class="sig-name descname"><span class="pre">find</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cube_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.dice.Dice.find" title="Link to this definition">¶</a></dt>
-<dd><p>Search for atom pairs using the requested execution policy.</p>
+<span class="sig-prename descclassname"><span class="pre">Dice.</span></span><span class="sig-name descname"><span class="pre">find</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cube_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.dice.Dice.find" title="Link to this definition">¶</a></dt>
+<dd><p>Search for atom pairs in serial.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
@@ -137,12 +137,6 @@
 <dt><strong>atom_type</strong><span class="classifier">list</span></dt><dd><p>List of two atom types</p>
 </dd>
 <dt><strong>distance</strong><span class="classifier">list</span></dt><dd><p>Bounds of allowed distance [lower, upper]</p>
-</dd>
-<dt><strong>policy</strong><span class="classifier">SearchPolicy, optional</span></dt><dd><p>Execution policy controlling whether the search runs serially or
-with a multiprocessing pool. <code class="docutils literal notranslate"><span class="pre">AUTO</span></code> uses process-based search
-only when the current <code class="docutils literal notranslate"><span class="pre">__main__</span></code> module is safely importable by
-worker processes. Otherwise it falls back to serial execution and,
-by default, emits a <code class="xref py py-class docutils literal notranslate"><span class="pre">RuntimeWarning</span></code>.</p>
 </dd>
 </dl>
 </dd>
@@ -154,14 +148,7 @@ by default, emits a <code class="xref py py-class docutils literal notranslate">
 </dd>
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt>TypeError</dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">atom_type</span></code> or <code class="docutils literal notranslate"><span class="pre">distance</span></code> is missing, or if <code class="docutils literal notranslate"><span class="pre">policy</span></code> is
-not a <a class="reference internal" href="porems.dice.SearchPolicy.html#porems.dice.SearchPolicy" title="porems.dice.SearchPolicy"><code class="xref py py-class docutils literal notranslate"><span class="pre">SearchPolicy</span></code></a> instance.</p>
-</dd>
-<dt>RuntimeError</dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">SearchExecution.PROCESSES</span></code> is requested from an unsafe
-multiprocessing entrypoint.</p>
-</dd>
-<dt>ValueError</dt><dd><p>If process-based execution is requested with fewer than two worker
-processes.</p>
+<dt>TypeError</dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">atom_type</span></code> or <code class="docutils literal notranslate"><span class="pre">distance</span></code> is missing.</p>
 </dd>
 </dl>
 </dd>

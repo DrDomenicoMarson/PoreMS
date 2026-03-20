@@ -9,9 +9,6 @@ import matplotlib.pyplot as plt
 import porems as pms
 
 
-SERIAL_SEARCH = pms.SearchPolicy(execution=pms.SearchExecution.SERIAL)
-
-
 class UserModelCase(unittest.TestCase):
     #################
     # Remove Output #
@@ -427,14 +424,14 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual(len(dice.neighbor((1, 1, 1), False)), 26)
 
         # Search
-        self.assertEqual(dice.find([(1, 1, 1)], ["Si", "O"], [0.155-0.005, 0.155+0.005], policy=SERIAL_SEARCH), [[51, [46, 14, 52, 65]], [64, [26, 63, 65, 67]]])
-        self.assertEqual(dice.find([(1, 1, 1)], ["O", "Si"], [0.155-0.005, 0.155+0.005], policy=SERIAL_SEARCH), [[14, [51, 13]], [52, [51, 49]], [65, [51, 64]], [67, [64, 69]]])
-        self.assertEqual(dice.find([(0, 0, 0)], ["Si", "O"], [0.155-0.005, 0.155+0.005], policy=SERIAL_SEARCH), [[3, [4, 9, 2, 174]], [5, [306, 110, 4, 6]]])
-        self.assertEqual(dice.find([(0, 0, 0)], ["O", "Si"], [0.155-0.005, 0.155+0.005], policy=SERIAL_SEARCH), [[4, [3, 5]], [6, [7, 5]], [9, [3, 11]]])
+        self.assertEqual(dice.find([(1, 1, 1)], ["Si", "O"], [0.155-0.005, 0.155+0.005]), [[51, [46, 14, 52, 65]], [64, [26, 63, 65, 67]]])
+        self.assertEqual(dice.find([(1, 1, 1)], ["O", "Si"], [0.155-0.005, 0.155+0.005]), [[14, [51, 13]], [52, [51, 49]], [65, [51, 64]], [67, [64, 69]]])
+        self.assertEqual(dice.find([(0, 0, 0)], ["Si", "O"], [0.155-0.005, 0.155+0.005]), [[3, [4, 9, 2, 174]], [5, [306, 110, 4, 6]]])
+        self.assertEqual(dice.find([(0, 0, 0)], ["O", "Si"], [0.155-0.005, 0.155+0.005]), [[4, [3, 5]], [6, [7, 5]], [9, [3, 11]]])
 
         # Full search
-        self.assertEqual(len(dice.find(None, ["Si", "O"], [0.155-0.005, 0.155+0.005], policy=SERIAL_SEARCH)), 192)
-        self.assertEqual(len(dice.find(None, ["O", "Si"], [0.155-0.005, 0.155+0.005], policy=SERIAL_SEARCH)), 384)
+        self.assertEqual(len(dice.find(None, ["Si", "O"], [0.155-0.005, 0.155+0.005])), 192)
+        self.assertEqual(len(dice.find(None, ["O", "Si"], [0.155-0.005, 0.155+0.005])), 384)
 
         # Setter Getter
         dice.set_pbc(True)
@@ -452,7 +449,7 @@ class UserModelCase(unittest.TestCase):
         block.set_name("matrix")
         pms.Store(block, "output").gro()
         dice = pms.Dice(block, 0.2, True)
-        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH)
+        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
 
         matrix = pms.Matrix(bonds)
         connect = matrix.get_matrix()
@@ -485,7 +482,7 @@ class UserModelCase(unittest.TestCase):
         block = pms.BetaCristobalit().generate([6, 6, 6], "z")
         block.set_name("shape_cylinder")
         dice = pms.Dice(block, 0.4, True)
-        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH))
+        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2]))
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 45, True))
 
@@ -534,7 +531,7 @@ class UserModelCase(unittest.TestCase):
         block = pms.BetaCristobalit().generate([6, 6, 6], "z")
         block.set_name("shape_sphere")
         dice = pms.Dice(block, 0.4, True)
-        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH))
+        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2]))
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
 
@@ -578,7 +575,7 @@ class UserModelCase(unittest.TestCase):
         block = pms.BetaCristobalit().generate([6, 6, 6], "z")
         block.set_name("shape_cuboid")
         dice = pms.Dice(block, 0.4, True)
-        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH))
+        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2]))
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
 
@@ -620,7 +617,7 @@ class UserModelCase(unittest.TestCase):
         block = pms.BetaCristobalit().generate([6, 6, 6], "z")
         block.set_name("shape_cone")
         dice = pms.Dice(block, 0.4, True)
-        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH))
+        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2]))
         centroid = block.centroid()
         central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 45, True))
 
@@ -680,7 +677,7 @@ class UserModelCase(unittest.TestCase):
         block.set_name("pore_cylinder_block")
 
         dice = pms.Dice(block, 0.4, True)
-        bond_list = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH)
+        bond_list = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
         matrix = pms.Matrix(bond_list)
 
         pore = pms.Pore(block, matrix)
@@ -714,7 +711,7 @@ class UserModelCase(unittest.TestCase):
         block.set_name("pore_cylinder_block")
 
         dice = pms.Dice(block, 0.4, True)
-        bond_list = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH)
+        bond_list = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
         matrix = pms.Matrix(bond_list)
 
         pore = pms.Pore(block, matrix)
@@ -839,7 +836,7 @@ class UserModelCase(unittest.TestCase):
         block = pattern.generate([2, 2, 2], "x")
         block.set_name("pattern_beta_cbt_ex_x")
         dice = pms.Dice(block, 0.2, True)
-        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH)
+        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
         matrix = pms.Matrix(bonds)
         pore = pms.Pore(block, matrix)
         pore.prepare()
@@ -852,7 +849,7 @@ class UserModelCase(unittest.TestCase):
         block = pattern.generate([2, 2, 2], "y")
         block.set_name("pattern_beta_cbt_ex_y")
         dice = pms.Dice(block, 0.2, True)
-        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH)
+        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
         matrix = pms.Matrix(bonds)
         pore = pms.Pore(block, matrix)
         pore.prepare()
@@ -865,7 +862,7 @@ class UserModelCase(unittest.TestCase):
         block = pattern.generate([2, 2, 2], "z")
         block.set_name("pattern_beta_cbt_ex_z")
         dice = pms.Dice(block, 0.2, True)
-        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2], policy=SERIAL_SEARCH)
+        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
         matrix = pms.Matrix(bonds)
         pore = pms.Pore(block, matrix)
         pore.prepare()
@@ -884,7 +881,7 @@ class UserModelCase(unittest.TestCase):
         block.set_name("pattern_beta_cbt_ex_amoprh")
 
         dice = pms.Dice(block, 0.4, True)
-        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.160-0.02, 0.160+0.02], policy=SERIAL_SEARCH))
+        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.160-0.02, 0.160+0.02]))
 
         connect = matrix.get_matrix()
         matrix.split(57790, 2524)

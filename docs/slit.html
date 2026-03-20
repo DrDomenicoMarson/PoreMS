@@ -72,7 +72,6 @@
 <li><a class="reference internal" href="#bare-amorphous-slit-preparation">Bare Amorphous Slit Preparation</a></li>
 <li><a class="reference internal" href="#functionalized-amorphous-slit-preparation">Functionalized Amorphous Slit Preparation</a></li>
 <li><a class="reference internal" href="#create-surface-molecules">Create surface molecules</a></li>
-<li><a class="reference internal" href="#search-execution-policy">Search execution policy</a></li>
 <li><a class="reference internal" href="#create-pore-system">Create pore system</a></li>
 <li><a class="reference internal" href="#stored-outputs">Stored outputs</a></li>
 </ul>
@@ -110,7 +109,6 @@
 <li><a class="reference internal" href="#bare-amorphous-slit-preparation">Bare Amorphous Slit Preparation</a></li>
 <li><a class="reference internal" href="#functionalized-amorphous-slit-preparation">Functionalized Amorphous Slit Preparation</a></li>
 <li><a class="reference internal" href="#create-surface-molecules">Create surface molecules</a></li>
-<li><a class="reference internal" href="#search-execution-policy">Search execution policy</a></li>
 <li><a class="reference internal" href="#create-pore-system">Create pore system</a></li>
 <li><a class="reference internal" href="#stored-outputs">Stored outputs</a></li>
 </ul>
@@ -171,11 +169,7 @@ Si atoms in the sample. For bare slits, <code class="docutils literal notranslat
 <code class="docutils literal notranslate"><span class="pre">SlitPreparationReport</span></code> with the converted alpha-aware target, the prepared
 bare surface, and the final surface composition. <code class="docutils literal notranslate"><span class="pre">write_bare_amorphous_slit(...)</span></code> finalizes the prepared slit and
 stores the main structure files together with a JSON report. Object backups are
-written only when <code class="docutils literal notranslate"><span class="pre">write_object_files=True</span></code> is requested explicitly.
-When running from notebooks or other non-file-backed entrypoints, pass
-<code class="docutils literal notranslate"><span class="pre">search_policy=pms.SearchPolicy(execution=pms.SearchExecution.SERIAL)</span></code> in
-<code class="docutils literal notranslate"><span class="pre">AmorphousSlitConfig</span></code> to avoid multiprocessing fallback warnings during the
-initial Si-O connectivity search.</p>
+written only when <code class="docutils literal notranslate"><span class="pre">write_object_files=True</span></code> is requested explicitly.</p>
 <p>The slit-preparation API is designed for the periodic bare-silica slit builder:</p>
 <ul class="simple">
 <li><p>zero exterior sites after preparation</p></li>
@@ -257,28 +251,6 @@ following code block can be used as a base.</p>
 <p>Parametrization must be carried out by the user. Topology generation should
 be performed for both a singular binding site and a geminal binding site.</p>
 </div>
-</section>
-<section id="search-execution-policy">
-<h2>Search execution policy<a class="headerlink" href="#search-execution-policy" title="Link to this heading">¶</a></h2>
-<p>Connectivity and proximity searches in PoreMS are controlled through
-<code class="docutils literal notranslate"><span class="pre">Dice.find(...)</span></code> and an explicit execution policy.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">porems</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pms</span>
-
-<span class="n">block</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">BetaCristobalit</span><span class="p">()</span><span class="o">.</span><span class="n">generate</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="s2">&quot;z&quot;</span><span class="p">)</span>
-<span class="n">dice</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">Dice</span><span class="p">(</span><span class="n">block</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-
-<span class="n">policy</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">SearchPolicy</span><span class="p">(</span>
-    <span class="n">execution</span><span class="o">=</span><span class="n">pms</span><span class="o">.</span><span class="n">SearchExecution</span><span class="o">.</span><span class="n">AUTO</span><span class="p">,</span>
-    <span class="n">processes</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="n">bonds</span> <span class="o">=</span> <span class="n">dice</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;Si&quot;</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.145</span><span class="p">,</span> <span class="mf">0.165</span><span class="p">],</span> <span class="n">policy</span><span class="o">=</span><span class="n">policy</span><span class="p">)</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">AUTO</span></code> uses multiprocessing only when the current <code class="docutils literal notranslate"><span class="pre">__main__</span></code> module can be
-re-imported safely by worker processes. Otherwise PoreMS falls back to serial
-execution and emits a Python warning. If <code class="docutils literal notranslate"><span class="pre">PROCESSES</span></code> is requested
-explicitly, the caller must use a file-backed <code class="docutils literal notranslate"><span class="pre">__main__</span></code> entrypoint such as a
-normal script or <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">unittest</span> <span class="pre">...</span></code>.</p>
 </section>
 <section id="create-pore-system">
 <h2>Create pore system<a class="headerlink" href="#create-pore-system" title="Link to this heading">¶</a></h2>

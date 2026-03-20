@@ -127,17 +127,12 @@
 <h1>PoreKit.build<a class="headerlink" href="#porekit-build" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreKit.build">
-<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">build</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bonds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_policy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.build" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">build</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bonds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.build" title="Link to this definition">¶</a></dt>
 <dd><p>Build the Si-O connectivity matrix and base pore object.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>bonds</strong><span class="classifier">list, optional</span></dt><dd><p>Accepted Si-O bond-length interval used during connectivity search.</p>
-</dd>
-<dt><strong>search_policy</strong><span class="classifier">SearchPolicy, optional</span></dt><dd><p>Execution policy passed to <a class="reference internal" href="porems.dice.Dice.find.html#porems.dice.Dice.find" title="porems.dice.Dice.find"><code class="xref py py-meth docutils literal notranslate"><span class="pre">porems.dice.Dice.find()</span></code></a>. Use
-<code class="docutils literal notranslate"><span class="pre">SearchPolicy(execution=SearchExecution.SERIAL)</span></code> to force
-single-process connectivity search from notebook or <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-c</span></code>
-entrypoints and avoid multiprocessing fallback warnings.</p>
 </dd>
 </dl>
 </dd>

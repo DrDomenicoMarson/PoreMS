@@ -1,6 +1,6 @@
 from ._version import __version__
 from .atom import Atom
-from .dice import Dice, SearchExecution, SearchPolicy
+from .dice import Dice
 from .matrix import Matrix
 from .molecule import Molecule
 from .pattern import BetaCristobalit, AlphaCristobalit
@@ -55,7 +55,7 @@ import porems.utils as utils
 __all__ = [
     "__version__",
     "Atom", "Molecule", "Store",
-    "Dice", "SearchExecution", "SearchPolicy", "Matrix",
+    "Dice", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
     "BindingSite", "Pore",
     "ShapeAttachmentSummary", "RoughnessProfile", "SurfaceAreaSummary", "SurfaceAllocationStats", "AllocationSummary",

@@ -147,10 +147,6 @@ angles are constant, the number of atoms in each cube are a constant
 <p>Therefore, the computational effort for an entire search scales linearly
 with the number of cubes. For example, doubling the cristobalite block size
 only increases the effort eightfold.</p>
-<p>Furthermore, the search can be parallelized across multiple processes,
-since no communication is needed between the subprocesses that each cover
-a set of cubes. Use <a class="reference internal" href="porems.dice.Dice.find.html#porems.dice.Dice.find" title="porems.dice.Dice.find"><code class="xref py py-meth docutils literal notranslate"><span class="pre">find()</span></code></a> together with <a class="reference internal" href="porems.dice.SearchPolicy.html#porems.dice.SearchPolicy" title="porems.dice.SearchPolicy"><code class="xref py py-class docutils literal notranslate"><span class="pre">SearchPolicy</span></code></a> to
-control whether the search runs serially or via a process pool.</p>
 <p>Note that the cube size must be strictly greater than the intended
 bond length searches.</p>
 <dl class="field-list simple">
@@ -212,8 +208,8 @@ neighbor lookups.</p>
 <p class="rubric">Search</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="porems.dice.Dice.find.html#porems.dice.Dice.find" title="porems.dice.Dice.find"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find</span></code></a>([cube_list, atom_type, distance, policy])</p></td>
-<td><p>Search for atom pairs using the requested execution policy.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="porems.dice.Dice.find.html#porems.dice.Dice.find" title="porems.dice.Dice.find"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find</span></code></a>([cube_list, atom_type, distance])</p></td>
+<td><p>Search for atom pairs in serial.</p></td>
 </tr>
 </tbody>
 </table>

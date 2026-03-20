@@ -23,28 +23,6 @@ PoreMS targets Python 3.14.
 
 Installation requires [numpy](https://numpy.org/), [pandas](https://pandas.pydata.org/), [matplotlib](https://matplotlib.org/), [seaborn](https://seaborn.pydata.org/) and [PyYAML](https://pyyaml.org/).
 
-## Search Execution Policy
-
-`Dice.find_parallel(...)` has been replaced by `Dice.find(...)`, which uses an explicit execution policy.
-
-```python
-import porems as pms
-
-block = pms.BetaCristobalit().generate([2, 2, 2], "z")
-dice = pms.Dice(block, 0.2, True)
-
-policy = pms.SearchPolicy(
-    execution=pms.SearchExecution.AUTO,
-    processes=4,
-)
-bond_list = dice.find(None, ["Si", "O"], [0.145, 0.165], policy=policy)
-```
-
-`AUTO` uses multiprocessing only when the current `__main__` module is safely importable by worker processes. Otherwise it falls back to serial execution and emits a Python warning.
-
-If you explicitly request `SearchExecution.PROCESSES`, run PoreMS from a file-backed `__main__` entrypoint such as a normal script or `python -m unittest ...`.
-
-
 ## Bare Amorphous Slit Preparation
 
 PoreMS exposes a high-level slit-preparation API for building periodic bare
@@ -78,10 +56,6 @@ containing an attach-ready `PoreKit` system and a structured
 `write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
 together with a JSON report in the selected output directory. Object backups are
 written only when `write_object_files=True` is requested explicitly.
-From notebooks or `python -c`, set
-`search_policy=pms.SearchPolicy(execution=pms.SearchExecution.SERIAL)` on
-`AmorphousSlitConfig` to suppress multiprocessing fallback warnings during
-connectivity search.
 
 For exact functionalized targets, use `prepare_functionalized_amorphous_slit_surface(...)`
 with the same `ExperimentalSiliconStateTarget` and a `SilaneAttachmentConfig`.

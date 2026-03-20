@@ -425,26 +425,19 @@ class PoreKit():
         self._box = self._block.get_box()
         self._centroid = self._block.centroid()
 
-    def build(self, bonds=None, search_policy=None):
+    def build(self, bonds=None):
         """Build the Si-O connectivity matrix and base pore object.
 
         Parameters
         ----------
         bonds : list, optional
             Accepted Si-O bond-length interval used during connectivity search.
-        search_policy : SearchPolicy, optional
-            Execution policy passed to :meth:`porems.dice.Dice.find`. Use
-            ``SearchPolicy(execution=SearchExecution.SERIAL)`` to force
-            single-process connectivity search from notebook or ``python -c``
-            entrypoints and avoid multiprocessing fallback warnings.
         """
         bonds = [0.155-1e-2, 0.155+1e-2] if bonds is None else bonds
 
         # Dice up block
         dice = pms.Dice(self._block, 0.4, True)
-        self._matrix = pms.Matrix(
-            dice.find(None, ["Si", "O"], bonds, policy=search_policy)
-        )
+        self._matrix = pms.Matrix(dice.find(None, ["Si", "O"], bonds))
 
         # Create pore object
         self._pore = pms.Pore(self._block, self._matrix)

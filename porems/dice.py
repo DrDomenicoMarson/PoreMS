@@ -4,91 +4,9 @@
 """Cube-based neighbor-search helpers for molecular structures."""
 ################################################################################
 
-
-import __main__
 import math
-import multiprocessing as mp
-import os
-import warnings
-
-from dataclasses import dataclass
-from enum import Enum
 
 import porems.geometry as geometry
-
-
-class SearchExecution(str, Enum):
-    """Execution modes supported by :meth:`Dice.find`.
-
-    Attributes
-    ----------
-    AUTO
-        Prefer process-based search when it is safe, otherwise run serially.
-    SERIAL
-        Always run the search in the current process.
-    PROCESSES
-        Require a process pool and fail if multiprocessing cannot be started
-        safely from the current entrypoint.
-    """
-
-    AUTO = "auto"
-    SERIAL = "serial"
-    PROCESSES = "processes"
-
-
-@dataclass(frozen=True)
-class SearchPolicy:
-    """Execution policy for :meth:`Dice.find`.
-
-    Parameters
-    ----------
-    execution : SearchExecution, optional
-        Requested execution mode for the search.
-    processes : int, optional
-        Number of worker processes to request when process-based execution is
-        used. If omitted, the CPU count detected during :class:`Dice`
-        initialization is used.
-    start_method : str, optional
-        Explicit multiprocessing start method to use when process-based
-        execution is requested. Leave ``None`` to use the interpreter default.
-    warn_on_fallback : bool, optional
-        True to emit a :class:`RuntimeWarning` when ``AUTO`` falls back to
-        serial execution because multiprocessing is unsafe from the current
-        entrypoint.
-    """
-
-    execution: SearchExecution = SearchExecution.AUTO
-    processes: int | None = None
-    start_method: str | None = None
-    warn_on_fallback: bool = True
-
-    def __post_init__(self):
-        """Validate and normalize the configured search policy.
-
-        Returns
-        -------
-        None
-            The dataclass instance is normalized in place.
-
-        Raises
-        ------
-        ValueError
-            If ``processes`` is smaller than one or ``start_method`` is not
-            supported by the current Python interpreter.
-        """
-        execution = SearchExecution(self.execution)
-        object.__setattr__(self, "execution", execution)
-
-        if self.processes is not None and self.processes < 1:
-            raise ValueError("SearchPolicy.processes must be at least 1.")
-
-        if self.start_method is not None:
-            valid_methods = mp.get_all_start_methods()
-            if self.start_method not in valid_methods:
-                raise ValueError(
-                    "SearchPolicy.start_method must be one of "
-                    f"{valid_methods}."
-                )
 
 
 class Dice:
@@ -119,11 +37,6 @@ class Dice:
     with the number of cubes. For example, doubling the cristobalite block size
     only increases the effort eightfold.
 
-    Furthermore, the search can be parallelized across multiple processes,
-    since no communication is needed between the subprocesses that each cover
-    a set of cubes. Use :meth:`find` together with :class:`SearchPolicy` to
-    control whether the search runs serially or via a process pool.
-
     Note that the cube size must be strictly greater than the intended
     bond length searches.
 
@@ -152,8 +65,6 @@ class Dice:
         """
         # Initialize
         self._dim = 3
-        self._np = mp.cpu_count()
-
         self._mol = mol
         self._size = size
         self._is_pbc = is_pbc
@@ -444,149 +355,8 @@ class Dice:
 
         return bond_list
 
-    def _resolve_process_count(self, processes):
-        """Resolve the requested worker-process count.
-
-        Parameters
-        ----------
-        processes : int, optional
-            Requested number of worker processes.
-
-        Returns
-        -------
-        process_count : int
-            Number of worker processes to request.
-        """
-        return self._np if processes is None else processes
-
-    def _chunk_cube_list(self, cube_list, process_count):
-        """Split the cube list into chunks for worker processes.
-
-        Parameters
-        ----------
-        cube_list : list
-            List of cube indices to search in.
-        process_count : int
-            Number of worker processes requested.
-
-        Returns
-        -------
-        cube_chunks : list
-            List of non-empty cube-index chunks.
-        """
-        chunk_size = max(1, math.ceil(len(cube_list) / process_count))
-        return [
-            cube_list[index:index + chunk_size]
-            for index in range(0, len(cube_list), chunk_size)
-        ]
-
-    def _unsafe_entrypoint_reason(self):
-        """Describe why the current entrypoint is unsafe for multiprocessing.
-
-        Returns
-        -------
-        reason : str or None
-            Description of the multiprocessing entrypoint problem, or ``None``
-            if the current ``__main__`` module is safely importable.
-        """
-        main_file = getattr(__main__, "__file__", None)
-        if main_file is None:
-            return "the current __main__ module does not define __file__"
-        if main_file == "<stdin>":
-            return "the current __main__ module originates from <stdin>"
-        if not os.path.exists(main_file):
-            return f"the current __main__.__file__ path does not exist: {main_file}"
-
-        return None
-
-    def _serial_fallback_warning(self, reason):
-        """Build the warning message for automatic serial fallback.
-
-        Parameters
-        ----------
-        reason : str
-            Explanation of why multiprocessing is unsafe.
-
-        Returns
-        -------
-        message : str
-            Warning message for automatic serial fallback.
-        """
-        return (
-            "Dice.find fell back to serial execution because multiprocessing "
-            f"is unsafe from the current entrypoint: {reason}. Use a "
-            "file-backed __main__ module or request "
-            "SearchExecution.SERIAL explicitly to silence this warning."
-        )
-
-    def _unsafe_process_error(self, reason):
-        """Build the error message for explicit process execution.
-
-        Parameters
-        ----------
-        reason : str
-            Explanation of why multiprocessing is unsafe.
-
-        Returns
-        -------
-        message : str
-            Error message for explicit process execution.
-        """
-        return (
-            "Dice.find with SearchExecution.PROCESSES requires a file-backed "
-            "__main__ module that multiprocessing workers can import. "
-            f"Multiprocessing is unsafe from the current entrypoint because "
-            f"{reason}."
-        )
-
-    def _find_processes(self, cube_list, atom_type, distance, policy):
-        """Run the search through a multiprocessing pool.
-
-        Parameters
-        ----------
-        cube_list : list
-            List of cube indices to search in.
-        atom_type : list
-            List of two atom types.
-        distance : list
-            Bounds of allowed distance ``[lower, upper]``.
-        policy : SearchPolicy
-            Execution policy for the search.
-
-        Returns
-        -------
-        bond_list : list
-            Bond array containing lists of atom ids.
-        """
-        process_count = self._resolve_process_count(policy.processes)
-        if process_count < 2:
-            raise ValueError(
-                "SearchExecution.PROCESSES requires at least two worker "
-                "processes. Use SearchExecution.SERIAL for single-process "
-                "execution."
-            )
-
-        cube_chunks = self._chunk_cube_list(cube_list, process_count)
-        context = (
-            mp.get_context(policy.start_method)
-            if policy.start_method is not None
-            else mp.get_context()
-        )
-
-        with context.Pool(processes=process_count) as pool:
-            results = [
-                pool.apply_async(
-                    self._find_bond,
-                    args=(cube_chunk, atom_type, distance),
-                )
-                for cube_chunk in cube_chunks
-            ]
-            bond_list = sum([result.get() for result in results], [])
-
-        return bond_list
-
-    def find(self, cube_list=None, atom_type=None, distance=None, policy=None):
-        """Search for atom pairs using the requested execution policy.
+    def find(self, cube_list=None, atom_type=None, distance=None):
+        """Search for atom pairs in serial.
 
         Parameters
         ----------
@@ -596,12 +366,6 @@ class Dice:
             List of two atom types
         distance : list
             Bounds of allowed distance [lower, upper]
-        policy : SearchPolicy, optional
-            Execution policy controlling whether the search runs serially or
-            with a multiprocessing pool. ``AUTO`` uses process-based search
-            only when the current ``__main__`` module is safely importable by
-            worker processes. Otherwise it falls back to serial execution and,
-            by default, emits a :class:`RuntimeWarning`.
 
         Returns
         -------
@@ -611,48 +375,11 @@ class Dice:
         Raises
         ------
         TypeError
-            If ``atom_type`` or ``distance`` is missing, or if ``policy`` is
-            not a :class:`SearchPolicy` instance.
-        RuntimeError
-            If ``SearchExecution.PROCESSES`` is requested from an unsafe
-            multiprocessing entrypoint.
-        ValueError
-            If process-based execution is requested with fewer than two worker
-            processes.
+            If ``atom_type`` or ``distance`` is missing.
         """
         if atom_type is None or distance is None:
             raise TypeError("Dice.find requires atom_type and distance arguments.")
-
-        cube_list = cube_list if cube_list else list(self._pointer.keys())
-        policy = policy if policy is not None else SearchPolicy()
-        if not isinstance(policy, SearchPolicy):
-            raise TypeError("Dice.find policy must be a SearchPolicy instance.")
-
-        if policy.execution is SearchExecution.SERIAL:
-            return self._find_bond(cube_list, atom_type, distance)
-
-        if policy.execution is SearchExecution.PROCESSES:
-            unsafe_reason = self._unsafe_entrypoint_reason()
-            if unsafe_reason is not None:
-                raise RuntimeError(self._unsafe_process_error(unsafe_reason))
-
-            return self._find_processes(cube_list, atom_type, distance, policy)
-
-        process_count = self._resolve_process_count(policy.processes)
-        if process_count < 2:
-            return self._find_bond(cube_list, atom_type, distance)
-
-        unsafe_reason = self._unsafe_entrypoint_reason()
-        if unsafe_reason is not None:
-            if policy.warn_on_fallback:
-                warnings.warn(
-                    self._serial_fallback_warning(unsafe_reason),
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-            return self._find_bond(cube_list, atom_type, distance)
-
-        return self._find_processes(cube_list, atom_type, distance, policy)
+        return self._find_bond(cube_list, atom_type, distance)
 
 
     ##################

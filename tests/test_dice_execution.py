@@ -1,5 +1,4 @@
 import json
-import multiprocessing as mp
 import os
 import subprocess
 import sys
@@ -10,17 +9,14 @@ import porems as pms
 
 
 class DiceExecutionCase(unittest.TestCase):
-    """Exercise the public dice search execution policy API."""
+    """Exercise the serial dice search API."""
 
     @classmethod
     def setUpClass(cls):
         block = pms.BetaCristobalit().generate([2, 2, 2], "z")
         cls.dice = pms.Dice(block, 0.2, True)
         cls.search_args = (None, ["Si", "O"], [0.155 - 1e-2, 0.155 + 1e-2])
-        cls.serial_policy = pms.SearchPolicy(execution=pms.SearchExecution.SERIAL)
-        cls.expected = cls._normalize(
-            cls.dice.find(*cls.search_args, policy=cls.serial_policy)
-        )
+        cls.expected = cls._normalize(cls.dice.find(*cls.search_args))
         cls.repo_root = os.path.dirname(os.path.dirname(__file__))
 
     @staticmethod
@@ -43,7 +39,7 @@ class DiceExecutionCase(unittest.TestCase):
         )
 
     def _run_subprocess(self, code):
-        """Run a Python subprocess from an unsafe ``python -c`` entrypoint.
+        """Run a Python subprocess from a ``python -c`` entrypoint.
 
         Parameters
         ----------
@@ -71,34 +67,15 @@ class DiceExecutionCase(unittest.TestCase):
             text=True,
         )
 
-    def test_find_serial(self):
-        result = self.dice.find(*self.search_args, policy=self.serial_policy)
+    def test_find_matches_expected(self):
+        result = self.dice.find(*self.search_args)
         self.assertEqual(self._normalize(result), self.expected)
 
-    def test_find_auto_without_warning_from_file_backed_main(self):
-        auto_policy = pms.SearchPolicy(
-            execution=pms.SearchExecution.AUTO,
-            processes=2,
-        )
+    def test_find_requires_atom_type_and_distance(self):
+        with self.assertRaises(TypeError):
+            self.dice.find()
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            result = self.dice.find(*self.search_args, policy=auto_policy)
-
-        self.assertEqual(self._normalize(result), self.expected)
-        self.assertEqual(caught, [])
-
-    def test_find_processes_matches_serial(self):
-        start_method = "spawn" if "spawn" in mp.get_all_start_methods() else None
-        process_policy = pms.SearchPolicy(
-            execution=pms.SearchExecution.PROCESSES,
-            processes=2,
-            start_method=start_method,
-        )
-        result = self.dice.find(*self.search_args, policy=process_policy)
-        self.assertEqual(self._normalize(result), self.expected)
-
-    def test_auto_falls_back_to_serial_for_python_dash_c(self):
+    def test_find_has_no_entrypoint_warning_for_python_dash_c(self):
         code = """
 import json
 import warnings
@@ -112,41 +89,6 @@ with warnings.catch_warnings(record=True) as caught:
         None,
         ["Si", "O"],
         [0.155 - 1e-2, 0.155 + 1e-2],
-        policy=pms.SearchPolicy(
-            execution=pms.SearchExecution.AUTO,
-            processes=2,
-        ),
-    )
-print(json.dumps({
-    "length": len(result),
-    "warnings": [str(item.message) for item in caught],
-}))
-"""
-        result = self._run_subprocess(code)
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-
-        payload = json.loads(result.stdout.strip())
-        self.assertEqual(payload["length"], len(self.expected))
-        self.assertEqual(len(payload["warnings"]), 1)
-        self.assertIn("fell back to serial execution", payload["warnings"][0])
-
-    def test_serial_succeeds_without_warning_for_python_dash_c(self):
-        code = """
-import json
-import warnings
-import porems as pms
-
-block = pms.BetaCristobalit().generate([2, 2, 2], "z")
-dice = pms.Dice(block, 0.2, True)
-with warnings.catch_warnings(record=True) as caught:
-    warnings.simplefilter("always")
-    result = dice.find(
-        None,
-        ["Si", "O"],
-        [0.155 - 1e-2, 0.155 + 1e-2],
-        policy=pms.SearchPolicy(
-            execution=pms.SearchExecution.SERIAL,
-        ),
     )
 print(json.dumps({
     "length": len(result),
@@ -160,7 +102,7 @@ print(json.dumps({
         self.assertEqual(payload["length"], len(self.expected))
         self.assertEqual(payload["warnings"], [])
 
-    def test_porekit_build_serial_succeeds_without_warning_for_python_dash_c(self):
+    def test_porekit_build_has_no_entrypoint_warning_for_python_dash_c(self):
         code = """
 import json
 import warnings
@@ -171,11 +113,7 @@ kit = pms.PoreKit()
 kit.structure(block)
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    kit.build(
-        search_policy=pms.SearchPolicy(
-            execution=pms.SearchExecution.SERIAL,
-        ),
-    )
+    kit.build()
 print(json.dumps({
     "matrix_size": len(kit._matrix.get_matrix()),
     "warnings": [str(item.message) for item in caught],
@@ -187,37 +125,6 @@ print(json.dumps({
         payload = json.loads(result.stdout.strip())
         self.assertGreater(payload["matrix_size"], 0)
         self.assertEqual(payload["warnings"], [])
-
-    def test_processes_raise_runtime_error_for_python_dash_c(self):
-        code = """
-import json
-import porems as pms
-
-block = pms.BetaCristobalit().generate([2, 2, 2], "z")
-dice = pms.Dice(block, 0.2, True)
-try:
-    dice.find(
-        None,
-        ["Si", "O"],
-        [0.155 - 1e-2, 0.155 + 1e-2],
-        policy=pms.SearchPolicy(
-            execution=pms.SearchExecution.PROCESSES,
-            processes=2,
-            start_method="spawn",
-        ),
-    )
-except Exception as error:
-    print(json.dumps({
-        "type": type(error).__name__,
-        "message": str(error),
-    }))
-"""
-        result = self._run_subprocess(code)
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-
-        payload = json.loads(result.stdout.strip())
-        self.assertEqual(payload["type"], "RuntimeError")
-        self.assertIn("requires a file-backed __main__ module", payload["message"])
 
 
 if __name__ == "__main__":
