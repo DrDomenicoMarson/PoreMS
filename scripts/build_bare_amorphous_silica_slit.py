@@ -33,10 +33,10 @@ def build_script_config():
     config : ScriptConfig
         Output path and slit-preparation settings used by this script.
     """
-    surface_target = pms.SurfaceCompositionTarget(
-        q2_fraction=0.069,
-        q3_fraction=0.681,
-        q4_fraction=0.25,
+    surface_target = pms.ExperimentalSiliconStateTarget(
+        q2_fraction=66 / 20000,
+        q3_fraction=652 / 20000,
+        q4_fraction=1.0 - ((66 + 652) / 20000),
     )
     slit_config = pms.AmorphousSlitConfig(
         name="bare_amorphous_silica_slit",
@@ -75,16 +75,19 @@ def main():
     print(f"Slit width (nm): {report.slit_width_nm:.3f}")
     print(f"Wall thickness per side (nm): {report.wall_thickness_nm:.3f}")
     print(f"Exterior sites: {report.site_ex}")
+    print(f"Alpha (auto/effective): {report.alpha_auto:.5f}/{report.alpha_effective:.5f}")
     print(
         "Siloxane search window (nm): "
         f"{report.siloxane_distance_range_nm[0]:.3f}-"
         f"{report.siloxane_distance_range_nm[1]:.3f}"
     )
     print(
-        "Surface Q2/Q3/Q4 counts: "
-        f"{report.prepared_surface.q2_sites}/"
-        f"{report.prepared_surface.q3_sites}/"
-        f"{report.prepared_surface.q4_sites}"
+        "Surface Q2/Q3/Q4/T2/T3 counts: "
+        f"{report.final_surface.q2_sites}/"
+        f"{report.final_surface.q3_sites}/"
+        f"{report.final_surface.q4_sites}/"
+        f"{report.final_surface.t2_sites}/"
+        f"{report.final_surface.t3_sites}"
     )
     print(f"Siloxane bridges introduced: {report.siloxane_bridges}")
 

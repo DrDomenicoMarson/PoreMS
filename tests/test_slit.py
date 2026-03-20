@@ -8,6 +8,34 @@ import porems.slit as slit_mod
 from porems._version import __version__ as EXPECTED_VERSION
 
 
+def experimental_target_from_surface(surface_target, alpha, alpha_override=None):
+    """Build an experimental all-silicon target from surface-only fractions.
+
+    Parameters
+    ----------
+    surface_target : SiliconStateFractions
+        Desired surface-only silicon-state fractions.
+    alpha : float
+        Surface-to-total silicon fraction used for the back-conversion.
+    alpha_override : float or None, optional
+        Explicit alpha override stored on the resulting experimental target.
+
+    Returns
+    -------
+    target : ExperimentalSiliconStateTarget
+        Experimental all-silicon target that maps back to ``surface_target``
+        when the same alpha value is applied.
+    """
+    return pms.ExperimentalSiliconStateTarget(
+        q2_fraction=alpha * surface_target.q2_fraction,
+        q3_fraction=alpha * surface_target.q3_fraction,
+        q4_fraction=alpha * surface_target.q4_fraction + (1.0 - alpha),
+        t2_fraction=alpha * surface_target.t2_fraction,
+        t3_fraction=alpha * surface_target.t3_fraction,
+        alpha_override=alpha_override,
+    )
+
+
 class AmorphousSlitPreparationCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -19,7 +47,16 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         if os.path.isdir(cls.output_dir):
             shutil.rmtree(cls.output_dir)
 
-        cls.config = pms.AmorphousSlitConfig(name="test_bare_amorphous_slit")
+        cls.surface_target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=0.069,
+            q3_fraction=0.681,
+            q4_fraction=0.25,
+            alpha_override=1.0,
+        )
+        cls.config = pms.AmorphousSlitConfig(
+            name="test_bare_amorphous_slit",
+            surface_target=cls.surface_target,
+        )
         cls.prepared_result = pms.prepare_amorphous_slit_surface(config=cls.config)
         cls.prepared_report = cls.prepared_result.report
         cls.stored_result = pms.write_bare_amorphous_slit(
@@ -81,26 +118,35 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertEqual(sorted(self.prepared_result.system._pore.sites_sl_shape), [0])
 
     def test_prepared_surface_composition_matches_target(self):
+        self.assertEqual(self.prepared_report.final_surface, self.prepared_report.target_surface)
         self.assertEqual(self.prepared_report.prepared_surface, self.prepared_report.target_surface)
         self.assertEqual(self.prepared_report.prepared_surface.total_surface_si, 954)
         self.assertEqual(self.prepared_report.prepared_surface.q2_sites, 66)
         self.assertEqual(self.prepared_report.prepared_surface.q3_sites, 650)
         self.assertEqual(self.prepared_report.prepared_surface.q4_sites, 238)
+        self.assertEqual(self.prepared_report.prepared_surface.t2_sites, 0)
+        self.assertEqual(self.prepared_report.prepared_surface.t3_sites, 0)
         self.assertFalse(self.prepared_report.used_surface_tolerance)
         self.assertAlmostEqual(self.prepared_report.surface_fraction_tolerance, 0.005)
+        self.assertAlmostEqual(self.prepared_report.alpha_auto, 954 / 40000, places=8)
+        self.assertEqual(self.prepared_report.alpha_effective, 1.0)
+        self.assertEqual(
+            self.prepared_report.derived_surface_target,
+            pms.SiliconStateFractions(0.069, 0.681, 0.25),
+        )
         self.assertAlmostEqual(
-            self.prepared_report.prepared_surface.q2_fraction,
-            self.config.surface_target.q2_fraction,
+            self.prepared_report.final_surface.q2_fraction,
+            self.prepared_report.derived_surface_target.q2_fraction,
             delta=1e-3,
         )
         self.assertAlmostEqual(
-            self.prepared_report.prepared_surface.q3_fraction,
-            self.config.surface_target.q3_fraction,
+            self.prepared_report.final_surface.q3_fraction,
+            self.prepared_report.derived_surface_target.q3_fraction,
             delta=1e-3,
         )
         self.assertAlmostEqual(
-            self.prepared_report.prepared_surface.q4_fraction,
-            self.config.surface_target.q4_fraction,
+            self.prepared_report.final_surface.q4_fraction,
+            self.prepared_report.derived_surface_target.q4_fraction,
             delta=1e-3,
         )
 
@@ -109,6 +155,7 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
             config=pms.AmorphousSlitConfig(
                 name="thin_bare_amorphous_slit",
                 repeat_y=1,
+                surface_target=self.surface_target,
             )
         )
 
@@ -116,10 +163,89 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertAlmostEqual(result.report.wall_thickness_nm, 1.3025, places=4)
         self.assertFalse(result.report.used_surface_tolerance)
         self.assertEqual(result.report.prepared_surface, result.report.target_surface)
+        self.assertEqual(result.report.final_surface, result.report.target_surface)
         self.assertEqual(result.report.prepared_surface.total_surface_si, 957)
         self.assertEqual(result.report.prepared_surface.q2_sites, 66)
         self.assertEqual(result.report.prepared_surface.q3_sites, 652)
         self.assertEqual(result.report.prepared_surface.q4_sites, 239)
+
+    def test_auto_alpha_q_only_target_uses_unified_conversion(self):
+        base_config = pms.AmorphousSlitConfig(
+            name="auto_alpha_reference",
+            repeat_y=1,
+            surface_target=self.surface_target,
+        )
+        base_result = pms.prepare_amorphous_slit_surface(config=base_config)
+        alpha_auto = base_result.report.alpha_auto
+        reference_surface = pms.SiliconStateFractions(0.069, 0.681, 0.25)
+        experimental_target = experimental_target_from_surface(
+            reference_surface,
+            alpha_auto,
+            alpha_override=None,
+        )
+
+        result = pms.prepare_amorphous_slit_surface(
+            config=pms.AmorphousSlitConfig(
+                name="auto_alpha_case",
+                repeat_y=1,
+                surface_target=experimental_target,
+            )
+        )
+
+        self.assertAlmostEqual(result.report.alpha_effective, alpha_auto, places=8)
+        self.assertAlmostEqual(
+            result.report.derived_surface_target.q2_fraction,
+            reference_surface.q2_fraction,
+            places=12,
+        )
+        self.assertAlmostEqual(
+            result.report.derived_surface_target.q3_fraction,
+            reference_surface.q3_fraction,
+            places=12,
+        )
+        self.assertAlmostEqual(
+            result.report.derived_surface_target.q4_fraction,
+            reference_surface.q4_fraction,
+            places=12,
+        )
+        self.assertEqual(result.report.final_surface.q2_sites, 66)
+        self.assertEqual(result.report.final_surface.q3_sites, 652)
+        self.assertEqual(result.report.final_surface.q4_sites, 239)
+
+    def test_surface_conversion_example_matches_expected_q2_enrichment(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=0.5,
+            q3_fraction=0.0,
+            q4_fraction=0.5,
+            alpha_override=0.5,
+        )
+        surface_target = slit_mod._surface_target_from_experimental(target, 0.5)
+
+        self.assertEqual(surface_target, pms.SiliconStateFractions(1.0, 0.0, 0.0))
+
+    def test_alpha_override_precedence(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=0.02,
+            q3_fraction=0.03,
+            q4_fraction=0.95,
+            alpha_override=0.2,
+        )
+        alpha_auto, alpha_effective = slit_mod._effective_alpha(100, 1000, target)
+
+        self.assertAlmostEqual(alpha_auto, 0.1)
+        self.assertAlmostEqual(alpha_effective, 0.2)
+
+    def test_invalid_alpha_target_combinations_raise(self):
+        with self.assertRaises(ValueError):
+            slit_mod._surface_target_from_experimental(
+                pms.ExperimentalSiliconStateTarget(
+                    q2_fraction=0.5,
+                    q3_fraction=0.0,
+                    q4_fraction=0.5,
+                    alpha_override=0.4,
+                ),
+                0.4,
+            )
 
     def test_bridge_algebra_matches_q_state_changes(self):
         cases = [
@@ -130,7 +256,11 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
 
         for pair_counts, expected_delta in cases:
             with self.subTest(pair_counts=pair_counts):
-                config = pms.AmorphousSlitConfig(name="bridge_algebra_case", repeat_y=1)
+                config = pms.AmorphousSlitConfig(
+                    name="bridge_algebra_case",
+                    repeat_y=1,
+                    surface_target=self.surface_target,
+                )
                 system = self._build_uncondensed_slit(config)
                 total_surface_si = len(system._site_in)
                 sites = system._pore.get_sites()
@@ -155,15 +285,19 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
                 self.assertEqual(after.q4_sites - before.q4_sites, expected_delta[2])
 
     def test_tolerance_fallback_selects_nearest_realizable_target(self):
-        config = pms.AmorphousSlitConfig(name="tolerance_case", repeat_y=1)
+        config = pms.AmorphousSlitConfig(
+            name="tolerance_case",
+            repeat_y=1,
+            surface_target=self.surface_target,
+        )
         system = self._build_uncondensed_slit(config)
         total_surface_si = len(system._site_in)
         initial_surface = slit_mod._surface_composition(
             total_surface_si,
             system._pore.get_sites(),
         )
-        requested_target = config.surface_target
-        exact_target = pms.SurfaceComposition(
+        requested_target = pms.SiliconStateFractions(66 / 957, 653 / 957, 238 / 957)
+        exact_target = pms.SiliconStateComposition(
             total_surface_si=total_surface_si,
             q2_sites=66,
             q3_sites=653,
@@ -178,28 +312,33 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
             exact_target,
             config.surface_fraction_tolerance,
             config.siloxane_distance_range_nm,
+            ligand=None,
         )
         errors = slit_mod._surface_fraction_errors(
-            attempt.prepared_surface,
+            attempt.final_surface,
             requested_target,
         )
 
         self.assertTrue(attempt.used_surface_tolerance)
         self.assertEqual(
             attempt.target_surface,
-            pms.SurfaceComposition(
+            pms.SiliconStateComposition(
                 total_surface_si=total_surface_si,
-                q2_sites=66,
-                q3_sites=652,
-                q4_sites=239,
+                q2_sites=65,
+                q3_sites=654,
+                q4_sites=238,
             ),
         )
         self.assertEqual(attempt.prepared_surface, attempt.target_surface)
+        self.assertEqual(attempt.final_surface, attempt.target_surface)
         self.assertTrue(all(error <= config.surface_fraction_tolerance for error in errors))
 
     def test_prepared_slit_remains_attachable(self):
         result = pms.prepare_amorphous_slit_surface(
-            config=pms.AmorphousSlitConfig(name="attachable_bare_amorphous_slit")
+            config=pms.AmorphousSlitConfig(
+                name="attachable_bare_amorphous_slit",
+                surface_target=self.surface_target,
+            )
         )
 
         result.system.attach(
@@ -215,6 +354,19 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         mol_dict = result.system._pore.get_mol_dict()
         self.assertIn("TMS", mol_dict)
         self.assertEqual(len(mol_dict["TMS"]), 1)
+
+    def test_bare_builder_rejects_non_zero_t_states(self):
+        with self.assertRaises(ValueError):
+            pms.prepare_amorphous_slit_surface(
+                config=pms.AmorphousSlitConfig(
+                    surface_target=pms.ExperimentalSiliconStateTarget(
+                        q2_fraction=0.05,
+                        q3_fraction=0.05,
+                        q4_fraction=0.85,
+                        t2_fraction=0.05,
+                    )
+                )
+            )
 
     def test_bare_slit_files_are_written(self):
         expected_files = [
@@ -247,17 +399,19 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertEqual(data["siloxane_distance_range_nm"], [0.4, 0.65])
         self.assertEqual(data["surface_fraction_tolerance"], 0.005)
         self.assertFalse(data["used_surface_tolerance"])
+        self.assertAlmostEqual(data["alpha_auto"], 954 / 40000, places=8)
+        self.assertEqual(data["alpha_effective"], 1.0)
         self.assertEqual(
-            data["prepared_surface"]["q2_sites"],
-            self.stored_report.prepared_surface.q2_sites,
+            data["final_surface"]["q2_sites"],
+            self.stored_report.final_surface.q2_sites,
         )
         self.assertEqual(
-            data["prepared_surface"]["q3_sites"],
-            self.stored_report.prepared_surface.q3_sites,
+            data["final_surface"]["q3_sites"],
+            self.stored_report.final_surface.q3_sites,
         )
         self.assertEqual(
-            data["prepared_surface"]["q4_sites"],
-            self.stored_report.prepared_surface.q4_sites,
+            data["final_surface"]["q4_sites"],
+            self.stored_report.final_surface.q4_sites,
         )
         self.assertFalse(
             os.path.exists(
@@ -276,7 +430,10 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
 
         pms.write_bare_amorphous_slit(
             output_dir,
-            config=pms.AmorphousSlitConfig(name="test_bare_amorphous_slit_with_objects"),
+            config=pms.AmorphousSlitConfig(
+                name="test_bare_amorphous_slit_with_objects",
+                surface_target=self.surface_target,
+            ),
             write_object_files=True,
         )
 
@@ -298,16 +455,93 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertEqual(pms.__version__, EXPECTED_VERSION)
         self.assertTrue(callable(pms.prepare_amorphous_slit_surface))
         self.assertTrue(callable(pms.write_bare_amorphous_slit))
+        self.assertTrue(callable(pms.prepare_functionalized_amorphous_slit_surface))
+        self.assertTrue(callable(pms.write_functionalized_amorphous_slit))
         self.assertIsInstance(self.config, pms.AmorphousSlitConfig)
+        self.assertIsInstance(self.surface_target, pms.ExperimentalSiliconStateTarget)
         self.assertIsInstance(self.prepared_result, pms.SlitPreparationResult)
         self.assertIsInstance(self.prepared_report, pms.SlitPreparationReport)
-        self.assertIsInstance(self.prepared_report.prepared_surface, pms.SurfaceComposition)
-        self.assertTrue(hasattr(pms, "RoughnessProfile"))
-        self.assertTrue(hasattr(pms, "SurfaceAreaSummary"))
-        self.assertTrue(hasattr(pms, "SurfaceAllocationStats"))
-        self.assertTrue(hasattr(pms, "AllocationSummary"))
-        self.assertTrue(hasattr(pms, "BindingSite"))
-        self.assertTrue(hasattr(pms, "ShapeAttachmentSummary"))
+        self.assertIsInstance(self.prepared_report.prepared_surface, pms.SiliconStateComposition)
+        self.assertTrue(hasattr(pms, "SiliconStateFractions"))
+        self.assertTrue(hasattr(pms, "SilaneAttachmentConfig"))
+        self.assertTrue(hasattr(pms, "FunctionalizedAmorphousSlitConfig"))
+        self.assertTrue(hasattr(pms, "FunctionalizedSlitResult"))
+
+
+class FunctionalizedAmorphousSlitCase(unittest.TestCase):
+    def test_exact_functionalized_target_is_realized(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=63 / 957,
+            q3_fraction=648 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=3 / 957,
+            t3_fraction=4 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_exact_slit",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+            ),
+        )
+
+        result = pms.prepare_functionalized_amorphous_slit_surface(config)
+
+        self.assertFalse(result.report.used_surface_tolerance)
+        self.assertEqual(
+            result.report.prepared_surface,
+            pms.SiliconStateComposition(957, 66, 652, 239),
+        )
+        self.assertEqual(
+            result.report.final_surface,
+            pms.SiliconStateComposition(957, 63, 648, 239, 3, 4),
+        )
+        self.assertEqual(result.report.final_surface, result.report.target_surface)
+        self.assertEqual(len(result.system._pore.get_site_dict()["in"]["TMSG"]), 3)
+        self.assertEqual(len(result.system._pore.get_site_dict()["in"]["TMS"]), 4)
+
+    def test_functionalized_tolerance_fallback_selects_nearest_realizable_target(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=63 / 957,
+            q3_fraction=649 / 957,
+            q4_fraction=238 / 957,
+            t2_fraction=3 / 957,
+            t3_fraction=4 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_tolerance_slit",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+            ),
+        )
+
+        result = pms.prepare_functionalized_amorphous_slit_surface(config)
+
+        self.assertTrue(result.report.used_surface_tolerance)
+        self.assertEqual(
+            result.report.final_surface,
+            pms.SiliconStateComposition(957, 63, 648, 239, 3, 4),
+        )
+        errors = slit_mod._surface_fraction_errors(
+            result.report.final_surface,
+            result.report.derived_surface_target,
+        )
+        self.assertTrue(
+            all(error <= result.report.surface_fraction_tolerance for error in errors)
+        )
 
 
 if __name__ == "__main__":

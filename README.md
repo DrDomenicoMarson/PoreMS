@@ -48,7 +48,9 @@ If you explicitly request `SearchExecution.PROCESSES`, run PoreMS from a file-ba
 ## Bare Amorphous Slit Preparation
 
 PoreMS exposes a high-level slit-preparation API for building periodic bare
-amorphous silica slits with controlled exposed-surface `Q2/Q3/Q4` fractions.
+and functionalized amorphous silica slits from alpha-aware experimental silicon
+state ratios. The input target always represents `Q2/Q3/Q4/T2/T3` fractions
+over all Si atoms in the sample; `T2` and `T3` default to zero for bare slits.
 
 ```python
 import porems as pms
@@ -57,10 +59,15 @@ config = pms.AmorphousSlitConfig(
     name="bare_amorphous_silica_slit",
     slit_width_nm=7.0,
     repeat_y=2,
+    surface_target=pms.ExperimentalSiliconStateTarget(
+        q2_fraction=66 / 40000,
+        q3_fraction=650 / 40000,
+        q4_fraction=1.0 - ((66 + 650) / 40000),
+    ),
 )
 
 result = pms.prepare_amorphous_slit_surface(config)
-print(result.report.prepared_surface)
+print(result.report.final_surface)
 
 pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
 ```
@@ -71,6 +78,9 @@ containing an attach-ready `PoreKit` system and a structured
 `write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
 together with a JSON report in the selected output directory. Object backups are
 written only when `write_object_files=True` is requested explicitly.
+
+For exact functionalized targets, use `prepare_functionalized_amorphous_slit_surface(...)`
+with the same `ExperimentalSiliconStateTarget` and a `SilaneAttachmentConfig`.
 
 
 ## Installation

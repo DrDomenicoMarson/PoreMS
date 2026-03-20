@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>SurfaceComposition &#8212; PoreMS 0.4.0 documentation</title>
+    <title>FunctionalizedSlitResult &#8212; PoreMS 0.4.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
@@ -68,8 +68,8 @@
   <ul class="dropdown-menu localtoc"
       role="menu"
       aria-labelledby="dLabelLocalToc"><ul>
-<li><a class="reference internal" href="#">SurfaceComposition</a><ul>
-<li><a class="reference internal" href="#porems.slit.SurfaceComposition"><code class="docutils literal notranslate"><span class="pre">SurfaceComposition</span></code></a></li>
+<li><a class="reference internal" href="#">FunctionalizedSlitResult</a><ul>
+<li><a class="reference internal" href="#porems.slit.FunctionalizedSlitResult"><code class="docutils literal notranslate"><span class="pre">FunctionalizedSlitResult</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -101,14 +101,14 @@
   <div class="row">
       <div class="col-md-3">
         <div id="sidebar" class="bs-sidenav" role="complementary"><ul>
-<li><a class="reference internal" href="#">SurfaceComposition</a><ul>
-<li><a class="reference internal" href="#porems.slit.SurfaceComposition"><code class="docutils literal notranslate"><span class="pre">SurfaceComposition</span></code></a></li>
+<li><a class="reference internal" href="#">FunctionalizedSlitResult</a><ul>
+<li><a class="reference internal" href="#porems.slit.FunctionalizedSlitResult"><code class="docutils literal notranslate"><span class="pre">FunctionalizedSlitResult</span></code></a></li>
 </ul>
 </li>
 </ul>
 
 <div id="sourcelink">
-  <a href="../_sources/generated/porems.slit.SurfaceComposition.rst.txt"
+  <a href="../_sources/generated/porems.slit.FunctionalizedSlitResult.rst.txt"
      rel="nofollow">Source</a>
 </div>
 <form action="../search.html" method="get">
@@ -123,23 +123,18 @@
     <div class="body col-md-9 content" role="main">
       
   </div>
-<div class=col-md-9 content><section id="surfacecomposition">
-<h1>SurfaceComposition<a class="headerlink" href="#surfacecomposition" title="Link to this heading">¶</a></h1>
+<div class=col-md-9 content><section id="functionalizedslitresult">
+<h1>FunctionalizedSlitResult<a class="headerlink" href="#functionalizedslitresult" title="Link to this heading">¶</a></h1>
 <dl class="py class">
-<dt class="sig sig-object py" id="porems.slit.SurfaceComposition">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">SurfaceComposition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">total_surface_si</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q2_sites</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q3_sites</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q4_sites</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.SurfaceComposition" title="Link to this definition">¶</a></dt>
-<dd><p>Surface-site counts for a slit model.</p>
+<dt class="sig sig-object py" id="porems.slit.FunctionalizedSlitResult">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">FunctionalizedSlitResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">system</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="porems.system.PoreKit.html#porems.system.PoreKit" title="porems.system.PoreKit"><span class="pre">PoreKit</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">report</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="porems.slit.SlitPreparationReport.html#porems.slit.SlitPreparationReport" title="porems.slit.SlitPreparationReport"><span class="pre">SlitPreparationReport</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.FunctionalizedSlitResult" title="Link to this definition">¶</a></dt>
+<dd><p>Prepared functionalized slit system together with its report.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>total_surface_si</strong><span class="classifier">int</span></dt><dd><p>Total number of exposed surface silicon atoms tracked by the slit
-preparation.</p>
+<dt><strong>system</strong><span class="classifier">PoreKit</span></dt><dd><p>Functionalized slit system associated with the preparation report.</p>
 </dd>
-<dt><strong>q2_sites</strong><span class="classifier">int</span></dt><dd><p>Number of geminal silanol surface silicon sites.</p>
-</dd>
-<dt><strong>q3_sites</strong><span class="classifier">int</span></dt><dd><p>Number of single silanol surface silicon sites.</p>
-</dd>
-<dt><strong>q4_sites</strong><span class="classifier">int</span></dt><dd><p>Number of fully condensed surface silicon sites.</p>
+<dt><strong>report</strong><span class="classifier">SlitPreparationReport</span></dt><dd><p>Summary of the generated slit geometry and surface composition.</p>
 </dd>
 </dl>
 </dd>

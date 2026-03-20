@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>prepare_amorphous_slit_surface &#8212; PoreMS 0.4.0 documentation</title>
+    <title>SilaneAttachmentConfig &#8212; PoreMS 0.4.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
@@ -68,8 +68,8 @@
   <ul class="dropdown-menu localtoc"
       role="menu"
       aria-labelledby="dLabelLocalToc"><ul>
-<li><a class="reference internal" href="#">prepare_amorphous_slit_surface</a><ul>
-<li><a class="reference internal" href="#porems.slit.prepare_amorphous_slit_surface"><code class="docutils literal notranslate"><span class="pre">prepare_amorphous_slit_surface()</span></code></a></li>
+<li><a class="reference internal" href="#">SilaneAttachmentConfig</a><ul>
+<li><a class="reference internal" href="#porems.slit.SilaneAttachmentConfig"><code class="docutils literal notranslate"><span class="pre">SilaneAttachmentConfig</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -101,14 +101,14 @@
   <div class="row">
       <div class="col-md-3">
         <div id="sidebar" class="bs-sidenav" role="complementary"><ul>
-<li><a class="reference internal" href="#">prepare_amorphous_slit_surface</a><ul>
-<li><a class="reference internal" href="#porems.slit.prepare_amorphous_slit_surface"><code class="docutils literal notranslate"><span class="pre">prepare_amorphous_slit_surface()</span></code></a></li>
+<li><a class="reference internal" href="#">SilaneAttachmentConfig</a><ul>
+<li><a class="reference internal" href="#porems.slit.SilaneAttachmentConfig"><code class="docutils literal notranslate"><span class="pre">SilaneAttachmentConfig</span></code></a></li>
 </ul>
 </li>
 </ul>
 
 <div id="sourcelink">
-  <a href="../_sources/generated/porems.slit.prepare_amorphous_slit_surface.rst.txt"
+  <a href="../_sources/generated/porems.slit.SilaneAttachmentConfig.rst.txt"
      rel="nofollow">Source</a>
 </div>
 <form action="../search.html" method="get">
@@ -123,29 +123,21 @@
     <div class="body col-md-9 content" role="main">
       
   </div>
-<div class=col-md-9 content><section id="prepare-amorphous-slit-surface">
-<h1>prepare_amorphous_slit_surface<a class="headerlink" href="#prepare-amorphous-slit-surface" title="Link to this heading">¶</a></h1>
-<dl class="py function">
-<dt class="sig sig-object py" id="porems.slit.prepare_amorphous_slit_surface">
-<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">prepare_amorphous_slit_surface</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.prepare_amorphous_slit_surface" title="Link to this definition">¶</a></dt>
-<dd><p>Prepare a bare amorphous slit surface from alpha-aware experimental data.</p>
+<div class=col-md-9 content><section id="silaneattachmentconfig">
+<h1>SilaneAttachmentConfig<a class="headerlink" href="#silaneattachmentconfig" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="porems.slit.SilaneAttachmentConfig">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">SilaneAttachmentConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">molecule</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="porems.molecule.Molecule.html#porems.molecule.Molecule" title="porems.molecule.Molecule"><span class="pre">Molecule</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mount</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.SilaneAttachmentConfig" title="Link to this definition">¶</a></dt>
+<dd><p>Attachment settings for one silane family.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>config</strong><span class="classifier">AmorphousSlitConfig, optional</span></dt><dd><p>Bare slit preparation configuration.</p>
+<dt><strong>molecule</strong><span class="classifier">Molecule</span></dt><dd><p>Base post-condensation ligand fragment used for both single and
+geminal attachment.</p>
 </dd>
-</dl>
+<dt><strong>mount</strong><span class="classifier">int</span></dt><dd><p>Atom id placed onto the selected silicon surface site.</p>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><dl class="simple">
-<dt><strong>result</strong><span class="classifier">SlitPreparationResult</span></dt><dd><p>Attach-ready bare slit system and its preparation report.</p>
-</dd>
-</dl>
-</dd>
-<dt class="field-odd">Raises<span class="colon">:</span></dt>
-<dd class="field-odd"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when the provided target contains non-zero <code class="docutils literal notranslate"><span class="pre">T2/T3</span></code> fractions
-or when the slit cannot realize the requested bare surface.</p>
+<dt><strong>axis</strong><span class="classifier">tuple[int, int]</span></dt><dd><p>Two atom ids defining the molecular attachment axis.</p>
 </dd>
 </dl>
 </dd>

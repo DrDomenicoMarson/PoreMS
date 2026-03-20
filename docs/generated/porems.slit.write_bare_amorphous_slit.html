@@ -127,28 +127,24 @@
 <h1>write_bare_amorphous_slit<a class="headerlink" href="#write-bare-amorphous-slit" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="porems.slit.write_bare_amorphous_slit">
-<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">write_bare_amorphous_slit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.write_bare_amorphous_slit" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">write_bare_amorphous_slit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_object_files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.write_bare_amorphous_slit" title="Link to this definition">¶</a></dt>
 <dd><p>Prepare, finalize, and store a bare amorphous silica slit.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>output_dir</strong><span class="classifier">str</span></dt><dd><p>Output directory for the generated slit files and JSON report.</p>
 </dd>
-<dt><strong>config</strong><span class="classifier">AmorphousSlitConfig, optional</span></dt><dd><p>Slit preparation configuration.</p>
+<dt><strong>config</strong><span class="classifier">AmorphousSlitConfig, optional</span></dt><dd><p>Bare slit preparation configuration.</p>
+</dd>
+<dt><strong>write_object_files</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also serialize the finalized pore structure and full
+<a class="reference internal" href="porems.system.PoreKit.html#porems.system.PoreKit" title="porems.system.PoreKit"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.system.PoreKit</span></code></a> state as <code class="docutils literal notranslate"><span class="pre">.obj</span></code> files. The default is
+<code class="docutils literal notranslate"><span class="pre">False</span></code> so object exports remain an explicit opt-in.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>result</strong><span class="classifier">SlitPreparationResult</span></dt><dd><p>Finalized bare slit system and the preparation report recorded before
-optional grafting.</p>
-</dd>
-</dl>
-</dd>
-<dt class="field-odd">Raises<span class="colon">:</span></dt>
-<dd class="field-odd"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when <a class="reference internal" href="porems.slit.prepare_amorphous_slit_surface.html#porems.slit.prepare_amorphous_slit_surface" title="porems.slit.prepare_amorphous_slit_surface"><code class="xref py py-func docutils literal notranslate"><span class="pre">prepare_amorphous_slit_surface()</span></code></a> cannot generate a
-valid slit for the requested configuration.</p>
+<dt><strong>result</strong><span class="classifier">SlitPreparationResult</span></dt><dd><p>Finalized bare slit system and its preparation report.</p>
 </dd>
 </dl>
 </dd>

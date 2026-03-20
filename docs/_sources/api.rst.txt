@@ -98,13 +98,19 @@ Slit Preparation
 .. autosummary::
     :toctree: generated/
 
-    slit.SurfaceCompositionTarget
+    slit.SiliconStateFractions
+    slit.ExperimentalSiliconStateTarget
     slit.AmorphousSlitConfig
-    slit.SurfaceComposition
+    slit.SiliconStateComposition
     slit.SlitPreparationReport
     slit.SlitPreparationResult
+    slit.SilaneAttachmentConfig
+    slit.FunctionalizedAmorphousSlitConfig
+    slit.FunctionalizedSlitResult
     slit.prepare_amorphous_slit_surface
     slit.write_bare_amorphous_slit
+    slit.prepare_functionalized_amorphous_slit_surface
+    slit.write_functionalized_amorphous_slit
 
 
 .. _utils_api:

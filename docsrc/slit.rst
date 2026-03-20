@@ -19,8 +19,10 @@ generation and surface chemistry.
 Bare Amorphous Slit Preparation
 -------------------------------
 
-PoreMS exposes a high-level API for preparing a periodic bare amorphous silica
-slit together with a structured surface report.
+PoreMS exposes a high-level API for preparing periodic bare and functionalized
+amorphous silica slits together with a structured surface report. The slit
+target is specified through experimental ``Q2/Q3/Q4/T2/T3`` fractions over all
+Si atoms in the sample. For bare slits, ``T2`` and ``T3`` remain zero.
 
 .. code-block:: python
 
@@ -30,17 +32,22 @@ slit together with a structured surface report.
       name="bare_amorphous_silica_slit",
       slit_width_nm=7.0,
       repeat_y=2,
+      surface_target=pms.ExperimentalSiliconStateTarget(
+          q2_fraction=66 / 40000,
+          q3_fraction=650 / 40000,
+          q4_fraction=1.0 - ((66 + 650) / 40000),
+      ),
   )
 
   result = pms.prepare_amorphous_slit_surface(config)
-  print(result.report.prepared_surface)
+  print(result.report.final_surface)
 
   pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
 
 ``prepare_amorphous_slit_surface(...)`` returns a
 ``SlitPreparationResult`` containing an attach-ready ``PoreKit`` system and a
-``SlitPreparationReport`` with the prepared surface composition and siloxane
-summary. ``write_bare_amorphous_slit(...)`` finalizes the prepared slit and
+``SlitPreparationReport`` with the converted alpha-aware target, the prepared
+bare surface, and the final surface composition. ``write_bare_amorphous_slit(...)`` finalizes the prepared slit and
 stores the main structure files together with a JSON report. Object backups are
 written only when ``write_object_files=True`` is requested explicitly.
 
@@ -48,9 +55,46 @@ The slit-preparation API is designed for the periodic bare-silica slit builder:
 
 * zero exterior sites after preparation
 * replicated amorphous template slabs along ``y``
-* surface-state targeting through ``Q2/Q3/Q4`` fractions
+* surface-state targeting through alpha-aware ``Q2/Q3/Q4/T2/T3`` fractions
 * bare-slit exports written in one call through
   ``write_bare_amorphous_slit(...)``
+
+
+Functionalized Amorphous Slit Preparation
+-----------------------------------------
+
+Exact functionalized targets use the same experimental target object together
+with a silane attachment definition. ``T2`` states are created from geminal
+sites and ``T3`` states from single sites.
+
+.. code-block:: python
+
+  import porems as pms
+
+  slit_config = pms.AmorphousSlitConfig(
+      name="functionalized_amorphous_silica_slit",
+      slit_width_nm=7.0,
+      repeat_y=1,
+      surface_target=pms.ExperimentalSiliconStateTarget(
+          q2_fraction=63 / 20000,
+          q3_fraction=648 / 20000,
+          q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
+          t2_fraction=3 / 20000,
+          t3_fraction=4 / 20000,
+      ),
+  )
+
+  functionalized = pms.FunctionalizedAmorphousSlitConfig(
+      slit_config=slit_config,
+      ligand=pms.SilaneAttachmentConfig(
+          molecule=pms.gen.tms(),
+          mount=0,
+          axis=(0, 1),
+      ),
+  )
+
+  result = pms.prepare_functionalized_amorphous_slit_surface(functionalized)
+  print(result.report.final_surface)
 
 
 Create surface molecules

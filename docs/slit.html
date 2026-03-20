@@ -70,6 +70,7 @@
       aria-labelledby="dLabelLocalToc"><ul>
 <li><a class="reference internal" href="#">Slit Preparation Guide</a><ul>
 <li><a class="reference internal" href="#bare-amorphous-slit-preparation">Bare Amorphous Slit Preparation</a></li>
+<li><a class="reference internal" href="#functionalized-amorphous-slit-preparation">Functionalized Amorphous Slit Preparation</a></li>
 <li><a class="reference internal" href="#create-surface-molecules">Create surface molecules</a></li>
 <li><a class="reference internal" href="#search-execution-policy">Search execution policy</a></li>
 <li><a class="reference internal" href="#create-pore-system">Create pore system</a></li>
@@ -107,6 +108,7 @@
         <div id="sidebar" class="bs-sidenav" role="complementary"><ul>
 <li><a class="reference internal" href="#">Slit Preparation Guide</a><ul>
 <li><a class="reference internal" href="#bare-amorphous-slit-preparation">Bare Amorphous Slit Preparation</a></li>
+<li><a class="reference internal" href="#functionalized-amorphous-slit-preparation">Functionalized Amorphous Slit Preparation</a></li>
 <li><a class="reference internal" href="#create-surface-molecules">Create surface molecules</a></li>
 <li><a class="reference internal" href="#search-execution-policy">Search execution policy</a></li>
 <li><a class="reference internal" href="#create-pore-system">Create pore system</a></li>
@@ -141,35 +143,77 @@ left to the user so that the package documentation stays focused on structure
 generation and surface chemistry.</p>
 <section id="bare-amorphous-slit-preparation">
 <h2>Bare Amorphous Slit Preparation<a class="headerlink" href="#bare-amorphous-slit-preparation" title="Link to this heading">¶</a></h2>
-<p>PoreMS exposes a high-level API for preparing a periodic bare amorphous silica
-slit together with a structured surface report.</p>
+<p>PoreMS exposes a high-level API for preparing periodic bare and functionalized
+amorphous silica slits together with a structured surface report. The slit
+target is specified through experimental <code class="docutils literal notranslate"><span class="pre">Q2/Q3/Q4/T2/T3</span></code> fractions over all
+Si atoms in the sample. For bare slits, <code class="docutils literal notranslate"><span class="pre">T2</span></code> and <code class="docutils literal notranslate"><span class="pre">T3</span></code> remain zero.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">porems</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pms</span>
 
 <span class="n">config</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">AmorphousSlitConfig</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">&quot;bare_amorphous_silica_slit&quot;</span><span class="p">,</span>
     <span class="n">slit_width_nm</span><span class="o">=</span><span class="mf">7.0</span><span class="p">,</span>
     <span class="n">repeat_y</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">surface_target</span><span class="o">=</span><span class="n">pms</span><span class="o">.</span><span class="n">ExperimentalSiliconStateTarget</span><span class="p">(</span>
+        <span class="n">q2_fraction</span><span class="o">=</span><span class="mi">66</span> <span class="o">/</span> <span class="mi">40000</span><span class="p">,</span>
+        <span class="n">q3_fraction</span><span class="o">=</span><span class="mi">650</span> <span class="o">/</span> <span class="mi">40000</span><span class="p">,</span>
+        <span class="n">q4_fraction</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">-</span> <span class="p">((</span><span class="mi">66</span> <span class="o">+</span> <span class="mi">650</span><span class="p">)</span> <span class="o">/</span> <span class="mi">40000</span><span class="p">),</span>
+    <span class="p">),</span>
 <span class="p">)</span>
 
 <span class="n">result</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">prepare_amorphous_slit_surface</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">report</span><span class="o">.</span><span class="n">prepared_surface</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">report</span><span class="o">.</span><span class="n">final_surface</span><span class="p">)</span>
 
 <span class="n">pms</span><span class="o">.</span><span class="n">write_bare_amorphous_slit</span><span class="p">(</span><span class="s2">&quot;output/bare_amorphous_slit&quot;</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">prepare_amorphous_slit_surface(...)</span></code> returns a
 <code class="docutils literal notranslate"><span class="pre">SlitPreparationResult</span></code> containing an attach-ready <code class="docutils literal notranslate"><span class="pre">PoreKit</span></code> system and a
-<code class="docutils literal notranslate"><span class="pre">SlitPreparationReport</span></code> with the prepared surface composition and siloxane
-summary. <code class="docutils literal notranslate"><span class="pre">write_bare_amorphous_slit(...)</span></code> finalizes the prepared slit and
-stores the main structure files together with a JSON report.</p>
+<code class="docutils literal notranslate"><span class="pre">SlitPreparationReport</span></code> with the converted alpha-aware target, the prepared
+bare surface, and the final surface composition. <code class="docutils literal notranslate"><span class="pre">write_bare_amorphous_slit(...)</span></code> finalizes the prepared slit and
+stores the main structure files together with a JSON report. Object backups are
+written only when <code class="docutils literal notranslate"><span class="pre">write_object_files=True</span></code> is requested explicitly.</p>
 <p>The slit-preparation API is designed for the periodic bare-silica slit builder:</p>
 <ul class="simple">
 <li><p>zero exterior sites after preparation</p></li>
 <li><p>replicated amorphous template slabs along <code class="docutils literal notranslate"><span class="pre">y</span></code></p></li>
-<li><p>surface-state targeting through <code class="docutils literal notranslate"><span class="pre">Q2/Q3/Q4</span></code> fractions</p></li>
+<li><p>surface-state targeting through alpha-aware <code class="docutils literal notranslate"><span class="pre">Q2/Q3/Q4/T2/T3</span></code> fractions</p></li>
 <li><p>bare-slit exports written in one call through
 <code class="docutils literal notranslate"><span class="pre">write_bare_amorphous_slit(...)</span></code></p></li>
 </ul>
+</section>
+<section id="functionalized-amorphous-slit-preparation">
+<h2>Functionalized Amorphous Slit Preparation<a class="headerlink" href="#functionalized-amorphous-slit-preparation" title="Link to this heading">¶</a></h2>
+<p>Exact functionalized targets use the same experimental target object together
+with a silane attachment definition. <code class="docutils literal notranslate"><span class="pre">T2</span></code> states are created from geminal
+sites and <code class="docutils literal notranslate"><span class="pre">T3</span></code> states from single sites.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">porems</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pms</span>
+
+<span class="n">slit_config</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">AmorphousSlitConfig</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;functionalized_amorphous_silica_slit&quot;</span><span class="p">,</span>
+    <span class="n">slit_width_nm</span><span class="o">=</span><span class="mf">7.0</span><span class="p">,</span>
+    <span class="n">repeat_y</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">surface_target</span><span class="o">=</span><span class="n">pms</span><span class="o">.</span><span class="n">ExperimentalSiliconStateTarget</span><span class="p">(</span>
+        <span class="n">q2_fraction</span><span class="o">=</span><span class="mi">63</span> <span class="o">/</span> <span class="mi">20000</span><span class="p">,</span>
+        <span class="n">q3_fraction</span><span class="o">=</span><span class="mi">648</span> <span class="o">/</span> <span class="mi">20000</span><span class="p">,</span>
+        <span class="n">q4_fraction</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">-</span> <span class="p">((</span><span class="mi">63</span> <span class="o">+</span> <span class="mi">648</span> <span class="o">+</span> <span class="mi">3</span> <span class="o">+</span> <span class="mi">4</span><span class="p">)</span> <span class="o">/</span> <span class="mi">20000</span><span class="p">),</span>
+        <span class="n">t2_fraction</span><span class="o">=</span><span class="mi">3</span> <span class="o">/</span> <span class="mi">20000</span><span class="p">,</span>
+        <span class="n">t3_fraction</span><span class="o">=</span><span class="mi">4</span> <span class="o">/</span> <span class="mi">20000</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">)</span>
+
+<span class="n">functionalized</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">FunctionalizedAmorphousSlitConfig</span><span class="p">(</span>
+    <span class="n">slit_config</span><span class="o">=</span><span class="n">slit_config</span><span class="p">,</span>
+    <span class="n">ligand</span><span class="o">=</span><span class="n">pms</span><span class="o">.</span><span class="n">SilaneAttachmentConfig</span><span class="p">(</span>
+        <span class="n">molecule</span><span class="o">=</span><span class="n">pms</span><span class="o">.</span><span class="n">gen</span><span class="o">.</span><span class="n">tms</span><span class="p">(),</span>
+        <span class="n">mount</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">),</span>
+<span class="p">)</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">prepare_functionalized_amorphous_slit_surface</span><span class="p">(</span><span class="n">functionalized</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">report</span><span class="o">.</span><span class="n">final_surface</span><span class="p">)</span>
+</pre></div>
+</div>
 </section>
 <section id="create-surface-molecules">
 <h2>Create surface molecules<a class="headerlink" href="#create-surface-molecules" title="Link to this heading">¶</a></h2>
@@ -250,10 +294,10 @@ surface group.</p>
 <a class="reference internal image-reference" href="_images/pore.png"><img alt="_images/pore.png" src="_images/pore.png" style="width: 50%;" />
 </a>
 </figure>
-<p>Once the generation is done, store the structure and preferably the object for
-future analysis. Furthermore, a master topology with the number of residues and
-a topology containing grid molecule parameters should be created. This is all
-handled by the store function</p>
+<p>Once the generation is done, store the structure. If you also want Python-side
+backup objects for later inspection, request them explicitly. The same helper
+also writes a master topology with the number of residues and a topology
+containing grid molecule parameters.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pore</span><span class="o">.</span><span class="n">store</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -265,9 +309,10 @@ companion files needed to keep the silica model reproducible:</p>
 <ul class="simple">
 <li><p>structure files such as <code class="docutils literal notranslate"><span class="pre">.gro</span></code> for coordinates and periodic box lengths</p></li>
 <li><p>topology helpers such as <code class="docutils literal notranslate"><span class="pre">.top</span></code> and <code class="docutils literal notranslate"><span class="pre">grid.itp</span></code> for the silica scaffold</p></li>
-<li><p>serialized <code class="docutils literal notranslate"><span class="pre">.obj</span></code> backups for later inspection in Python</p></li>
 <li><p>YAML or JSON metadata summaries for the generated geometry and surface state</p></li>
 </ul>
+<p>Serialized <code class="docutils literal notranslate"><span class="pre">.obj</span></code> backups remain available as an explicit opt-in through
+<code class="docutils literal notranslate"><span class="pre">write_object_files=True</span></code> when calling the storage helpers.</p>
 <p>PoreMS intentionally stops at generating the silica model and its companion
 build artifacts. Any downstream simulation setup should be defined separately
 by the user for the specific force field and engine they choose.</p>

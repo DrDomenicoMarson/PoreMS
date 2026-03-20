@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>prepare_amorphous_slit_surface &#8212; PoreMS 0.4.0 documentation</title>
+    <title>write_functionalized_amorphous_slit &#8212; PoreMS 0.4.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
@@ -68,8 +68,8 @@
   <ul class="dropdown-menu localtoc"
       role="menu"
       aria-labelledby="dLabelLocalToc"><ul>
-<li><a class="reference internal" href="#">prepare_amorphous_slit_surface</a><ul>
-<li><a class="reference internal" href="#porems.slit.prepare_amorphous_slit_surface"><code class="docutils literal notranslate"><span class="pre">prepare_amorphous_slit_surface()</span></code></a></li>
+<li><a class="reference internal" href="#">write_functionalized_amorphous_slit</a><ul>
+<li><a class="reference internal" href="#porems.slit.write_functionalized_amorphous_slit"><code class="docutils literal notranslate"><span class="pre">write_functionalized_amorphous_slit()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -101,14 +101,14 @@
   <div class="row">
       <div class="col-md-3">
         <div id="sidebar" class="bs-sidenav" role="complementary"><ul>
-<li><a class="reference internal" href="#">prepare_amorphous_slit_surface</a><ul>
-<li><a class="reference internal" href="#porems.slit.prepare_amorphous_slit_surface"><code class="docutils literal notranslate"><span class="pre">prepare_amorphous_slit_surface()</span></code></a></li>
+<li><a class="reference internal" href="#">write_functionalized_amorphous_slit</a><ul>
+<li><a class="reference internal" href="#porems.slit.write_functionalized_amorphous_slit"><code class="docutils literal notranslate"><span class="pre">write_functionalized_amorphous_slit()</span></code></a></li>
 </ul>
 </li>
 </ul>
 
 <div id="sourcelink">
-  <a href="../_sources/generated/porems.slit.prepare_amorphous_slit_surface.rst.txt"
+  <a href="../_sources/generated/porems.slit.write_functionalized_amorphous_slit.rst.txt"
      rel="nofollow">Source</a>
 </div>
 <form action="../search.html" method="get">
@@ -123,29 +123,28 @@
     <div class="body col-md-9 content" role="main">
       
   </div>
-<div class=col-md-9 content><section id="prepare-amorphous-slit-surface">
-<h1>prepare_amorphous_slit_surface<a class="headerlink" href="#prepare-amorphous-slit-surface" title="Link to this heading">¶</a></h1>
+<div class=col-md-9 content><section id="write-functionalized-amorphous-slit">
+<h1>write_functionalized_amorphous_slit<a class="headerlink" href="#write-functionalized-amorphous-slit" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="porems.slit.prepare_amorphous_slit_surface">
-<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">prepare_amorphous_slit_surface</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.prepare_amorphous_slit_surface" title="Link to this definition">¶</a></dt>
-<dd><p>Prepare a bare amorphous slit surface from alpha-aware experimental data.</p>
+<dt class="sig sig-object py" id="porems.slit.write_functionalized_amorphous_slit">
+<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">write_functionalized_amorphous_slit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_object_files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.write_functionalized_amorphous_slit" title="Link to this definition">¶</a></dt>
+<dd><p>Prepare, finalize, and store a functionalized amorphous silica slit.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>config</strong><span class="classifier">AmorphousSlitConfig, optional</span></dt><dd><p>Bare slit preparation configuration.</p>
+<dt><strong>output_dir</strong><span class="classifier">str</span></dt><dd><p>Output directory for the generated slit files and JSON report.</p>
+</dd>
+<dt><strong>config</strong><span class="classifier">FunctionalizedAmorphousSlitConfig</span></dt><dd><p>Functionalized slit preparation configuration.</p>
+</dd>
+<dt><strong>write_object_files</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also serialize the finalized pore structure and full
+<a class="reference internal" href="porems.system.PoreKit.html#porems.system.PoreKit" title="porems.system.PoreKit"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.system.PoreKit</span></code></a> state as <code class="docutils literal notranslate"><span class="pre">.obj</span></code> files. The default is
+<code class="docutils literal notranslate"><span class="pre">False</span></code> so object exports remain an explicit opt-in.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>result</strong><span class="classifier">SlitPreparationResult</span></dt><dd><p>Attach-ready bare slit system and its preparation report.</p>
-</dd>
-</dl>
-</dd>
-<dt class="field-odd">Raises<span class="colon">:</span></dt>
-<dd class="field-odd"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when the provided target contains non-zero <code class="docutils literal notranslate"><span class="pre">T2/T3</span></code> fractions
-or when the slit cannot realize the requested bare surface.</p>
+<dt><strong>result</strong><span class="classifier">FunctionalizedSlitResult</span></dt><dd><p>Finalized functionalized slit system and its preparation report.</p>
 </dd>
 </dl>
 </dd>

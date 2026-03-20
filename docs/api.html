@@ -282,26 +282,44 @@
 <span id="slit-api"></span><h2>Slit Preparation<a class="headerlink" href="#slit-preparation" title="Link to this heading">¶</a></h2>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SurfaceCompositionTarget.html#porems.slit.SurfaceCompositionTarget" title="porems.slit.SurfaceCompositionTarget"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SurfaceCompositionTarget</span></code></a>(q2_fraction, ...)</p></td>
-<td><p>Target fractions for the exposed surface silicon population.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SiliconStateFractions.html#porems.slit.SiliconStateFractions" title="porems.slit.SiliconStateFractions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SiliconStateFractions</span></code></a>(q2_fraction, ...)</p></td>
+<td><p>Five-state silicon surface fractions.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.AmorphousSlitConfig.html#porems.slit.AmorphousSlitConfig" title="porems.slit.AmorphousSlitConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.AmorphousSlitConfig</span></code></a>(name, ...)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.ExperimentalSiliconStateTarget.html#porems.slit.ExperimentalSiliconStateTarget" title="porems.slit.ExperimentalSiliconStateTarget"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.ExperimentalSiliconStateTarget</span></code></a>(...[, ...])</p></td>
+<td><p>Experimental silicon-state fractions over all Si atoms in the sample.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.AmorphousSlitConfig.html#porems.slit.AmorphousSlitConfig" title="porems.slit.AmorphousSlitConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.AmorphousSlitConfig</span></code></a>(name, ...)</p></td>
 <td><p>Configuration for a periodic bare amorphous silica slit.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SurfaceComposition.html#porems.slit.SurfaceComposition" title="porems.slit.SurfaceComposition"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SurfaceComposition</span></code></a>(total_surface_si, ...)</p></td>
-<td><p>Surface-site counts for a slit model.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.SiliconStateComposition.html#porems.slit.SiliconStateComposition" title="porems.slit.SiliconStateComposition"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SiliconStateComposition</span></code></a>(...[, ...])</p></td>
+<td><p>Integer five-state silicon surface composition.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.SlitPreparationReport.html#porems.slit.SlitPreparationReport" title="porems.slit.SlitPreparationReport"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitPreparationReport</span></code></a>(name, ...)</p></td>
-<td><p>Summary of the prepared amorphous slit surface.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SlitPreparationReport.html#porems.slit.SlitPreparationReport" title="porems.slit.SlitPreparationReport"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitPreparationReport</span></code></a>(name, ...)</p></td>
+<td><p>Summary of a prepared or functionalized amorphous slit.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SlitPreparationResult.html#porems.slit.SlitPreparationResult" title="porems.slit.SlitPreparationResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitPreparationResult</span></code></a>(system, report)</p></td>
-<td><p>Prepared slit system together with its surface report.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.SlitPreparationResult.html#porems.slit.SlitPreparationResult" title="porems.slit.SlitPreparationResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitPreparationResult</span></code></a>(system, report)</p></td>
+<td><p>Prepared bare slit system together with its report.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SilaneAttachmentConfig.html#porems.slit.SilaneAttachmentConfig" title="porems.slit.SilaneAttachmentConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SilaneAttachmentConfig</span></code></a>(molecule, mount, ...)</p></td>
+<td><p>Attachment settings for one silane family.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.FunctionalizedAmorphousSlitConfig.html#porems.slit.FunctionalizedAmorphousSlitConfig" title="porems.slit.FunctionalizedAmorphousSlitConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.FunctionalizedAmorphousSlitConfig</span></code></a>(...)</p></td>
+<td><p>Configuration for an exactly targeted functionalized amorphous slit.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.FunctionalizedSlitResult.html#porems.slit.FunctionalizedSlitResult" title="porems.slit.FunctionalizedSlitResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.FunctionalizedSlitResult</span></code></a>(system, report)</p></td>
+<td><p>Prepared functionalized slit system together with its report.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.prepare_amorphous_slit_surface.html#porems.slit.prepare_amorphous_slit_surface" title="porems.slit.prepare_amorphous_slit_surface"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.prepare_amorphous_slit_surface</span></code></a>([config])</p></td>
-<td><p>Prepare an amorphous silica slit surface with a target Q-state mix.</p></td>
+<td><p>Prepare a bare amorphous slit surface from alpha-aware experimental data.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.write_bare_amorphous_slit.html#porems.slit.write_bare_amorphous_slit" title="porems.slit.write_bare_amorphous_slit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.write_bare_amorphous_slit</span></code></a>(output_dir[, ...])</p></td>
 <td><p>Prepare, finalize, and store a bare amorphous silica slit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.prepare_functionalized_amorphous_slit_surface.html#porems.slit.prepare_functionalized_amorphous_slit_surface" title="porems.slit.prepare_functionalized_amorphous_slit_surface"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.prepare_functionalized_amorphous_slit_surface</span></code></a>(config)</p></td>
+<td><p>Prepare an exactly targeted functionalized amorphous slit surface.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.write_functionalized_amorphous_slit.html#porems.slit.write_functionalized_amorphous_slit" title="porems.slit.write_functionalized_amorphous_slit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.write_functionalized_amorphous_slit</span></code></a>(...)</p></td>
+<td><p>Prepare, finalize, and store a functionalized amorphous silica slit.</p></td>
 </tr>
 </tbody>
 </table>

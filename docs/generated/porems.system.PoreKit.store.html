@@ -127,7 +127,7 @@
 <h1>PoreKit.store<a class="headerlink" href="#porekit-store" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.system.PoreKit.store">
-<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">store</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">link</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.store" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">PoreKit.</span></span><span class="sig-name descname"><span class="pre">store</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">link</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_object_files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.system.PoreKit.store" title="Link to this definition">¶</a></dt>
 <dd><p>Write the finalized pore system and companion simulation files.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -136,6 +136,10 @@
 </dd>
 <dt><strong>sort_list</strong><span class="classifier">list, optional</span></dt><dd><p>Sorting list for output structure files. Defaults to the internal
 builder ordering.</p>
+</dd>
+<dt><strong>write_object_files</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also serialize the pore structure and full
+<a class="reference internal" href="porems.system.PoreKit.html#porems.system.PoreKit" title="porems.system.PoreKit"><code class="xref py py-class docutils literal notranslate"><span class="pre">PoreKit</span></code></a> state as <code class="docutils literal notranslate"><span class="pre">.obj</span></code> files. The default keeps object
+serialization disabled unless the caller explicitly requests it.</p>
 </dd>
 </dl>
 </dd>

@@ -5,9 +5,9 @@
     </div>
     <div class=col-md-9 content>
 
-SurfaceCompositionTarget
-========================
+SilaneAttachmentConfig
+======================
 
 .. currentmodule:: porems.slit
 
-.. autoclass:: SurfaceCompositionTarget
+.. autoclass:: SilaneAttachmentConfig

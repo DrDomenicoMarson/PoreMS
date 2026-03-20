@@ -5,9 +5,9 @@
     </div>
     <div class=col-md-9 content>
 
-SurfaceComposition
-==================
+FunctionalizedSlitResult
+========================
 
 .. currentmodule:: porems.slit
 
-.. autoclass:: SurfaceComposition
+.. autoclass:: FunctionalizedSlitResult
