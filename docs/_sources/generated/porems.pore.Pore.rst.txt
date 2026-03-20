@@ -6,6 +6,8 @@
 Pore
 ====
 
+.. currentmodule:: porems.pore
+
 .. autoclass:: Pore
 
 
