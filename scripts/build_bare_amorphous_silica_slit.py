@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare and store a fully periodic bare amorphous silica slit."""
+"""Prepare and store a periodic functionalized amorphous silica slit."""
 
 
 import os
@@ -11,18 +11,19 @@ import porems as pms
 
 @dataclass(frozen=True)
 class ScriptConfig:
-    """Internal configuration for the bare-slit builder script.
+    """Internal configuration for the functionalized-slit builder script.
 
     Parameters
     ----------
     output_dir : str
         Output directory for the stored slit system and metadata files.
-    slit_config : AmorphousSlitConfig
-        Slit-preparation settings used to generate the stored slit.
+    slit_config : FunctionalizedAmorphousSlitConfig
+        Functionalized slit-preparation settings used to generate the stored
+        slit.
     """
 
     output_dir: str
-    slit_config: pms.AmorphousSlitConfig
+    slit_config: pms.FunctionalizedAmorphousSlitConfig
 
 
 def build_script_config():
@@ -34,25 +35,36 @@ def build_script_config():
         Output path and slit-preparation settings used by this script.
     """
     surface_target = pms.ExperimentalSiliconStateTarget(
-        q2_fraction=66 / 20000,
-        q3_fraction=652 / 20000,
-        q4_fraction=1.0 - ((66 + 652) / 20000),
+        q2_fraction=1.01 / 100.0,
+        q3_fraction=12.75 / 100.0,
+        q4_fraction=68.58 / 100.0,
+        t2_fraction=6.22 / 100.0,
+        t3_fraction=11.44 / 100.0,
+        alpha_override=0.328,
     )
-    slit_config = pms.AmorphousSlitConfig(
-        name="bare_amorphous_silica_slit",
+    bare_slit = pms.AmorphousSlitConfig(
+        name="functionalized_amorphous_silica_slit",
         slit_width_nm=7.0,
         repeat_y=1,
         temperature_k=300.0,
         surface_target=surface_target,
     )
+    slit_config = pms.FunctionalizedAmorphousSlitConfig(
+        slit_config=bare_slit,
+        ligand=pms.SilaneAttachmentConfig(
+            molecule=pms.gen.tms(),
+            mount=0,
+            axis=(0, 1),
+        ),
+    )
     return ScriptConfig(
-        output_dir=os.path.join("output", "bare_amorphous_silica_slit"),
+        output_dir=os.path.join("output", "functionalized_amorphous_silica_slit"),
         slit_config=slit_config,
     )
 
 
 def main():
-    """Prepare and store the bare amorphous silica slit.
+    """Prepare and store the functionalized amorphous silica slit.
 
     Returns
     -------
@@ -61,13 +73,13 @@ def main():
     """
     script_config = build_script_config()
     output_dir = os.path.abspath(script_config.output_dir)
-    result = pms.write_bare_amorphous_slit(
+    result = pms.write_functionalized_amorphous_slit(
         output_dir,
         config=script_config.slit_config,
     )
     report = result.report
 
-    print(f"Stored slit in {output_dir}")
+    print(f"Stored functionalized slit in {output_dir}")
     print(
         "Box (nm): "
         f"{report.box_nm[0]:.3f} x {report.box_nm[1]:.3f} x {report.box_nm[2]:.3f}"
@@ -77,12 +89,28 @@ def main():
     print(f"Exterior sites: {report.site_ex}")
     print(f"Alpha (auto/effective): {report.alpha_auto:.5f}/{report.alpha_effective:.5f}")
     print(
+        "Experimental Q2/Q3/Q4/T2/T3 (%): "
+        f"{100.0 * report.experimental_target.q2_fraction:.2f}/"
+        f"{100.0 * report.experimental_target.q3_fraction:.2f}/"
+        f"{100.0 * report.experimental_target.q4_fraction:.2f}/"
+        f"{100.0 * report.experimental_target.t2_fraction:.2f}/"
+        f"{100.0 * report.experimental_target.t3_fraction:.2f}"
+    )
+    print(
         "Siloxane search window (nm): "
         f"{report.siloxane_distance_range_nm[0]:.3f}-"
         f"{report.siloxane_distance_range_nm[1]:.3f}"
     )
     print(
-        "Surface Q2/Q3/Q4/T2/T3 counts: "
+        "Target Q2/Q3/Q4/T2/T3 counts: "
+        f"{report.target_surface.q2_sites}/"
+        f"{report.target_surface.q3_sites}/"
+        f"{report.target_surface.q4_sites}/"
+        f"{report.target_surface.t2_sites}/"
+        f"{report.target_surface.t3_sites}"
+    )
+    print(
+        "Final Q2/Q3/Q4/T2/T3 counts: "
         f"{report.final_surface.q2_sites}/"
         f"{report.final_surface.q3_sites}/"
         f"{report.final_surface.q4_sites}/"

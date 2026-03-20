@@ -142,6 +142,12 @@ class AmorphousSlitConfig:
     surface_fraction_tolerance : float, optional
         Allowed absolute fraction deviation per silicon state when the exact
         integer target cannot be realized on the current slit.
+    search_policy : SearchPolicy, optional
+        Connectivity-search execution policy passed to
+        :meth:`porems.system.PoreKit.build`. Use
+        ``SearchPolicy(execution=SearchExecution.SERIAL)`` from notebooks or
+        other non-file-backed entrypoints to avoid multiprocessing fallback
+        warnings during Si-O bond reconstruction.
     template_split_pairs : tuple, optional
         Template-specific bond pairs that must be disconnected after
         reconstructing the amorphous connectivity matrix.
@@ -161,6 +167,7 @@ class AmorphousSlitConfig:
     amorph_bond_range_nm: tuple[float, float] = (0.160 - 0.02, 0.160 + 0.02)
     siloxane_distance_range_nm: tuple[float, float] = (0.40, 0.65)
     surface_fraction_tolerance: float = 0.005
+    search_policy: pms.SearchPolicy = field(default_factory=pms.SearchPolicy)
     template_split_pairs: tuple[tuple[int, int], ...] = ((57790, 2524),)
 
     def __post_init__(self):
@@ -180,6 +187,8 @@ class AmorphousSlitConfig:
             raise ValueError("The temperature must be positive.")
         if self.surface_fraction_tolerance < 0:
             raise ValueError("The surface fraction tolerance must be non-negative.")
+        if not isinstance(self.search_policy, pms.SearchPolicy):
+            raise TypeError("The search policy must be a SearchPolicy instance.")
 
 
 @dataclass(frozen=True)
@@ -1436,7 +1445,10 @@ def _build_base_slit_system(config):
 
     system = pms.PoreKit()
     system.structure(replicated)
-    system.build(bonds=list(config.amorph_bond_range_nm))
+    system.build(
+        bonds=list(config.amorph_bond_range_nm),
+        search_policy=config.search_policy,
+    )
     _duplicate_template_splits(system._matrix, base.get_num(), config.repeat_y, config.template_split_pairs)
 
     system.add_shape(system.shape_slit(config.slit_width_nm, centroid=system.centroid()), hydro=0)

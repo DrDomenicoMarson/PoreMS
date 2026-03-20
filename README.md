@@ -78,6 +78,10 @@ containing an attach-ready `PoreKit` system and a structured
 `write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
 together with a JSON report in the selected output directory. Object backups are
 written only when `write_object_files=True` is requested explicitly.
+From notebooks or `python -c`, set
+`search_policy=pms.SearchPolicy(execution=pms.SearchExecution.SERIAL)` on
+`AmorphousSlitConfig` to suppress multiprocessing fallback warnings during
+connectivity search.
 
 For exact functionalized targets, use `prepare_functionalized_amorphous_slit_surface(...)`
 with the same `ExperimentalSiliconStateTarget` and a `SilaneAttachmentConfig`.

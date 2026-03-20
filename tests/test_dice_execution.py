@@ -160,6 +160,34 @@ print(json.dumps({
         self.assertEqual(payload["length"], len(self.expected))
         self.assertEqual(payload["warnings"], [])
 
+    def test_porekit_build_serial_succeeds_without_warning_for_python_dash_c(self):
+        code = """
+import json
+import warnings
+import porems as pms
+
+block = pms.BetaCristobalit().generate([2, 2, 2], "z")
+kit = pms.PoreKit()
+kit.structure(block)
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    kit.build(
+        search_policy=pms.SearchPolicy(
+            execution=pms.SearchExecution.SERIAL,
+        ),
+    )
+print(json.dumps({
+    "matrix_size": len(kit._matrix.get_matrix()),
+    "warnings": [str(item.message) for item in caught],
+}))
+"""
+        result = self._run_subprocess(code)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+        payload = json.loads(result.stdout.strip())
+        self.assertGreater(payload["matrix_size"], 0)
+        self.assertEqual(payload["warnings"], [])
+
     def test_processes_raise_runtime_error_for_python_dash_c(self):
         code = """
 import json

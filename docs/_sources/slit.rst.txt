@@ -50,6 +50,10 @@ Si atoms in the sample. For bare slits, ``T2`` and ``T3`` remain zero.
 bare surface, and the final surface composition. ``write_bare_amorphous_slit(...)`` finalizes the prepared slit and
 stores the main structure files together with a JSON report. Object backups are
 written only when ``write_object_files=True`` is requested explicitly.
+When running from notebooks or other non-file-backed entrypoints, pass
+``search_policy=pms.SearchPolicy(execution=pms.SearchExecution.SERIAL)`` in
+``AmorphousSlitConfig`` to avoid multiprocessing fallback warnings during the
+initial Si-O connectivity search.
 
 The slit-preparation API is designed for the periodic bare-silica slit builder:
 
