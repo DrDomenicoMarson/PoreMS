@@ -1927,9 +1927,9 @@ def write_bare_amorphous_slit(
     config=None,
     write_object_files=False,
     write_pdb=False,
-    write_pdb_conect=False,
+    write_pdb_conect=True,
     write_cif=False,
-    write_cif_bonds=False,
+    write_cif_bonds=True,
 ):
     """Prepare, finalize, and store a bare amorphous silica slit.
 
@@ -1946,13 +1946,14 @@ def write_bare_amorphous_slit(
     write_pdb : bool, optional
         When ``True``, also write a PDB structure file for inspection.
     write_pdb_conect : bool, optional
-        When ``True``, emit inspection-oriented ``CONECT`` records in the
-        written PDB file. This flag implies PDB output.
+        When ``True`` (the default), emit inspection-oriented ``CONECT``
+        records in the written PDB file whenever PDB output is requested.
     write_cif : bool, optional
         When ``True``, also write an mmCIF structure file for inspection.
     write_cif_bonds : bool, optional
-        When ``True``, emit an inspection-oriented ``_struct_conn`` loop in
-        the written mmCIF file. This flag implies mmCIF output.
+        When ``True`` (the default), emit an inspection-oriented
+        ``_struct_conn`` loop in the written mmCIF file whenever mmCIF output
+        is requested.
 
     Returns
     -------
@@ -1984,9 +1985,9 @@ def write_functionalized_amorphous_slit(
     config,
     write_object_files=False,
     write_pdb=False,
-    write_pdb_conect=False,
+    write_pdb_conect=True,
     write_cif=False,
-    write_cif_bonds=False,
+    write_cif_bonds=True,
 ):
     """Prepare, finalize, and store a functionalized amorphous silica slit.
 
@@ -2003,13 +2004,14 @@ def write_functionalized_amorphous_slit(
     write_pdb : bool, optional
         When ``True``, also write a PDB structure file for inspection.
     write_pdb_conect : bool, optional
-        When ``True``, emit inspection-oriented ``CONECT`` records in the
-        written PDB file. This flag implies PDB output.
+        When ``True`` (the default), emit inspection-oriented ``CONECT``
+        records in the written PDB file whenever PDB output is requested.
     write_cif : bool, optional
         When ``True``, also write an mmCIF structure file for inspection.
     write_cif_bonds : bool, optional
-        When ``True``, emit an inspection-oriented ``_struct_conn`` loop in
-        the written mmCIF file. This flag implies mmCIF output.
+        When ``True`` (the default), emit an inspection-oriented
+        ``_struct_conn`` loop in the written mmCIF file whenever mmCIF output
+        is requested.
 
     Returns
     -------

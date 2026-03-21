@@ -1507,9 +1507,9 @@ class PoreKit():
         sort_list=None,
         write_object_files=False,
         write_pdb=False,
-        write_pdb_conect=False,
+        write_pdb_conect=True,
         write_cif=False,
-        write_cif_bonds=False,
+        write_cif_bonds=True,
     ):
         """Write the finalized pore system and companion simulation files.
 
@@ -1528,13 +1528,14 @@ class PoreKit():
             When ``True``, also write a PDB structure file alongside the
             default GROMACS outputs.
         write_pdb_conect : bool, optional
-            When ``True``, emit inspection-oriented ``CONECT`` records in the
-            written PDB file. This flag implies PDB output.
+            When ``True`` (the default), emit inspection-oriented ``CONECT``
+            records in the written PDB file whenever PDB output is requested.
         write_cif : bool, optional
             When ``True``, also write an mmCIF structure file.
         write_cif_bonds : bool, optional
-            When ``True``, emit an inspection-oriented ``_struct_conn`` loop in
-            the written mmCIF file. This flag implies mmCIF output.
+            When ``True`` (the default), emit an inspection-oriented
+            ``_struct_conn`` loop in the written mmCIF file whenever mmCIF
+            output is requested.
         """
         sort_list = [] if sort_list is None else sort_list
 
@@ -1549,9 +1550,9 @@ class PoreKit():
 
         # Save files
         store.gro(use_atom_names=True)
-        if write_pdb or write_pdb_conect:
+        if write_pdb:
             store.pdb(use_atom_names=True, write_conect=write_pdb_conect)
-        if write_cif or write_cif_bonds:
+        if write_cif:
             store.cif(use_atom_names=True, write_bonds=write_cif_bonds)
         store.top()
         store.grid()

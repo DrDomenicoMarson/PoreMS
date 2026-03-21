@@ -422,7 +422,7 @@ class Store:
                 f"A {record_b.residue_short} {record_b.residue_id} {record_b.atom_name}\n"
             )
 
-    def cif(self, name="", use_atom_names=False, write_bonds=False):
+    def cif(self, name="", use_atom_names=False, write_bonds=True):
         """Write the current structure in mmCIF format.
 
         Parameters
@@ -433,9 +433,10 @@ class Store:
             True to preserve explicit atom names when available. False to
             enumerate atom names from atom types.
         write_bonds : bool, optional
-            When ``True``, also emit an ``_struct_conn`` loop for the active
-            silica scaffold and built-in ``SL``/``SLG`` surface residues.
-            Ligand-internal connectivity is not reconstructed here.
+            When ``True`` (the default), also emit an ``_struct_conn`` loop
+            for the active silica scaffold and built-in ``SL``/``SLG``
+            surface residues. Ligand-internal connectivity is not
+            reconstructed here.
         """
         link = self._link
         link += name if name else self._name + ".cif"
@@ -512,7 +513,7 @@ class Store:
 
             file_out.write("#\n")
 
-    def pdb(self, name="", use_atom_names=False, write_conect=False):
+    def pdb(self, name="", use_atom_names=False, write_conect=True):
         """Write the current structure in PDB format.
 
         Parameters
@@ -523,9 +524,10 @@ class Store:
             True to preserve explicit atom names when available. False to
             enumerate atom names from atom types.
         write_conect : bool, optional
-            When ``True``, also emit inspection-oriented ``CONECT`` records for
-            the active silica scaffold and the built-in ``SL``/``SLG`` surface
-            residues. Ligand-internal connectivity is not reconstructed here.
+            When ``True`` (the default), also emit inspection-oriented
+            ``CONECT`` records for the active silica scaffold and the built-in
+            ``SL``/``SLG`` surface residues. Ligand-internal connectivity is
+            not reconstructed here.
         """
         # Initialize
         link = self._link
@@ -551,9 +553,9 @@ class Store:
                     out_string += f"{coord*10:8.3f}"
                 out_string += f"{1:6.2f}"                  # 55-60 (6)    Occupancy
                 out_string += f"{0:6.2f}"                  # 61-66 (6)    Temperature factor
-                out_string += "           "                # 67-77 (11)   -
-                out_string += f"{record.atom_type:>2s}"    # 78-79 (2)    Element symbol
-                out_string += "  "                         # 80-81 (2)    Charge on the atom
+                out_string += "          "                 # 67-76 (10)   -
+                out_string += f"{record.atom_type:>2s}"    # 77-78 (2)    Element symbol
+                out_string += "  "                         # 79-80 (2)    Charge on the atom
 
                 file_out.write(out_string+"\n")
 
