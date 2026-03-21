@@ -163,8 +163,7 @@ class Molecule:
                         pos = [float(line[30:38])/10, float(line[38:46])/10, float(line[46:54])/10]
                         name = line[12:16].strip()
                         atom_token = line[76:78].strip() if len(line) >= 78 else ""
-                        atom_type = atom_token if atom_token else ''.join([i for i in name if not i.isdigit()])
-                        atom_type = db.get_element(atom_type)
+                        atom_type = db.get_pdb_element(name, atom_token)
                         serial_to_index[serial] = len(atom_list)
                         atom_list.append(Atom(pos, atom_type, name, residue))
                     elif record == "CONECT":

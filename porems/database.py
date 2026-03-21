@@ -129,6 +129,21 @@ covalent_radii = {
 }
 
 
+_PDB_SINGLE_LETTER_ELEMENTS = {"B", "C", "F", "H", "I", "N", "O", "P", "S"}
+_PDB_TWO_LETTER_FALLBACKS = {
+    "AL": "Al",
+    "BR": "Br",
+    "CL": "Cl",
+    "CU": "Cu",
+    "FE": "Fe",
+    "LI": "Li",
+    "MG": "Mg",
+    "NA": "Na",
+    "SI": "Si",
+    "ZN": "Zn",
+}
+
+
 ##################
 # Getter Methods #
 ##################
@@ -217,3 +232,47 @@ def get_covalent_radius(symbol):
         return covalent_radii[element]
 
     raise ValueError("DB: Covalent radius not found.")
+
+
+def get_pdb_element(atom_name, element_token=""):
+    """Infer one chemical element from PDB atom metadata.
+
+    Parameters
+    ----------
+    atom_name : str
+        PDB atom-name field, such as ``"CA"`` or ``"SI1"``.
+    element_token : str, optional
+        Explicit PDB element-column token. When provided, it takes priority.
+
+    Returns
+    -------
+    element : str
+        Normalized chemical element symbol.
+
+    Raises
+    ------
+    ValueError
+        Raised when no supported chemical element can be derived.
+    """
+    token = element_token.strip()
+    if token:
+        return get_element(token)
+
+    stripped_name = atom_name.strip()
+    if not stripped_name:
+        raise ValueError("DB: Atom name not found.")
+
+    while stripped_name and stripped_name[0].isdigit():
+        stripped_name = stripped_name[1:]
+    letters = "".join(char for char in stripped_name if char.isalpha())
+    if not letters:
+        raise ValueError("DB: Atom name not found.")
+
+    letters_upper = letters.upper()
+    if len(letters_upper) >= 2 and letters_upper[:2] in _PDB_TWO_LETTER_FALLBACKS:
+        return _PDB_TWO_LETTER_FALLBACKS[letters_upper[:2]]
+
+    if letters_upper[0] in _PDB_SINGLE_LETTER_ELEMENTS:
+        return letters_upper[0]
+
+    return get_element(letters)

@@ -370,14 +370,16 @@ class Store:
 
         for molecule_index, serials in enumerate(molecule_serials):
             mol = self._mols[molecule_index]
-            for atom_a, atom_b in mol.get_bonds():
+            explicit_bonds = mol.get_bonds()
+            for atom_a, atom_b in explicit_bonds:
                 bonds.append(
                     GraphBond(serials[atom_a], serials[atom_b], "ligand_explicit")
                 )
-            for atom_a, atom_b in mol.infer_bonds():
-                bonds.append(
-                    GraphBond(serials[atom_a], serials[atom_b], "ligand_inferred")
-                )
+            if not explicit_bonds:
+                for atom_a, atom_b in mol.infer_bonds():
+                    bonds.append(
+                        GraphBond(serials[atom_a], serials[atom_b], "ligand_inferred")
+                    )
 
         if isinstance(self._inp, Pore):
             molecule_serial_map = {

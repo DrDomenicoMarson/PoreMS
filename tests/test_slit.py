@@ -673,6 +673,16 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
 
 
 class FunctionalizedAmorphousSlitCase(unittest.TestCase):
+    def test_silane_attachment_config_defaults_to_ten_degree_rotation_scan(self):
+        ligand = pms.SilaneAttachmentConfig(
+            molecule=pms.gen.tms(),
+            mount=0,
+            axis=(0, 1),
+        )
+
+        self.assertTrue(ligand.rotate_about_axis)
+        self.assertEqual(ligand.rotate_step_deg, 10.0)
+
     def test_exact_functionalized_target_is_realized(self):
         target = pms.ExperimentalSiliconStateTarget(
             q2_fraction=63 / 957,
@@ -782,6 +792,7 @@ class FunctionalizedAmorphousSlitCase(unittest.TestCase):
         self.assertIsInstance(graph, pms.AssembledStructureGraph)
         self.assertTrue(any(bond.provenance == "graft_junction" for bond in graph.bonds))
         self.assertTrue(any(bond.provenance == "ligand_explicit" for bond in graph.bonds))
+        self.assertFalse(any(bond.provenance == "ligand_inferred" for bond in graph.bonds))
 
         attachment_record = result.system._pore.get_attachment_records()[0]
         mount_serial = serials_by_molecule[id(attachment_record.molecule)][

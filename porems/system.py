@@ -1168,7 +1168,18 @@ class PoreKit():
         """
         return [0, 0, -1] if pos[2] < self.centroid()[2] else [0, 0, 1]
 
-    def _attach_special(self, mol, mount, axis, amount, scale=1, symmetry="point", is_proxi=True, is_rotate=False):
+    def _attach_special(
+        self,
+        mol,
+        mount,
+        axis,
+        amount,
+        scale=1,
+        symmetry="point",
+        is_proxi=True,
+        is_rotate=False,
+        rotate_step_deg=30,
+    ):
         """Attach molecules to evenly spaced special positions on one pore.
 
         Parameters
@@ -1188,7 +1199,10 @@ class PoreKit():
         is_proxi : bool, optional
             True to fill binding sites in proximity of filled binding sites.
         is_rotate : bool, optional
-            True to randomly rotate the molecule around its own axis.
+            True to scan several rotations around the molecule axis and keep
+            the least crowded pose.
+        rotate_step_deg : float, optional
+            Angular step in degrees used when ``is_rotate`` is enabled.
 
         Raises
         ------
@@ -1221,6 +1235,7 @@ class PoreKit():
             is_proxi=is_proxi,
             is_random=False,
             is_rotate=is_rotate,
+            rotate_step_deg=rotate_step_deg,
         )
 
         for attached_mol in mols:
@@ -1299,7 +1314,23 @@ class PoreKit():
                         self._sort_list.append(mol.get_short())
                         
 
-    def attach(self, mol, mount, axis, amount, site_type="in", inp="num", shape="all", pos_list=None, scale=1, trials=1000, is_proxi=True, is_rotate=False, is_g=True):
+    def attach(
+        self,
+        mol,
+        mount,
+        axis,
+        amount,
+        site_type="in",
+        inp="num",
+        shape="all",
+        pos_list=None,
+        scale=1,
+        trials=1000,
+        is_proxi=True,
+        is_rotate=False,
+        rotate_step_deg=30,
+        is_g=True,
+    ):
         """Attach a molecule to interior or exterior pore sites.
 
         Parameters
@@ -1329,7 +1360,10 @@ class PoreKit():
         is_proxi : bool, optional
             True to consume nearby sites with silanol fills after attachment.
         is_rotate : bool, optional
-            True to allow random rotation around the molecule axis.
+            True to scan several rotations around the molecule axis and keep
+            the least crowded pose.
+        rotate_step_deg : float, optional
+            Angular step in degrees used when ``is_rotate`` is enabled.
         is_g : bool, optional
             True to allow geminal surface sites as mounting positions.
 
@@ -1416,6 +1450,7 @@ class PoreKit():
                     is_proxi=is_proxi,
                     is_random=True,
                     is_rotate=is_rotate,
+                    rotate_step_deg=rotate_step_deg,
                     is_g=is_g,
                 )
             elif site_type == "in" and shape != "all":
@@ -1434,6 +1469,7 @@ class PoreKit():
                     is_proxi=is_proxi,
                     is_random=True,
                     is_rotate=is_rotate,
+                    rotate_step_deg=rotate_step_deg,
                     is_g=is_g,
                 )
                 self._prune_consumed_shape_sites()
@@ -1458,6 +1494,7 @@ class PoreKit():
                         is_proxi=is_proxi,
                         is_random=True,
                         is_rotate=is_rotate,
+                        rotate_step_deg=rotate_step_deg,
                         is_g=is_g,
                     )
                     attached_mols.extend(mols)
@@ -2376,7 +2413,18 @@ class PoreCylinder(PoreKit):
         self.add_shape(self.shape_cylinder(diam), hydro=hydro[0])
         self.prepare()
 
-    def attach_special(self, mol, mount, axis, amount, scale=1, symmetry="point", is_proxi=True, is_rotate=False):
+    def attach_special(
+        self,
+        mol,
+        mount,
+        axis,
+        amount,
+        scale=1,
+        symmetry="point",
+        is_proxi=True,
+        is_rotate=False,
+        rotate_step_deg=30,
+    ):
         """Attach molecules at evenly spaced special positions on the cylinder.
 
         Parameters
@@ -2396,14 +2444,27 @@ class PoreCylinder(PoreKit):
         is_proxi : bool, optional
             True to consume nearby sites with silanol fills after attachment.
         is_rotate : bool, optional
-            True to allow random rotation around the molecule axis.
+            True to scan several rotations around the molecule axis and keep
+            the least crowded pose.
+        rotate_step_deg : float, optional
+            Angular step in degrees used when ``is_rotate`` is enabled.
         
         Raises
         ------
         ValueError
             Raised when the requested symmetry mode is not supported.
         """
-        self._attach_special(mol, mount, axis, amount, scale, symmetry, is_proxi, is_rotate)
+        self._attach_special(
+            mol,
+            mount,
+            axis,
+            amount,
+            scale,
+            symmetry,
+            is_proxi,
+            is_rotate,
+            rotate_step_deg,
+        )
 
 class PoreSlit(PoreKit):
     """Convenience builder for a slit pore in :math:`\\beta`-cristobalite.
@@ -2457,7 +2518,18 @@ class PoreSlit(PoreKit):
     ##############
     # Attachment #
     ##############
-    def attach_special(self, mol, mount, axis, amount, scale=1, symmetry="point", is_proxi=True, is_rotate=False):
+    def attach_special(
+        self,
+        mol,
+        mount,
+        axis,
+        amount,
+        scale=1,
+        symmetry="point",
+        is_proxi=True,
+        is_rotate=False,
+        rotate_step_deg=30,
+    ):
         """Attach molecules at evenly spaced special positions on the slit.
 
         Parameters
@@ -2477,14 +2549,27 @@ class PoreSlit(PoreKit):
         is_proxi : bool, optional
             True to consume nearby sites with silanol fills after attachment.
         is_rotate : bool, optional
-            True to allow random rotation around the molecule axis.
+            True to scan several rotations around the molecule axis and keep
+            the least crowded pose.
+        rotate_step_deg : float, optional
+            Angular step in degrees used when ``is_rotate`` is enabled.
         
         Raises
         ------
         ValueError
             Raised when the requested symmetry mode is not supported.
         """
-        self._attach_special(mol, mount, axis, amount, scale, symmetry, is_proxi, is_rotate)
+        self._attach_special(
+            mol,
+            mount,
+            axis,
+            amount,
+            scale,
+            symmetry,
+            is_proxi,
+            is_rotate,
+            rotate_step_deg,
+        )
 
 
 class PoreCapsule(PoreKit):
@@ -2617,7 +2702,18 @@ class PoreAmorphCylinder(PoreKit):
     ##############
     # Attachment #
     ##############
-    def attach_special(self, mol, mount, axis, amount, scale=1, symmetry="point", is_proxi=True, is_rotate=False):
+    def attach_special(
+        self,
+        mol,
+        mount,
+        axis,
+        amount,
+        scale=1,
+        symmetry="point",
+        is_proxi=True,
+        is_rotate=False,
+        rotate_step_deg=30,
+    ):
         """Attach molecules at evenly spaced special positions on the cylinder.
 
         Parameters
@@ -2637,11 +2733,24 @@ class PoreAmorphCylinder(PoreKit):
         is_proxi : bool, optional
             True to consume nearby sites with silanol fills after attachment.
         is_rotate : bool, optional
-            True to allow random rotation around the molecule axis.
+            True to scan several rotations around the molecule axis and keep
+            the least crowded pose.
+        rotate_step_deg : float, optional
+            Angular step in degrees used when ``is_rotate`` is enabled.
         
         Raises
         ------
         ValueError
             Raised when the requested symmetry mode is not supported.
         """
-        self._attach_special(mol, mount, axis, amount, scale, symmetry, is_proxi, is_rotate)
+        self._attach_special(
+            mol,
+            mount,
+            axis,
+            amount,
+            scale,
+            symmetry,
+            is_proxi,
+            is_rotate,
+            rotate_step_deg,
+        )

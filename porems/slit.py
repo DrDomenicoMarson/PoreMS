@@ -378,11 +378,18 @@ class SilaneAttachmentConfig:
         Atom id placed onto the selected silicon surface site.
     axis : tuple[int, int]
         Two atom ids defining the molecular attachment axis.
+    rotate_about_axis : bool, optional
+        True to scan several rotations around ``axis`` and keep the least
+        crowded pose before giving up on one site.
+    rotate_step_deg : float, optional
+        Angular step in degrees used when ``rotate_about_axis`` is enabled.
     """
 
     molecule: pms.Molecule
     mount: int
     axis: tuple[int, int]
+    rotate_about_axis: bool = True
+    rotate_step_deg: float = 10.0
 
 
 @dataclass(frozen=True)
@@ -1567,7 +1574,8 @@ def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal):
         site_type="in",
         is_proxi=False,
         is_random=False,
-        is_rotate=False,
+        is_rotate=ligand.rotate_about_axis,
+        rotate_step_deg=ligand.rotate_step_deg,
         is_g=allow_geminal,
     )
     for mol in mols:

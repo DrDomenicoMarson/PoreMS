@@ -12,6 +12,7 @@ from collections.abc import Callable
 from collections import Counter
 from dataclasses import dataclass, field
 
+import porems.database as db
 import porems.geometry as geometry
 import porems.generic as generic
 
@@ -21,6 +22,7 @@ from porems.molecule import Molecule
 
 
 _VALID_SITE_TYPES = {"in", "ex"}
+_STERIC_CLEARANCE_SCALE = 0.85
 
 
 @dataclass
@@ -259,6 +261,180 @@ class Pore():
                 if atom_id not in oxygen_ids and self._block.get_atom_type(atom_id) == "O"
             )
         )
+
+    def _minimum_image_vector(self, pos_a, pos_b):
+        """Return the shortest periodic vector from ``pos_a`` to ``pos_b``.
+
+        Parameters
+        ----------
+        pos_a : list[float]
+            First position vector.
+        pos_b : list[float]
+            Second position vector.
+
+        Returns
+        -------
+        vector : list[float]
+            Minimum-image displacement vector.
+        """
+        box = self._block.get_box()
+        vector = geometry.vector(pos_a, pos_b)
+        for dim, box_length in enumerate(box):
+            if box_length <= 0:
+                continue
+            half_box = box_length / 2
+            while vector[dim] > half_box:
+                vector[dim] -= box_length
+            while vector[dim] < -half_box:
+                vector[dim] += box_length
+        return vector
+
+    def _placement_clearance(self, mol, ignored_block_atoms=None):
+        """Return the minimum steric clearance of a candidate attached pose.
+
+        Parameters
+        ----------
+        mol : Molecule
+            Candidate attached molecule.
+        ignored_block_atoms : set[int] or None, optional
+            Scaffold atom ids that should be ignored during the clash check.
+
+        Returns
+        -------
+        clearance : float
+            Minimum distance minus the steric cutoff across all checked pairs.
+            Positive values indicate a clash-free pose.
+        """
+        ignored_block_atoms = set() if ignored_block_atoms is None else set(ignored_block_atoms)
+        min_clearance = float("inf")
+
+        matrix = self._matrix.get_matrix()
+        attached_molecules = []
+        for site_group in ("in", "ex"):
+            for molecules in self._mol_dict[site_group].values():
+                attached_molecules.extend(molecules)
+
+        for atom in mol.get_atom_list():
+            try:
+                radius_a = db.get_covalent_radius(atom.get_atom_type())
+            except ValueError:
+                continue
+
+            for atom_id in matrix:
+                if atom_id in ignored_block_atoms:
+                    continue
+                try:
+                    radius_b = db.get_covalent_radius(self._block.get_atom_type(atom_id))
+                except ValueError:
+                    continue
+
+                distance = geometry.length(
+                    self._minimum_image_vector(atom.get_pos(), self._block.pos(atom_id))
+                )
+                clearance = distance - _STERIC_CLEARANCE_SCALE * (radius_a + radius_b)
+                if clearance < min_clearance:
+                    min_clearance = clearance
+
+            for attached_molecule in attached_molecules:
+                for attached_atom in attached_molecule.get_atom_list():
+                    try:
+                        radius_b = db.get_covalent_radius(attached_atom.get_atom_type())
+                    except ValueError:
+                        continue
+
+                    distance = geometry.length(
+                        self._minimum_image_vector(atom.get_pos(), attached_atom.get_pos())
+                    )
+                    clearance = distance - _STERIC_CLEARANCE_SCALE * (radius_a + radius_b)
+                    if clearance < min_clearance:
+                        min_clearance = clearance
+
+        return min_clearance
+
+    def _rotation_angles(self, rotate_step_deg):
+        """Return the sampled axis-rotation angles for one pose search.
+
+        Parameters
+        ----------
+        rotate_step_deg : float
+            Angular step in degrees used to sample rotations around the mount
+            axis.
+
+        Returns
+        -------
+        angles : tuple[float, ...]
+            Rotation angles covering one full turn, including ``0``.
+
+        Raises
+        ------
+        ValueError
+            Raised when ``rotate_step_deg`` is not strictly positive.
+        """
+        if rotate_step_deg <= 0:
+            raise ValueError("Attachment rotation step must be greater than zero.")
+
+        angles = []
+        angle = 0.0
+        while angle < 360.0:
+            angles.append(round(angle, 10))
+            angle += rotate_step_deg
+
+        return tuple(angles if angles else [0.0])
+
+    def _optimize_attachment_pose(
+        self,
+        mol,
+        mount,
+        surf_axis,
+        ignored_block_atoms,
+        is_rotate,
+        rotate_step_deg,
+    ):
+        """Rotate one candidate pose around the mount axis to reduce clashes.
+
+        Parameters
+        ----------
+        mol : Molecule
+            Candidate attached molecule already aligned to ``surf_axis`` and
+            translated to the target site.
+        mount : int
+            Mount atom index.
+        surf_axis : list[float]
+            Surface-normal vector used as the rotation axis.
+        ignored_block_atoms : set[int]
+            Scaffold atom ids ignored during the steric check.
+        is_rotate : bool
+            True to scan several rotations around the mount axis.
+        rotate_step_deg : float
+            Angular step in degrees used during the rotation scan.
+
+        Returns
+        -------
+        mol : Molecule or None
+            Best non-clashing pose, or ``None`` when every sampled pose clashes.
+        """
+        angles = self._rotation_angles(rotate_step_deg) if is_rotate else (0.0,)
+        best_molecule = None
+        best_clearance = float("-inf")
+
+        axis_end = [
+            mol.pos(mount)[dim] + surf_axis[dim]
+            for dim in range(self._dim)
+        ]
+        axis = [mol.pos(mount), axis_end]
+
+        for angle in angles:
+            candidate = copy.deepcopy(mol)
+            if angle != 0:
+                candidate.rotate(axis, angle)
+            clearance = self._placement_clearance(candidate, ignored_block_atoms)
+            if clearance > best_clearance:
+                best_clearance = clearance
+                best_molecule = candidate
+
+        if best_clearance < 0:
+            return None
+        return best_molecule
 
     def _surface_handle_oxygen_ids(self):
         """Return oxygen atoms that currently behave as surface handles.
@@ -636,7 +812,23 @@ class Pore():
                 f"Unsupported site_type '{site_type}'. Expected one of: {sorted(_VALID_SITE_TYPES)}."
             )
 
-    def attach(self, mol, mount, axis, sites, amount, scale=1, trials=1000, pos_list=None, site_type="in", is_proxi=True, is_random=True, is_rotate=False, is_g=True):
+    def attach(
+        self,
+        mol,
+        mount,
+        axis,
+        sites,
+        amount,
+        scale=1,
+        trials=1000,
+        pos_list=None,
+        site_type="in",
+        is_proxi=True,
+        is_random=True,
+        is_rotate=False,
+        rotate_step_deg=30,
+        is_g=True,
+    ):
         """Attach molecules to available pore surface sites.
 
         Parameters
@@ -664,8 +856,10 @@ class Pore():
         is_random : bool, optional
             True to choose sites randomly from ``sites``.
         is_rotate : bool, optional
-            True to allow random rotation around the molecule axis before
-            placement.
+            True to scan several rotations around the molecule axis and keep
+            the least crowded pose before accepting one placement.
+        rotate_step_deg : float, optional
+            Angular step in degrees used when ``is_rotate`` is enabled.
         is_g : bool, optional
             True to allow geminal surface sites as mounting positions.
 
@@ -747,6 +941,18 @@ class Pore():
                     # Move molecule to mounting position
                     mol_temp.move(mount, self._block.pos(si))
 
+                    mol_temp = self._optimize_attachment_pose(
+                        mol_temp,
+                        mount,
+                        surf_axis,
+                        {si, *self._sites[si].oxygen_ids},
+                        is_rotate,
+                        rotate_step_deg,
+                    )
+                    if mol_temp is None:
+                        self._sites[si].is_available = True
+                        continue
+
                     # Add molecule to molecule list and global dictionary
                     mol_list.append(mol_temp)
                     if not mol_temp.get_short() in self._mol_dict[site_type]:
@@ -776,7 +982,18 @@ class Pore():
                     if is_proxi:
                         proxi_list = [sites[x] for x in si_matrix[sites.index(si)]]
                         if len(proxi_list) > 0:
-                            mol_list.extend(self.attach(generic.silanol(), 0, [0, 1], proxi_list, len(proxi_list), site_type=site_type, is_proxi=False, is_random=False))
+                            mol_list.extend(
+                                self.attach(
+                                    generic.silanol(),
+                                    0,
+                                    [0, 1],
+                                    proxi_list,
+                                    len(proxi_list),
+                                    site_type=site_type,
+                                    is_proxi=False,
+                                    is_random=False,
+                                )
+                            )
         return mol_list
 
     def siloxane(self, sites, amount, slx_dist=None, trials=1000, site_type="in"):

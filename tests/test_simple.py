@@ -114,6 +114,9 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual(pms.db.get_mass("H"), 1.0079)
         self.assertEqual(pms.db.get_element("Si"), "Si")
         self.assertEqual(pms.db.get_element("Ci"), "C")
+        self.assertEqual(pms.db.get_pdb_element("CA"), "C")
+        self.assertEqual(pms.db.get_pdb_element("CD1"), "C")
+        self.assertEqual(pms.db.get_pdb_element("SI1"), "Si")
         self.assertAlmostEqual(pms.db.get_covalent_radius("OM1"), 0.066)
         with self.assertRaisesRegex(ValueError, "Atom name not found"):
             pms.db.get_mass("DOTA")
@@ -188,6 +191,33 @@ class UserModelCase(unittest.TestCase):
 
         mol = pms.Molecule(inp=pdb_path)
         self.assertEqual(mol.get_bonds(), [(0, 1), (1, 2)])
+
+        graph = pms.Store(mol, "output").assembled_graph(use_atom_names=True)
+        self.assertEqual(len(graph.bonds), 2)
+        self.assertTrue(all(bond.provenance == "ligand_explicit" for bond in graph.bonds))
+
+    def test_molecule_pdb_name_fallback_keeps_phenyl_atoms_as_carbon(self):
+        pdb_path = os.path.join("output", "phenyl_silane_probe.pdb")
+        with open(pdb_path, "w") as file_out:
+            file_out.write(
+                "HETATM    1 SI1 PHS A   1       0.000   0.000   0.000  1.00  0.00              \n"
+                "HETATM    2  CA PHS A   1       1.860   0.000   0.000  1.00  0.00              \n"
+                "HETATM    3 CD1 PHS A   1       2.560   1.210   0.000  1.00  0.00              \n"
+                "HETATM    4 CE1 PHS A   1       3.960   1.210   0.000  1.00  0.00              \n"
+                "CONECT    1    2\n"
+                "CONECT    2    1    3\n"
+                "CONECT    3    2    4\n"
+                "CONECT    4    3\n"
+                "TER\nEND\n"
+            )
+
+        mol = pms.Molecule(inp=pdb_path)
+
+        self.assertEqual(
+            [mol.get_atom_type(index) for index in range(mol.get_num())],
+            ["Si", "C", "C", "C"],
+        )
+        self.assertEqual(mol.get_bonds(), [(0, 1), (1, 2), (2, 3)])
 
     def test_molecule_bond_graph_is_preserved_through_edits(self):
         mol = pms.Molecule()
