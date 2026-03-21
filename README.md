@@ -79,16 +79,16 @@ Create a Python 3.14 environment, then install the repository from the
 repository root in editable mode:
 
     pip install -r requirements.txt
-    pip install -e .
+    pip install -e .[test]
 
 Use the repository directly in editable mode for local work.
 
 
 ## Testing
 
-Run the test suite from the repository root after the editable install:
+Run the test suite from the repository root after installing the test extra:
 
-    python -m pytest tests/ -q
+    pytest
 
 
 ## Development

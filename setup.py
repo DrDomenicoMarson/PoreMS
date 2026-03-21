@@ -14,5 +14,6 @@ setup(
     packages=["porems"],
     package_data={"porems": ["templates/*", "py.typed"]},
     install_requires=["numpy", "matplotlib", "pandas", "seaborn", "pyyaml"],
+    extras_require={"test": ["pytest", "pytest-cov"]},
     python_requires=">=3.14",
 )

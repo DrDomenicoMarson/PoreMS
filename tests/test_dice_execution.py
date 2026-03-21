@@ -2,22 +2,26 @@ import json
 import os
 import subprocess
 import sys
-import unittest
 import warnings
 
-import porems as pms
+import pytest
 
 
-class DiceExecutionCase(unittest.TestCase):
+@pytest.fixture(scope="class", autouse=True)
+def _dice_case_context(request, dice_execution_context):
+    """Expose the shared dice context as class attributes."""
+
+    if request.cls is None:
+        return
+
+    request.cls.dice = dice_execution_context.dice
+    request.cls.search_args = dice_execution_context.search_args
+    request.cls.expected = dice_execution_context.expected
+    request.cls.repo_root = dice_execution_context.repo_root
+
+
+class TestDiceExecution:
     """Exercise the serial dice search API."""
-
-    @classmethod
-    def setUpClass(cls):
-        block = pms.BetaCristobalit().generate([2, 2, 2], "z")
-        cls.dice = pms.Dice(block, 0.2, True)
-        cls.search_args = (None, ["Si", "O"], [0.155 - 1e-2, 0.155 + 1e-2])
-        cls.expected = cls._normalize(cls.dice.find(*cls.search_args))
-        cls.repo_root = os.path.dirname(os.path.dirname(__file__))
 
     @staticmethod
     def _normalize(bond_list):
@@ -69,10 +73,10 @@ class DiceExecutionCase(unittest.TestCase):
 
     def test_find_matches_expected(self):
         result = self.dice.find(*self.search_args)
-        self.assertEqual(self._normalize(result), self.expected)
+        assert self._normalize(result) == self.expected
 
     def test_find_requires_atom_type_and_distance(self):
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             self.dice.find()
 
     def test_find_has_no_entrypoint_warning_for_python_dash_c(self):
@@ -96,11 +100,11 @@ print(json.dumps({
 }))
 """
         result = self._run_subprocess(code)
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        assert result.returncode == 0, result.stderr
 
         payload = json.loads(result.stdout.strip())
-        self.assertEqual(payload["length"], len(self.expected))
-        self.assertEqual(payload["warnings"], [])
+        assert payload["length"] == len(self.expected)
+        assert payload["warnings"] == []
 
     def test_porekit_build_has_no_entrypoint_warning_for_python_dash_c(self):
         code = """
@@ -120,12 +124,8 @@ print(json.dumps({
 }))
 """
         result = self._run_subprocess(code)
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        assert result.returncode == 0, result.stderr
 
         payload = json.loads(result.stdout.strip())
-        self.assertGreater(payload["matrix_size"], 0)
-        self.assertEqual(payload["warnings"], [])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert payload["matrix_size"] > 0
+        assert payload["warnings"] == []
