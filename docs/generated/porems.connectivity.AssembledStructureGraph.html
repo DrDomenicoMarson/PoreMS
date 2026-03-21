@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Store.cif &#8212; PoreMS 0.4.0 documentation</title>
+    <title>AssembledStructureGraph &#8212; PoreMS 0.4.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
@@ -68,8 +68,8 @@
   <ul class="dropdown-menu localtoc"
       role="menu"
       aria-labelledby="dLabelLocalToc"><ul>
-<li><a class="reference internal" href="#">Store.cif</a><ul>
-<li><a class="reference internal" href="#porems.store.Store.cif"><code class="docutils literal notranslate"><span class="pre">Store.cif()</span></code></a></li>
+<li><a class="reference internal" href="#">AssembledStructureGraph</a><ul>
+<li><a class="reference internal" href="#porems.connectivity.AssembledStructureGraph"><code class="docutils literal notranslate"><span class="pre">AssembledStructureGraph</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -101,14 +101,14 @@
   <div class="row">
       <div class="col-md-3">
         <div id="sidebar" class="bs-sidenav" role="complementary"><ul>
-<li><a class="reference internal" href="#">Store.cif</a><ul>
-<li><a class="reference internal" href="#porems.store.Store.cif"><code class="docutils literal notranslate"><span class="pre">Store.cif()</span></code></a></li>
+<li><a class="reference internal" href="#">AssembledStructureGraph</a><ul>
+<li><a class="reference internal" href="#porems.connectivity.AssembledStructureGraph"><code class="docutils literal notranslate"><span class="pre">AssembledStructureGraph</span></code></a></li>
 </ul>
 </li>
 </ul>
 
 <div id="sourcelink">
-  <a href="../_sources/generated/porems.store.Store.cif.rst.txt"
+  <a href="../_sources/generated/porems.connectivity.AssembledStructureGraph.rst.txt"
      rel="nofollow">Source</a>
 </div>
 <form action="../search.html" method="get">
@@ -123,23 +123,20 @@
     <div class="body col-md-9 content" role="main">
       
   </div>
-<div class=col-md-9 content><section id="store-cif">
-<h1>Store.cif<a class="headerlink" href="#store-cif" title="Link to this heading">¶</a></h1>
-<dl class="py method">
-<dt class="sig sig-object py" id="porems.store.Store.cif">
-<span class="sig-prename descclassname"><span class="pre">Store.</span></span><span class="sig-name descname"><span class="pre">cif</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_atom_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_bonds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.store.Store.cif" title="Link to this definition">¶</a></dt>
-<dd><p>Write the current structure in mmCIF format.</p>
+<div class=col-md-9 content><section id="assembledstructuregraph">
+<h1>AssembledStructureGraph<a class="headerlink" href="#assembledstructuregraph" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="porems.connectivity.AssembledStructureGraph">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.connectivity.</span></span><span class="sig-name descname"><span class="pre">AssembledStructureGraph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atom_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bonds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="porems.connectivity.GraphBond.html#porems.connectivity.GraphBond" title="porems.connectivity.GraphBond"><span class="pre">GraphBond</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angles</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="porems.connectivity.GraphAngle.html#porems.connectivity.GraphAngle" title="porems.connectivity.GraphAngle"><span class="pre">GraphAngle</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.connectivity.AssembledStructureGraph" title="Link to this definition">¶</a></dt>
+<dd><p>Bond graph assembled in the same atom order as structure export.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>Output filename. Defaults to <code class="docutils literal notranslate"><span class="pre">&lt;name&gt;.cif</span></code>.</p>
+<dt><strong>atom_ids</strong><span class="classifier">tuple[int, …]</span></dt><dd><p>One-based atom ids in writer order.</p>
 </dd>
-<dt><strong>use_atom_names</strong><span class="classifier">bool, optional</span></dt><dd><p>True to preserve explicit atom names when available. False to
-enumerate atom names from atom types.</p>
+<dt><strong>bonds</strong><span class="classifier">tuple[GraphBond, …]</span></dt><dd><p>Bonded atom pairs present in the assembled system.</p>
 </dd>
-<dt><strong>write_bonds</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code> (the default), also emit an <code class="docutils literal notranslate"><span class="pre">_struct_conn</span></code> loop
-for the full assembled bond graph, including silica scaffold,
-siloxane bridges, ligand-internal bonds, and graft junctions.</p>
+<dt><strong>angles</strong><span class="classifier">tuple[GraphAngle, …]</span></dt><dd><p>Unique angles derived from <code class="docutils literal notranslate"><span class="pre">bonds</span></code>.</p>
 </dd>
 </dl>
 </dd>

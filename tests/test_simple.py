@@ -1,6 +1,7 @@
 import os
 import sys
 import warnings
+import copy
 
 import shutil
 import unittest
@@ -111,6 +112,9 @@ class UserModelCase(unittest.TestCase):
     def test_database(self):
         print()
         self.assertEqual(pms.db.get_mass("H"), 1.0079)
+        self.assertEqual(pms.db.get_element("Si"), "Si")
+        self.assertEqual(pms.db.get_element("Ci"), "C")
+        self.assertAlmostEqual(pms.db.get_covalent_radius("OM1"), 0.066)
         with self.assertRaisesRegex(ValueError, "Atom name not found"):
             pms.db.get_mass("DOTA")
 
@@ -160,10 +164,47 @@ class UserModelCase(unittest.TestCase):
         self.assertEqual(pos_gro, pos_atom)
         self.assertEqual([col+col for col in pos_gro], pos_concat)
         self.assertEqual([col+col for col in pos_gro], pos_append)
+        self.assertEqual(mol_gro.get_bonds(), [])
+        self.assertEqual(mol_pdb.get_bonds(), [])
+        self.assertEqual(len(mol_mol2.get_bonds()), 12)
+        self.assertEqual(len(mol_gro.infer_bonds()), 12)
 
         print()
         with self.assertRaisesRegex(ValueError, "Unsupported filetype"):
             pms.Molecule(inp="data/benzene.DOTA")
+
+    def test_molecule_loads_pdb_conect_and_preserves_bonds(self):
+        pdb_path = os.path.join("output", "bonded_probe.pdb")
+        with open(pdb_path, "w") as file_out:
+            file_out.write(
+                "HETATM    1 SI1 TMS A   1       0.000   0.000   0.000  1.00  0.00          Si  \n"
+                "HETATM    2  O1 TMS A   1       1.640   0.000   0.000  1.00  0.00           O  \n"
+                "HETATM    3  C1 TMS A   1       2.800   0.000   0.000  1.00  0.00           C  \n"
+                "CONECT    1    2\n"
+                "CONECT    2    1    3\n"
+                "CONECT    3    2\n"
+                "TER\nEND\n"
+            )
+
+        mol = pms.Molecule(inp=pdb_path)
+        self.assertEqual(mol.get_bonds(), [(0, 1), (1, 2)])
+
+    def test_molecule_bond_graph_is_preserved_through_edits(self):
+        mol = pms.Molecule()
+        mol.add("Si", [0.0, 0.0, 0.0], name="SI1")
+        mol.add("O", 0, r=0.164, name="O1")
+        mol.add("H", 1, r=0.098, name="H1")
+
+        self.assertEqual(mol.get_bonds(), [(0, 1), (1, 2)])
+
+        mol_copy = copy.deepcopy(mol)
+        self.assertEqual(mol_copy.get_bonds(), [(0, 1), (1, 2)])
+
+        mol.switch_atom_order(0, 2)
+        self.assertEqual(mol.get_bonds(), [(0, 1), (1, 2)])
+
+        mol.delete(2)
+        self.assertEqual(mol.get_bonds(), [(0, 1)])
 
     def test_molecule_properties(self):
         mol = pms.Molecule(inp="data/benzene.gro")
@@ -295,6 +336,17 @@ class UserModelCase(unittest.TestCase):
         with open("output/store_cif.cif", "r") as file_in:
             cif_text = file_in.read()
         self.assertIn("_atom_site.Cartn_x", cif_text)
+        self.assertIn("_struct_conn.id", cif_text)
+
+        with open("output/store_pdb.pdb", "r") as file_in:
+            pdb_text = file_in.read()
+        self.assertIn("CONECT", pdb_text)
+
+        graph = pms.Store(mol, "output").assembled_graph(use_atom_names=True)
+        self.assertIsInstance(graph, pms.AssembledStructureGraph)
+        self.assertEqual(len(graph.bonds), 12)
+        self.assertTrue(all(bond.provenance == "ligand_inferred" for bond in graph.bonds))
+        self.assertGreater(len(graph.angles), 0)
 
         print()
         with self.assertRaisesRegex(TypeError, "Unsupported input type"):

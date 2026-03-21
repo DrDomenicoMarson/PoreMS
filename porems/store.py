@@ -13,6 +13,7 @@ import warnings
 import porems.utils as utils
 import porems.database as db
 
+from porems.connectivity import AssembledStructureGraph, GraphBond
 from porems.molecule import Molecule
 from porems.pore import Pore
 
@@ -320,44 +321,22 @@ class Store:
         """
         return ((residue_id - 1) % 9999) + 1
 
-    def _pdb_known_residue_bonds(self, residue_short, atom_count):
-        """Return built-in internal bonds for known surface residue templates.
-
-        Parameters
-        ----------
-        residue_short : str
-            Short residue identifier of the written molecule.
-        atom_count : int
-            Number of atoms present in that molecule.
-
-        Returns
-        -------
-        bonds : tuple[tuple[int, int], ...]
-            Zero-based local atom-index pairs that should be written as
-            ``CONECT`` records.
-        """
-        if residue_short == "SL" and atom_count >= 3:
-            return ((0, 1), (1, 2))
-        if residue_short == "SLG" and atom_count >= 5:
-            return ((0, 1), (1, 2), (0, 3), (3, 4))
-        return ()
-
-    def _pdb_conect_pairs(self, atom_records, molecule_serials):
-        """Collect inspection-only PDB connectivity pairs.
+    def _assembled_structure_graph(self, atom_records, molecule_serials):
+        """Build a bonded graph for the serialized structure.
 
         Parameters
         ----------
         atom_records : list[_StructureAtomRecord]
-            All atom records written to the current PDB file.
+            All atom records written to the current structure file.
         molecule_serials : list[list[int]]
             Atom serial numbers grouped per written molecule.
 
         Returns
         -------
-        bond_pairs : list[tuple[int, int]]
-            Sorted unique atom-serial pairs to emit as ``CONECT`` records.
+        graph : AssembledStructureGraph
+            Assembled bond graph in writer atom order.
         """
-        bond_pairs = set()
+        bonds = []
 
         source_serials = {
             record.source_id: record.serial
@@ -365,23 +344,82 @@ class Store:
             if record.source_id is not None
         }
         if isinstance(self._inp, Pore):
+            inserted_bridge_oxygen = {
+                record.atom_id
+                for record in self._inp.get_surface_edit_history()
+                if record.reason == "inserted_bridge_oxygen"
+            }
             for atom_id, props in self._inp._matrix.get_matrix().items():
                 if atom_id not in source_serials:
                     continue
                 for neighbor_id in props["atoms"]:
-                    if neighbor_id not in source_serials:
+                    if neighbor_id not in source_serials or neighbor_id < atom_id:
                         continue
-                    serial_a = source_serials[atom_id]
-                    serial_b = source_serials[neighbor_id]
-                    bond_pairs.add(tuple(sorted((serial_a, serial_b))))
+                    provenance = (
+                        "siloxane_bridge"
+                        if atom_id in inserted_bridge_oxygen or neighbor_id in inserted_bridge_oxygen
+                        else "scaffold"
+                    )
+                    bonds.append(
+                        GraphBond(
+                            source_serials[atom_id],
+                            source_serials[neighbor_id],
+                            provenance,
+                        )
+                    )
 
         for molecule_index, serials in enumerate(molecule_serials):
-            residue_short = self._mols[molecule_index].get_short()
-            for atom_a, atom_b in self._pdb_known_residue_bonds(residue_short, len(serials)):
-                if atom_a < len(serials) and atom_b < len(serials):
-                    bond_pairs.add(tuple(sorted((serials[atom_a], serials[atom_b]))))
+            mol = self._mols[molecule_index]
+            for atom_a, atom_b in mol.get_bonds():
+                bonds.append(
+                    GraphBond(serials[atom_a], serials[atom_b], "ligand_explicit")
+                )
+            for atom_a, atom_b in mol.infer_bonds():
+                bonds.append(
+                    GraphBond(serials[atom_a], serials[atom_b], "ligand_inferred")
+                )
 
-        return sorted(bond_pairs)
+        if isinstance(self._inp, Pore):
+            molecule_serial_map = {
+                id(mol): serials
+                for mol, serials in zip(self._mols, molecule_serials)
+            }
+            for record in self._inp.get_attachment_records():
+                serials = molecule_serial_map.get(id(record.molecule))
+                if not serials:
+                    continue
+                mount_serial = serials[record.mount_atom_local_id]
+                for oxygen_source_id in record.scaffold_oxygen_source_ids:
+                    if oxygen_source_id in source_serials:
+                        bonds.append(
+                            GraphBond(
+                                mount_serial,
+                                source_serials[oxygen_source_id],
+                                "graft_junction",
+                            )
+                        )
+
+        return AssembledStructureGraph.from_bonds(
+            (record.serial for record in atom_records),
+            bonds,
+        )
+
+    def assembled_graph(self, use_atom_names=False):
+        """Return the assembled bonded graph in structure-writer atom order.
+
+        Parameters
+        ----------
+        use_atom_names : bool, optional
+            True to preserve explicit atom names when available while matching
+            the graph to the same atom order used by structure writers.
+
+        Returns
+        -------
+        graph : AssembledStructureGraph
+            Bond graph and derived angle hooks for the current object.
+        """
+        atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
+        return self._assembled_structure_graph(atom_records, molecule_serials)
 
     def _write_pdb_conect_records(self, file_out, bond_pairs):
         """Write ``CONECT`` records for previously collected bond pairs.
@@ -409,8 +447,8 @@ class Store:
                     + "\n"
                 )
 
-    def _write_cif_struct_conn_loop(self, file_out, atom_records, molecule_serials):
-        """Write an mmCIF bond loop for known scaffold and surface connectivity.
+    def _write_cif_struct_conn_loop(self, file_out, atom_records, graph):
+        """Write an mmCIF bond loop for the assembled bonded structure.
 
         Parameters
         ----------
@@ -418,11 +456,10 @@ class Store:
             Open output stream.
         atom_records : list[_StructureAtomRecord]
             Serialized atom metadata in file order.
-        molecule_serials : list[list[int]]
-            Atom serial numbers grouped per written molecule.
+        graph : AssembledStructureGraph
+            Assembled graph matching ``atom_records``.
         """
-        bond_pairs = self._pdb_conect_pairs(atom_records, molecule_serials)
-        if not bond_pairs:
+        if not graph.bonds:
             return
 
         record_by_serial = {record.serial: record for record in atom_records}
@@ -439,9 +476,9 @@ class Store:
         file_out.write("_struct_conn.ptnr2_label_seq_id\n")
         file_out.write("_struct_conn.ptnr2_label_atom_id\n")
 
-        for conn_index, (serial_a, serial_b) in enumerate(bond_pairs, start=1):
-            record_a = record_by_serial[serial_a]
-            record_b = record_by_serial[serial_b]
+        for conn_index, bond in enumerate(graph.bonds, start=1):
+            record_a = record_by_serial[bond.atom_a]
+            record_b = record_by_serial[bond.atom_b]
             file_out.write(
                 f"conn{conn_index} covale "
                 f"A {record_a.residue_short} {record_a.residue_id} {record_a.atom_name} "
@@ -460,13 +497,13 @@ class Store:
             enumerate atom names from atom types.
         write_bonds : bool, optional
             When ``True`` (the default), also emit an ``_struct_conn`` loop
-            for the active silica scaffold and built-in ``SL``/``SLG``
-            surface residues. Ligand-internal connectivity is not
-            reconstructed here.
+            for the full assembled bond graph, including silica scaffold,
+            siloxane bridges, ligand-internal bonds, and graft junctions.
         """
         link = self._link
         link += name if name else self._name + ".cif"
         atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
+        graph = self._assembled_structure_graph(atom_records, molecule_serials)
         data_name = self._name.replace(" ", "_")
 
         with open(link, "w") as file_out:
@@ -510,7 +547,7 @@ class Store:
                         [
                             "HETATM",
                             str(record.serial),
-                            record.atom_type,
+                            db.get_element(record.atom_type),
                             record.atom_name,
                             ".",
                             record.residue_short,
@@ -535,7 +572,7 @@ class Store:
                 )
 
             if write_bonds:
-                self._write_cif_struct_conn_loop(file_out, atom_records, molecule_serials)
+                self._write_cif_struct_conn_loop(file_out, atom_records, graph)
 
             file_out.write("#\n")
 
@@ -551,14 +588,15 @@ class Store:
             enumerate atom names from atom types.
         write_conect : bool, optional
             When ``True`` (the default), also emit inspection-oriented
-            ``CONECT`` records for the active silica scaffold and the built-in
-            ``SL``/``SLG`` surface residues. Ligand-internal connectivity is
-            not reconstructed here.
+            ``CONECT`` records for the full assembled bond graph, including
+            silica scaffold, siloxane bridges, ligand-internal bonds, and
+            graft junctions.
         """
         # Initialize
         link = self._link
         link += name if name else self._name+".pdb"
         atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
+        graph = self._assembled_structure_graph(atom_records, molecule_serials)
         self._warn_if_pdb_limits_exceeded(atom_records)
 
         # Open file
@@ -580,7 +618,7 @@ class Store:
                 out_string += f"{1:6.2f}"                  # 55-60 (6)    Occupancy
                 out_string += f"{0:6.2f}"                  # 61-66 (6)    Temperature factor
                 out_string += "          "                 # 67-76 (10)   -
-                out_string += f"{record.atom_type:>2s}"    # 77-78 (2)    Element symbol
+                out_string += f"{db.get_element(record.atom_type):>2s}" # 77-78 (2) Element symbol
                 out_string += "  "                         # 79-80 (2)    Charge on the atom
 
                 file_out.write(out_string+"\n")
@@ -588,7 +626,7 @@ class Store:
             if write_conect:
                 self._write_pdb_conect_records(
                     file_out,
-                    self._pdb_conect_pairs(atom_records, molecule_serials),
+                    [(bond.atom_a, bond.atom_b) for bond in graph.bonds],
                 )
 
             # End statement

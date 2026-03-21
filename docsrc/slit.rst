@@ -54,9 +54,10 @@ bridge oxygens, and the final valid surface/scaffold oxygen counts.
 main structure files together with a JSON report. Object backups are written
 only when ``write_object_files=True`` is requested explicitly. For inspection,
 the same writer can also emit a ``.pdb`` file, and ``write_pdb_conect=True``
-adds ``CONECT`` records for the active silica connectivity and the built-in
-``SL``/``SLG`` surface groups. For larger systems, ``write_cif=True`` writes
-an mmCIF file, and ``write_cif_bonds=True`` adds an inspection-oriented
+adds ``CONECT`` records for the assembled bond graph, including silica
+scaffold bonds, siloxane bridges, ligand-internal bonds, and graft junctions.
+For larger systems, ``write_cif=True`` writes an mmCIF file, and
+``write_cif_bonds=True`` adds the same inspection-oriented connectivity via an
 ``_struct_conn`` bond loop.
 
 The slit-preparation API is designed for the periodic bare-silica slit builder:

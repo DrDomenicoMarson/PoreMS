@@ -62,6 +62,7 @@ class Molecule:
         self._charge = 0
         self._masses = []
         self._mass = 0
+        self._bonds = set()
 
         # Check data input
         if inp is None:
@@ -69,7 +70,7 @@ class Molecule:
         else:
             # Read from file
             if isinstance(inp, str):
-                self._atom_list = self._read(inp, inp.split(".")[-1].upper())
+                self._atom_list, self._bonds = self._read(inp, inp.split(".")[-1].upper())
             # Concat multiple molecules
             elif isinstance(inp, list):
                 # Atom list is provided
@@ -77,7 +78,7 @@ class Molecule:
                     self._atom_list = inp
                 # List of molecules is provided
                 else:
-                    self._atom_list = self._concat(inp)
+                    self._atom_list, self._bonds = self._concat(inp)
 
 
     ##################
@@ -122,6 +123,8 @@ class Molecule:
         -------
         atom_list : list
             Atom list
+        bonds : set[tuple[int, int]]
+            Explicit bond pairs read from the input file.
 
         Raises
         ------
@@ -134,43 +137,74 @@ class Molecule:
 
         # Read molecule
         atom_list = []
-        with open(file_path, "r") as file_in:
-            for line_idx, line in enumerate(file_in):
-                line_val = line.split()
-                is_add = False
+        bonds = set()
 
-                # Gro file
-                if file_type == "GRO":
+        if file_type == "GRO":
+            with open(file_path, "r") as file_in:
+                for line_idx, line in enumerate(file_in):
+                    line_val = line.split()
                     if line_idx > 0 and len(line_val) > 3:
                         residue = int(line[0:5])-1
                         pos = [float(line_val[i]) for i in range(3, 5+1)]
                         name = line_val[1]
                         atom_type = ''.join([i for i in line_val[1] if not i.isdigit()])
-                        is_add = True
+                        atom_list.append(Atom(pos, atom_type, name, residue))
 
-                # Pdb file
-                elif file_type == "PDB":
-                    if line_val[0] in ["ATOM", "HETATM"]:
+            return atom_list, bonds
+
+        if file_type == "PDB":
+            serial_to_index = {}
+            with open(file_path, "r") as file_in:
+                for line in file_in:
+                    record = line[0:6].strip()
+                    if record in ["ATOM", "HETATM"]:
+                        serial = int(line[6:11])
                         residue = int(line[22:26])-1
-                        pos = [float(line_val[i])/10 for i in range(6, 8+1)]
-                        name = line_val[11]
-                        atom_type = line_val[11]
-                        is_add = True
+                        pos = [float(line[30:38])/10, float(line[38:46])/10, float(line[46:54])/10]
+                        name = line[12:16].strip()
+                        atom_token = line[76:78].strip() if len(line) >= 78 else ""
+                        atom_type = atom_token if atom_token else ''.join([i for i in name if not i.isdigit()])
+                        atom_type = db.get_element(atom_type)
+                        serial_to_index[serial] = len(atom_list)
+                        atom_list.append(Atom(pos, atom_type, name, residue))
+                    elif record == "CONECT":
+                        serials = [
+                            int(line[start:start+5])
+                            for start in range(6, len(line.rstrip("\n")), 5)
+                            if line[start:start+5].strip()
+                        ]
+                        if len(serials) < 2 or serials[0] not in serial_to_index:
+                            continue
+                        atom_a = serial_to_index[serials[0]]
+                        for serial_b in serials[1:]:
+                            if serial_b in serial_to_index:
+                                bonds.add(self._normalize_bond(atom_a, serial_to_index[serial_b]))
 
-                # Mol2 file
-                elif file_type == "MOL2":
-                    if len(line_val) > 8:
-                        residue = 0
-                        pos = [float(line_val[i])/10 for i in range(2, 4+1)]
-                        name = line_val[1]
+            return atom_list, bonds
+
+        section = None
+        with open(file_path, "r") as file_in:
+            for line in file_in:
+                line_val = line.split()
+                if not line_val:
+                    continue
+                if line.startswith("@<TRIPOS>"):
+                    section = line.strip()
+                    continue
+
+                if section == "@<TRIPOS>ATOM" and len(line_val) > 5:
+                    residue = int(line_val[6])-1 if len(line_val) > 6 else 0
+                    pos = [float(line_val[i])/10 for i in range(2, 4+1)]
+                    name = line_val[1]
+                    try:
+                        atom_type = db.get_element(line_val[5])
+                    except ValueError:
                         atom_type = ''.join([i for i in line_val[1] if not i.isdigit()])
-                        is_add = True
-
-                if is_add:
                     atom_list.append(Atom(pos, atom_type, name, residue))
+                elif section == "@<TRIPOS>BOND" and len(line_val) >= 4:
+                    bonds.add(self._normalize_bond(int(line_val[1])-1, int(line_val[2])-1))
 
-        # Transform to column
-        return atom_list
+        return atom_list, bonds
 
     def _concat(self, mol_list):
         """Concatenate a molecule list into one molecule object.
@@ -184,8 +218,44 @@ class Molecule:
         -------
         atom_list : list
             Atom list
+        bonds : set[tuple[int, int]]
+            Bond pairs with concatenated atom indexing.
         """
-        return sum([mol.get_atom_list() for mol in mol_list], [])
+        atom_list = []
+        bonds = set()
+        atom_offset = 0
+        for mol in mol_list:
+            atom_list.extend(mol.get_atom_list())
+            bonds.update(
+                self._normalize_bond(atom_a + atom_offset, atom_b + atom_offset)
+                for atom_a, atom_b in mol.get_bonds()
+            )
+            atom_offset += mol.get_num()
+        return atom_list, bonds
+
+    def _normalize_bond(self, atom_a, atom_b):
+        """Normalize one bond definition to a sorted atom pair.
+
+        Parameters
+        ----------
+        atom_a : int
+            First atom index.
+        atom_b : int
+            Second atom index.
+
+        Returns
+        -------
+        bond : tuple[int, int]
+            Sorted bond tuple.
+
+        Raises
+        ------
+        ValueError
+            Raised when the two atom indices are identical.
+        """
+        if atom_a == atom_b:
+            raise ValueError("Molecule: Cannot create a bond from one atom to itself.")
+        return (atom_a, atom_b) if atom_a < atom_b else (atom_b, atom_a)
 
     def _temp(self, atoms):
         """Create a temporary molecule of specified atom ids.
@@ -210,7 +280,10 @@ class Molecule:
         mol : Molecule
             Molecule whose atoms will be appended in their current order.
         """
+        atom_offset = self.get_num()
         self._atom_list += mol.get_atom_list()
+        for atom_a, atom_b in mol.get_bonds():
+            self._bonds.add(self._normalize_bond(atom_a + atom_offset, atom_b + atom_offset))
 
     def column_pos(self):
         """Return Cartesian coordinates grouped by dimension.
@@ -645,6 +718,11 @@ class Molecule:
             metadata can later be used by structure writers to reconstruct
             connectivity for objectified scaffold atoms.
 
+        Notes
+        -----
+        When ``pos`` is given as an atom index, the new atom is also connected
+        to that reference atom in the molecule bond graph.
+
         Examples
         --------
         .. code-block:: python
@@ -654,6 +732,7 @@ class Molecule:
             mol.add("C", 1, [0, 1], r=0.153, theta= 135)
         """
         # Process input
+        bond_atom = pos if isinstance(pos, int) else None
         pos = self.pos(pos) if isinstance(pos, int) else pos
         vec = self._vector(*bond) if bond else geometry.main_axis("z")
 
@@ -681,6 +760,8 @@ class Molecule:
                 source_id=source_id,
             )
         )
+        if bond_atom is not None:
+            self.add_bond(bond_atom, self.get_num()-1)
 
     # Delete an atom
     def delete(self, atoms):
@@ -693,10 +774,24 @@ class Molecule:
         """
         # Process input
         atoms = [atoms] if isinstance(atoms, int) else atoms
+        atoms = sorted(set(atoms))
+
+        old_to_new = {}
+        new_index = 0
+        for atom_index in range(self.get_num()):
+            if atom_index in atoms:
+                continue
+            old_to_new[atom_index] = new_index
+            new_index += 1
 
         # Remove atoms
         for atom in sorted(atoms, reverse=True):
             self._atom_list.pop(atom)
+        self._bonds = {
+            self._normalize_bond(old_to_new[atom_a], old_to_new[atom_b])
+            for atom_a, atom_b in self._bonds
+            if atom_a in old_to_new and atom_b in old_to_new
+        }
 
     def overlap(self, error=0.005):
         """Return groups of atoms whose coordinates overlap within a tolerance.
@@ -744,6 +839,85 @@ class Molecule:
             Index of the second atom.
         """
         self._atom_list[atom_a], self._atom_list[atom_b] = self._atom_list[atom_b], self._atom_list[atom_a]
+        remapped_bonds = set()
+        for bond_a, bond_b in self._bonds:
+            bond_a = atom_b if bond_a == atom_a else atom_a if bond_a == atom_b else bond_a
+            bond_b = atom_b if bond_b == atom_a else atom_a if bond_b == atom_b else bond_b
+            remapped_bonds.add(self._normalize_bond(bond_a, bond_b))
+        self._bonds = remapped_bonds
+
+    def add_bond(self, atom_a, atom_b):
+        """Add one explicit bond to the molecule graph.
+
+        Parameters
+        ----------
+        atom_a : int
+            Index of the first bonded atom.
+        atom_b : int
+            Index of the second bonded atom.
+
+        Raises
+        ------
+        IndexError
+            Raised when one atom index is outside the molecule.
+        ValueError
+            Raised when a self-bond is requested.
+        """
+        if atom_a < 0 or atom_a >= self.get_num() or atom_b < 0 or atom_b >= self.get_num():
+            raise IndexError("Molecule: Bond atom index out of range.")
+        self._bonds.add(self._normalize_bond(atom_a, atom_b))
+
+    def get_bonds(self):
+        """Return explicit molecule bonds.
+
+        Returns
+        -------
+        bonds : list[tuple[int, int]]
+            Sorted explicit atom-index pairs.
+        """
+        return sorted(self._bonds)
+
+    def infer_bonds(self, cutoff_scale=1.20):
+        """Infer missing bonds from covalent radii and interatomic distances.
+
+        Parameters
+        ----------
+        cutoff_scale : float, optional
+            Multiplicative tolerance applied to the sum of covalent radii.
+
+        Returns
+        -------
+        bonds : list[tuple[int, int]]
+            Sorted inferred bond pairs that are not already explicit bonds.
+        """
+        inferred_bonds = set()
+        for atom_a in range(self.get_num()):
+            atom_type_a = self.get_atom_type(atom_a)
+            try:
+                element_a = db.get_element(atom_type_a)
+                radius_a = db.get_covalent_radius(atom_type_a)
+            except ValueError:
+                continue
+
+            for atom_b in range(atom_a + 1, self.get_num()):
+                if (atom_a, atom_b) in self._bonds:
+                    continue
+
+                atom_type_b = self.get_atom_type(atom_b)
+                try:
+                    element_b = db.get_element(atom_type_b)
+                    radius_b = db.get_covalent_radius(atom_type_b)
+                except ValueError:
+                    continue
+
+                if element_a == "H" and element_b == "H":
+                    continue
+
+                cutoff = cutoff_scale * (radius_a + radius_b)
+                if geometry.length(self.bond(atom_a, atom_b)) <= cutoff:
+                    inferred_bonds.add((atom_a, atom_b))
+
+        return sorted(inferred_bonds)
 
     def set_atom_type(self, atom, atom_type):
         """Set the atom type of one atom.

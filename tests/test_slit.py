@@ -592,7 +592,7 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
             )
         )
 
-    def test_bare_slit_pdb_with_conect_is_opt_in(self):
+    def test_bare_slit_pdb_writes_conect_by_default(self):
         output_dir = os.path.join(
             os.path.dirname(__file__),
             "output",
@@ -608,7 +608,6 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
                 surface_target=self.surface_target,
             ),
             write_pdb=True,
-            write_pdb_conect=True,
         )
 
         pdb_path = os.path.join(output_dir, "test_bare_amorphous_slit_with_pdb.pdb")
@@ -620,7 +619,7 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertTrue(any(line.startswith("HETATM") for line in pdb_lines))
         self.assertTrue(any(line.startswith("CONECT") for line in pdb_lines))
 
-    def test_bare_slit_cif_with_bonds_is_opt_in(self):
+    def test_bare_slit_cif_writes_bonds_by_default(self):
         output_dir = os.path.join(
             os.path.dirname(__file__),
             "output",
@@ -636,7 +635,6 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
                 surface_target=self.surface_target,
             ),
             write_cif=True,
-            write_cif_bonds=True,
         )
 
         cif_path = os.path.join(output_dir, "test_bare_amorphous_slit_with_cif.cif")
@@ -668,6 +666,10 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertTrue(hasattr(pms, "SilaneAttachmentConfig"))
         self.assertTrue(hasattr(pms, "FunctionalizedAmorphousSlitConfig"))
         self.assertTrue(hasattr(pms, "FunctionalizedSlitResult"))
+        self.assertTrue(hasattr(pms, "GraphBond"))
+        self.assertTrue(hasattr(pms, "GraphAngle"))
+        self.assertTrue(hasattr(pms, "AttachmentRecord"))
+        self.assertTrue(hasattr(pms, "AssembledStructureGraph"))
 
 
 class FunctionalizedAmorphousSlitCase(unittest.TestCase):
@@ -745,6 +747,111 @@ class FunctionalizedAmorphousSlitCase(unittest.TestCase):
         self.assertTrue(
             all(error <= result.report.surface_fraction_tolerance for error in errors)
         )
+
+    def test_functionalized_assembled_graph_contains_graft_junctions_and_angles(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=63 / 957,
+            q3_fraction=648 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=3 / 957,
+            t3_fraction=4 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_graph_slit",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+            ),
+        )
+
+        result = pms.prepare_functionalized_amorphous_slit_surface(config)
+        store = pms.Store(result.system._pore)
+        graph = store.assembled_graph(use_atom_names=True)
+        atom_records, molecule_serials = store._collect_structure_records(use_atom_names=True)
+        serials_by_molecule = {
+            id(molecule): serials
+            for molecule, serials in zip(store._mols, molecule_serials)
+        }
+
+        self.assertIsInstance(graph, pms.AssembledStructureGraph)
+        self.assertTrue(any(bond.provenance == "graft_junction" for bond in graph.bonds))
+        self.assertTrue(any(bond.provenance == "ligand_explicit" for bond in graph.bonds))
+
+        attachment_record = result.system._pore.get_attachment_records()[0]
+        mount_serial = serials_by_molecule[id(attachment_record.molecule)][
+            attachment_record.mount_atom_local_id
+        ]
+        self.assertTrue(
+            any(
+                bond.provenance == "graft_junction"
+                and mount_serial in (bond.atom_a, bond.atom_b)
+                for bond in graph.bonds
+            )
+        )
+        self.assertTrue(any(angle.atom_b == mount_serial for angle in graph.angles))
+
+        record_by_serial = {record.serial: record for record in atom_records}
+        graft_neighbors = {
+            bond.atom_b if bond.atom_a == mount_serial else bond.atom_a
+            for bond in graph.bonds
+            if bond.provenance == "graft_junction"
+            and mount_serial in (bond.atom_a, bond.atom_b)
+        }
+        self.assertTrue(
+            all(record_by_serial[serial].atom_type == "O" for serial in graft_neighbors)
+        )
+
+    def test_functionalized_bonded_exports_include_graft_connectivity(self):
+        output_dir = os.path.join(
+            os.path.dirname(__file__),
+            "output",
+            "functionalized_amorphous_slit_bonded_export",
+        )
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=63 / 957,
+            q3_fraction=648 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=3 / 957,
+            t3_fraction=4 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_export_slit",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+            ),
+        )
+
+        pms.write_functionalized_amorphous_slit(
+            output_dir,
+            config,
+            write_pdb=True,
+            write_cif=True,
+        )
+
+        with open(os.path.join(output_dir, "functionalized_export_slit.pdb"), "r") as file_in:
+            pdb_text = file_in.read()
+        with open(os.path.join(output_dir, "functionalized_export_slit.cif"), "r") as file_in:
+            cif_text = file_in.read()
+
+        self.assertIn("CONECT", pdb_text)
+        self.assertIn("_struct_conn.id", cif_text)
+        self.assertIn(" TMS ", pdb_text)
 
 
 if __name__ == "__main__":

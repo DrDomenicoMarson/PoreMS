@@ -115,6 +115,20 @@ masses = {"H":    1.0079,  # Hydrogen
           "Hs": 277.0000}  # Hassium
 
 
+# Create covalent radii dictionary in nanometers
+covalent_radii = {
+    "H": 0.031,
+    "C": 0.076,
+    "N": 0.071,
+    "O": 0.066,
+    "F": 0.057,
+    "P": 0.107,
+    "S": 0.105,
+    "Cl": 0.102,
+    "Si": 0.111,
+}
+
+
 ##################
 # Getter Methods #
 ##################
@@ -140,3 +154,66 @@ def get_mass(symbol):
         return masses[symbol]
 
     raise ValueError("DB: Atom name not found.")
+
+
+def get_element(symbol):
+    """Return the chemical element represented by one atom-type token.
+
+    Parameters
+    ----------
+    symbol : str
+        Atom-type or element token.
+
+    Returns
+    -------
+    element : str
+        Normalized chemical element symbol.
+
+    Raises
+    ------
+    ValueError
+        Raised when no supported chemical element can be derived.
+    """
+    if symbol in masses:
+        return symbol
+
+    letters = "".join(char for char in symbol if char.isalpha())
+    if not letters:
+        raise ValueError("DB: Atom name not found.")
+
+    if len(letters) >= 2:
+        candidate = letters[0].upper() + letters[1].lower()
+        if candidate in masses:
+            return candidate
+
+    candidate = letters[0].upper()
+    if candidate in masses:
+        return candidate
+
+    raise ValueError("DB: Atom name not found.")
+
+
+def get_covalent_radius(symbol):
+    """Return the covalent radius of one atom type.
+
+    Parameters
+    ----------
+    symbol : str
+        Atom-type or element token.
+
+    Returns
+    -------
+    radius : float
+        Covalent radius in nanometers.
+
+    Raises
+    ------
+    ValueError
+        Raised when the requested element is not present in the local radius
+        table.
+    """
+    element = get_element(symbol)
+    if element in covalent_radii:
+        return covalent_radii[element]
+
+    raise ValueError("DB: Covalent radius not found.")

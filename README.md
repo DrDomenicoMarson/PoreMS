@@ -59,10 +59,11 @@ the final valid surface/scaffold oxygen counts.
 together with a JSON report in the selected output directory. Object backups are
 written only when `write_object_files=True` is requested explicitly. For
 inspection, the same writer can also emit a `.pdb` file, and
-`write_pdb_conect=True` adds `CONECT` records for the active silica
-connectivity and built-in `SL`/`SLG` surface groups. For larger systems,
-`write_cif=True` writes an mmCIF file, and `write_cif_bonds=True` adds an
-inspection-oriented `_struct_conn` bond loop.
+`write_pdb_conect=True` adds `CONECT` records for the assembled bond graph,
+including silica scaffold bonds, siloxane bridges, ligand-internal bonds, and
+graft junctions. For larger systems, `write_cif=True` writes an mmCIF file,
+and `write_cif_bonds=True` adds the same inspection-oriented connectivity via
+an `_struct_conn` bond loop.
 
 In the slit exact-target path, custom siloxane bridge oxygens are folded back
 into the silica scaffold representation and exported as regular scaffold oxygen

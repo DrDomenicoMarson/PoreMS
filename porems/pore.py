@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import porems.geometry as geometry
 import porems.generic as generic
 
+from porems.connectivity import AttachmentRecord
 from porems.dice import Dice
 from porems.molecule import Molecule
 
@@ -169,6 +170,7 @@ class Pore():
         self._objectified_atoms = set()
         self._surface_edit_history = []
         self._surface_preparation_diagnostics = SurfacePreparationDiagnostics()
+        self._attachment_records = []
 
         self._mol_dict = {"block": {}, "in": {}, "ex": {}}
 
@@ -231,6 +233,32 @@ class Pore():
         for atom_id in atoms:
             self._record_surface_edit(atom_id, reason)
         self._matrix.remove(atoms)
+
+    def _retained_scaffold_oxygen_ids(self, site_id, oxygen_ids):
+        """Return scaffold oxygens that stay bonded to an attached mount atom.
+
+        Parameters
+        ----------
+        site_id : int
+            Silicon site id that is about to be consumed.
+        oxygen_ids : list[int]
+            Surface-handle oxygen ids removed together with the silicon site.
+
+        Returns
+        -------
+        oxygen_ids : tuple[int, ...]
+            Source ids of retained scaffold oxygens bonded to ``site_id``.
+        """
+        if site_id not in self._matrix.get_matrix():
+            return ()
+
+        return tuple(
+            sorted(
+                atom_id
+                for atom_id in self._matrix.get_matrix()[site_id]["atoms"]
+                if atom_id not in oxygen_ids and self._block.get_atom_type(atom_id) == "O"
+            )
+        )
 
     def _surface_handle_oxygen_ids(self):
         """Return oxygen atoms that currently behave as surface handles.
@@ -725,6 +753,22 @@ class Pore():
                         self._mol_dict[site_type][mol_temp.get_short()] = []
                     self._mol_dict[site_type][mol_temp.get_short()].append(mol_temp)
 
+                    scaffold_oxygen_source_ids = self._retained_scaffold_oxygen_ids(
+                        si,
+                        self._sites[si].oxygen_ids,
+                    )
+                    self._attachment_records.append(
+                        AttachmentRecord(
+                            site_id=si,
+                            site_type=site_type,
+                            mount_atom_local_id=mount,
+                            is_geminal=self._sites[si].is_geminal,
+                            scaffold_oxygen_source_ids=scaffold_oxygen_source_ids,
+                            surface_oxygen_source_ids=tuple(self._sites[si].oxygen_ids),
+                            molecule=mol_temp,
+                        )
+                    )
+
                     # Remove bonds of occupied binding site
                     self._matrix.remove([si] + self._sites[si].oxygen_ids)
 
@@ -1047,6 +1091,16 @@ class Pore():
             preparation and later bridge insertion.
         """
         return list(self._surface_edit_history)
+
+    def get_attachment_records(self):
+        """Return metadata for molecules attached to the prepared pore surface.
+
+        Returns
+        -------
+        records : list[AttachmentRecord]
+            Attachment records in placement order.
+        """
+        return list(self._attachment_records)
 
     def get_site_dict(self):
         """Return molecules grouped by site family.

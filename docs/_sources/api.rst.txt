@@ -17,6 +17,10 @@ Molecule
     molecule.Molecule
     atom.Atom
     store.Store
+    connectivity.GraphBond
+    connectivity.GraphAngle
+    connectivity.AttachmentRecord
+    connectivity.AssembledStructureGraph
 
 
 .. _pore_api:

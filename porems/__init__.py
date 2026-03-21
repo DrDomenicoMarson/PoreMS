@@ -1,5 +1,6 @@
 from ._version import __version__
 from .atom import Atom
+from .connectivity import AttachmentRecord, AssembledStructureGraph, GraphAngle, GraphBond
 from .dice import Dice
 from .matrix import Matrix
 from .molecule import Molecule
@@ -54,7 +55,7 @@ import porems.utils as utils
 
 __all__ = [
     "__version__",
-    "Atom", "Molecule", "Store",
+    "Atom", "GraphBond", "GraphAngle", "AttachmentRecord", "AssembledStructureGraph", "Molecule", "Store",
     "Dice", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
     "BindingSite", "SurfacePreparationDiagnostics", "Pore",
