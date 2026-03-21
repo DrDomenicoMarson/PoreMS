@@ -284,15 +284,41 @@ class Store:
         if max_atom_serial <= 99999 and max_residue_serial <= 9999:
             return
 
+        warning_parts = []
+        if max_atom_serial > 99999:
+            warning_parts.append(
+                "atom serials exceed the 5-column PDB field and will be written "
+                "as non-standard values"
+            )
+        if max_residue_serial > 9999:
+            warning_parts.append(
+                "residue ids exceed the 4-column PDB field and will be wrapped "
+                "into the standard range for visualization"
+            )
+
         warnings.warn(
             "PDB fixed-width fields are exceeded by this export "
-            f"(max atom serial={max_atom_serial}, max residue id={max_residue_serial}). "
-            "PoreMS will still write the full identifiers, but the resulting file is "
-            "non-standard and some viewers may misread atom or residue numbering. "
-            "Prefer mmCIF for large systems.",
+            f"(max atom serial={max_atom_serial}, max residue id={max_residue_serial}); "
+            + "; ".join(warning_parts)
+            + ". Prefer mmCIF for large systems.",
             UserWarning,
             stacklevel=2,
         )
+
+    def _pdb_residue_id(self, residue_id):
+        """Return a PDB-safe residue sequence number.
+
+        Parameters
+        ----------
+        residue_id : int
+            Internal residue identifier assigned during structure export.
+
+        Returns
+        -------
+        residue_id : int
+            Residue identifier wrapped into the standard 4-column PDB range.
+        """
+        return ((residue_id - 1) % 9999) + 1
 
     def _pdb_known_residue_bonds(self, residue_short, atom_count):
         """Return built-in internal bonds for known surface residue templates.
@@ -546,7 +572,7 @@ class Store:
                 out_string += f"{record.residue_short:>3s}"# 18-20 (3)    Residue name
                 out_string += " "                          # 21    (1)    -
                 out_string += "A"                          # 22    (1)    Chain identifier
-                out_string += f"{record.residue_id:4d}"    # 23-26 (4)    Residue sequence number
+                out_string += f"{self._pdb_residue_id(record.residue_id):4d}" # 23-26 (4) Residue sequence number
                 out_string += " "                          # 27    (1)    Code for insertion of residues
                 out_string += "   "                        # 28-30 (3)    -
                 for coord in record.position:              # 31-54 (3*8)  Coordinates
