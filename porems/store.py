@@ -60,6 +60,28 @@ class _StructureAtomRecord:
     source_id: int | None
 
 
+@dataclass
+class _StructureExportCache:
+    """Cached assembled export data for one atom-name mode.
+
+    Parameters
+    ----------
+    atom_records : list[_StructureAtomRecord]
+        Serialized atom metadata in structure-writer order.
+    molecule_serials : list[list[int]]
+        Atom serial numbers grouped by written molecule.
+    graph : AssembledStructureGraph or None, optional
+        Cached assembled bond graph matching ``atom_records``.
+    validation_report : ConnectivityValidationReport or None, optional
+        Cached connectivity-validation report for the assembled structure.
+    """
+
+    atom_records: list[_StructureAtomRecord]
+    molecule_serials: list[list[int]]
+    graph: AssembledStructureGraph | None = None
+    validation_report: ConnectivityValidationReport | None = None
+
+
 class Store:
     """Write molecule and pore objects to simulation input files.
 
@@ -137,6 +159,7 @@ class Store:
 
         # Create output folder
         utils.mkdirp(link)
+        self._structure_export_cache = {}
 
 
     ###############
@@ -273,6 +296,76 @@ class Store:
             residue_serial += 1
 
         return atom_records, molecule_serials
+
+    def _export_cache(self, use_atom_names=False):
+        """Return cached structure-export data for one atom-name mode.
+
+        Parameters
+        ----------
+        use_atom_names : bool, optional
+            True to preserve explicit atom names when available. False to
+            enumerate atom names from atom types.
+
+        Returns
+        -------
+        cache : _StructureExportCache
+            Cached structure records and lazily populated graph/validation
+            data for the requested atom-name mode.
+        """
+        cache = self._structure_export_cache.get(use_atom_names)
+        if cache is not None:
+            return cache
+
+        atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
+        cache = _StructureExportCache(atom_records, molecule_serials)
+        self._structure_export_cache[use_atom_names] = cache
+        return cache
+
+    def _export_graph(self, use_atom_names=False):
+        """Return the cached assembled bond graph for one atom-name mode.
+
+        Parameters
+        ----------
+        use_atom_names : bool, optional
+            True to preserve explicit atom names when available. False to
+            enumerate atom names from atom types.
+
+        Returns
+        -------
+        graph : AssembledStructureGraph
+            Assembled graph matching the current structure-writer order.
+        """
+        cache = self._export_cache(use_atom_names)
+        if cache.graph is None:
+            cache.graph = self._assembled_structure_graph(
+                cache.atom_records,
+                cache.molecule_serials,
+            )
+        return cache.graph
+
+    def _validation_report(self, use_atom_names=False):
+        """Return the cached connectivity-validation report.
+
+        Parameters
+        ----------
+        use_atom_names : bool, optional
+            True to preserve explicit atom names when available. False to
+            enumerate atom names from atom types.
+
+        Returns
+        -------
+        report : ConnectivityValidationReport
+            Cached validation report for the assembled structure.
+        """
+        cache = self._export_cache(use_atom_names)
+        if cache.validation_report is None:
+            graph = self._export_graph(use_atom_names)
+            cache.validation_report = ConnectivityValidationReport(
+                atom_count=len(cache.atom_records),
+                bond_count=len(graph.bonds),
+                findings=self._connectivity_validation_findings(cache.atom_records, graph),
+            )
+        return cache.validation_report
 
     def _warn_if_pdb_limits_exceeded(self, atom_records):
         """Warn when serialized PDB identifiers exceed fixed-width fields.
@@ -425,8 +518,7 @@ class Store:
         graph : AssembledStructureGraph
             Bond graph and derived angle hooks for the current object.
         """
-        atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
-        return self._assembled_structure_graph(atom_records, molecule_serials)
+        return self._export_graph(use_atom_names)
 
     def _write_pdb_conect_records(self, file_out, bond_pairs):
         """Write ``CONECT`` records for previously collected bond pairs.
@@ -669,13 +761,7 @@ class Store:
             Full framework-oxygen checks are applied only to finalized pore
             states.
         """
-        atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
-        graph = self._assembled_structure_graph(atom_records, molecule_serials)
-        return ConnectivityValidationReport(
-            atom_count=len(atom_records),
-            bond_count=len(graph.bonds),
-            findings=self._connectivity_validation_findings(atom_records, graph),
-        )
+        return self._validation_report(use_atom_names)
 
     def _handle_connectivity_validation(self, use_atom_names, validate_connectivity):
         """Validate one structure before writing and handle the chosen mode.
@@ -755,8 +841,9 @@ class Store:
         self._handle_connectivity_validation(use_atom_names, validate_connectivity)
         link = self._link
         link += name if name else self._name + ".cif"
-        atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
-        graph = self._assembled_structure_graph(atom_records, molecule_serials)
+        cache = self._export_cache(use_atom_names)
+        atom_records = cache.atom_records
+        graph = self._export_graph(use_atom_names)
         data_name = self._name.replace(" ", "_")
 
         with open(link, "w") as file_out:
@@ -859,8 +946,9 @@ class Store:
         # Initialize
         link = self._link
         link += name if name else self._name+".pdb"
-        atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
-        graph = self._assembled_structure_graph(atom_records, molecule_serials)
+        cache = self._export_cache(use_atom_names)
+        atom_records = cache.atom_records
+        graph = self._export_graph(use_atom_names)
         self._warn_if_pdb_limits_exceeded(atom_records)
 
         # Open file

@@ -10,7 +10,8 @@ import json
 import math
 import os
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
+from time import perf_counter
 
 import porems as pms
 
@@ -326,6 +327,10 @@ class SlitPreparationReport:
     preparation_diagnostics : SurfacePreparationDiagnostics
         Surface-cleanup and bridge-insertion diagnostics collected across
         preparation, Q-state editing, and optional grafting.
+    timing_summary : SlitTimingSummary, optional
+        Lightweight wall-clock timing summary for the major slit-preparation
+        stages. Bare-slit builds leave all values at zero unless later export
+        stages populate them.
     """
 
     name: str
@@ -347,6 +352,7 @@ class SlitPreparationReport:
     prepared_surface: SiliconStateComposition
     final_surface: SiliconStateComposition
     preparation_diagnostics: pms.SurfacePreparationDiagnostics
+    timing_summary: "SlitTimingSummary" = field(default_factory=lambda: SlitTimingSummary())
 
 
 @dataclass
@@ -393,6 +399,65 @@ class SilaneAttachmentConfig:
 
 
 @dataclass(frozen=True)
+class FunctionalizedSlitStericConfig:
+    """Slit-only steric acceptance settings for exact silane placement.
+
+    Parameters
+    ----------
+    enabled : bool, optional
+        True to reject sterically crowded slit-grafting poses during the exact
+        ``T2/T3`` attachment workflow.
+    clearance_scale : float, optional
+        Multiplicative factor applied to the sum of covalent radii when
+        estimating the minimum allowed atom-pair separation for the slit-only
+        steric screen.
+    """
+
+    enabled: bool = True
+    clearance_scale: float = 0.60
+
+    def __post_init__(self):
+        """Validate the slit steric settings.
+
+        Raises
+        ------
+        ValueError
+            Raised when the steric clearance scale is not strictly positive.
+        """
+        if self.clearance_scale <= 0:
+            raise ValueError("The slit steric clearance scale must be greater than zero.")
+
+
+@dataclass(frozen=True)
+class SlitTimingSummary:
+    """Lightweight wall-clock timings for major slit-preparation stages.
+
+    Parameters
+    ----------
+    base_slit_build_s : float, optional
+        Seconds spent building and preparing the unfunctionalized slit.
+    q_state_preparation_s : float, optional
+        Seconds spent editing the slit surface to the requested prepared
+        ``Q``-state composition before any optional grafting.
+    t2_attachment_s : float, optional
+        Seconds spent attaching the requested ``T2`` population.
+    t3_attachment_s : float, optional
+        Seconds spent attaching the requested ``T3`` population.
+    finalize_s : float, optional
+        Seconds spent in :meth:`porems.system.PoreKit.finalize`.
+    store_export_s : float, optional
+        Seconds spent writing the requested coordinate/topology export files.
+    """
+
+    base_slit_build_s: float = 0.0
+    q_state_preparation_s: float = 0.0
+    t2_attachment_s: float = 0.0
+    t3_attachment_s: float = 0.0
+    finalize_s: float = 0.0
+    store_export_s: float = 0.0
+
+
+@dataclass(frozen=True)
 class FunctionalizedAmorphousSlitConfig:
     """Configuration for an exactly targeted functionalized amorphous slit.
 
@@ -402,10 +467,16 @@ class FunctionalizedAmorphousSlitConfig:
         Base slit configuration, including the unified experimental target.
     ligand : SilaneAttachmentConfig
         Silane attachment definition used to realize ``T2`` and ``T3``.
+    steric_settings : FunctionalizedSlitStericConfig, optional
+        Slit-only steric acceptance settings forwarded to the exact
+        deterministic ``T2/T3`` attachment workflow.
     """
 
     slit_config: AmorphousSlitConfig
     ligand: SilaneAttachmentConfig
+    steric_settings: FunctionalizedSlitStericConfig = field(
+        default_factory=FunctionalizedSlitStericConfig
+    )
 
 
 @dataclass
@@ -460,6 +531,8 @@ class _SurfaceTargetAttempt:
     used_surface_tolerance : bool
         Whether the selected target came from the tolerance fallback rather
         than the exact integer target.
+    timing_summary : SlitTimingSummary
+        Wall-clock timings collected while realizing the selected target.
     """
 
     system: pms.PoreKit
@@ -468,6 +541,7 @@ class _SurfaceTargetAttempt:
     final_surface: SiliconStateComposition
     siloxane_bridges: int
     used_surface_tolerance: bool
+    timing_summary: SlitTimingSummary = field(default_factory=SlitTimingSummary)
 
 
 @dataclass
@@ -1543,7 +1617,7 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
     return bridge_count
 
 
-def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal):
+def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal, steric_settings=None):
     """Attach one silane family to a deterministic list of specific sites.
 
     Parameters
@@ -1556,6 +1630,9 @@ def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal):
         Specific site ids that must be consumed in order.
     allow_geminal : bool
         Forwarded geminal-allowance flag for the internal attachment helper.
+    steric_settings : FunctionalizedSlitStericConfig or None, optional
+        Slit-only steric acceptance settings. When ``None``, the default
+        relaxed slit steric settings are used.
 
     Returns
     -------
@@ -1565,6 +1642,11 @@ def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal):
     if not site_ids:
         return []
 
+    steric_settings = (
+        FunctionalizedSlitStericConfig()
+        if steric_settings is None
+        else steric_settings
+    )
     mols = kit._pore.attach(
         copy.deepcopy(ligand.molecule),
         ligand.mount,
@@ -1578,6 +1660,8 @@ def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal):
         is_rotate=ligand.rotate_about_axis,
         rotate_step_deg=ligand.rotate_step_deg,
         is_g=allow_geminal,
+        check_sterics=steric_settings.enabled,
+        steric_clearance_scale=steric_settings.clearance_scale,
     )
     for mol in mols:
         if mol.get_short() not in kit._sort_list:
@@ -1617,6 +1701,7 @@ def _realize_surface_target(
     tolerance,
     distance_range,
     ligand=None,
+    steric_settings=None,
 ):
     """Select and realize a compatible final slit-surface composition.
 
@@ -1640,6 +1725,9 @@ def _realize_surface_target(
     ligand : SilaneAttachmentConfig or None, optional
         Optional silane attachment definition used to realize ``T2`` and
         ``T3``.
+    steric_settings : FunctionalizedSlitStericConfig or None, optional
+        Slit-only steric acceptance settings used for the deterministic
+        functionalized attachment path.
 
     Returns
     -------
@@ -1669,6 +1757,7 @@ def _realize_surface_target(
             continue
 
         trial_system = copy.deepcopy(base_system)
+        q_state_start = perf_counter()
         try:
             bridge_count = _enforce_surface_target(
                 trial_system,
@@ -1678,29 +1767,38 @@ def _realize_surface_target(
             )
         except ValueError:
             continue
+        q_state_preparation_s = perf_counter() - q_state_start
 
         prepared_surface = _surface_composition(total_surface_si, trial_system._pore.get_sites())
+        t2_attachment_s = 0.0
+        t3_attachment_s = 0.0
 
         if ligand is not None:
             geminal_sites = _available_site_ids(trial_system, oxygen_count=2)
             if len(geminal_sites) < candidate_surface.t2_sites:
                 continue
+            t2_start = perf_counter()
             _attach_to_specific_sites(
                 trial_system,
                 ligand,
                 geminal_sites[:candidate_surface.t2_sites],
                 allow_geminal=True,
+                steric_settings=steric_settings,
             )
+            t2_attachment_s = perf_counter() - t2_start
 
             single_sites = _available_site_ids(trial_system, oxygen_count=1)
             if len(single_sites) < candidate_surface.t3_sites:
                 continue
+            t3_start = perf_counter()
             _attach_to_specific_sites(
                 trial_system,
                 ligand,
                 single_sites[:candidate_surface.t3_sites],
                 allow_geminal=False,
+                steric_settings=steric_settings,
             )
+            t3_attachment_s = perf_counter() - t3_start
 
         attached_t2, attached_t3 = _attached_state_counts(trial_system, ligand)
         final_surface = _surface_composition(
@@ -1720,6 +1818,11 @@ def _realize_surface_target(
             final_surface=final_surface,
             siloxane_bridges=bridge_count,
             used_surface_tolerance=used_tolerance,
+            timing_summary=SlitTimingSummary(
+                q_state_preparation_s=q_state_preparation_s,
+                t2_attachment_s=t2_attachment_s,
+                t3_attachment_s=t3_attachment_s,
+            ),
         )
 
     raise ValueError(
@@ -1779,6 +1882,7 @@ def _build_report(
     derived_surface_target,
     target_attempt,
     initial_surface,
+    timing_summary=None,
 ):
     """Create a slit preparation report for a bare or functionalized build.
 
@@ -1796,6 +1900,9 @@ def _build_report(
         Successful target realization payload.
     initial_surface : SiliconStateComposition
         Surface composition before custom condensation.
+    timing_summary : SlitTimingSummary or None, optional
+        Timing summary to store in the report. When omitted, the timings
+        collected inside ``target_attempt`` are used.
 
     Returns
     -------
@@ -1806,6 +1913,11 @@ def _build_report(
     system._pore.set_name(config.name)
     wall_thickness = (system.box()[1] - config.slit_width_nm) / 2
     diagnostics = system._pore.get_surface_preparation_diagnostics()
+    timing_summary = (
+        target_attempt.timing_summary
+        if timing_summary is None
+        else timing_summary
+    )
 
     return SlitPreparationReport(
         name=config.name,
@@ -1827,6 +1939,7 @@ def _build_report(
         prepared_surface=target_attempt.prepared_surface,
         final_surface=target_attempt.final_surface,
         preparation_diagnostics=diagnostics,
+        timing_summary=timing_summary,
     )
 
 
@@ -1881,6 +1994,7 @@ def prepare_amorphous_slit_surface(config=None):
         derived_surface_target,
         target_attempt,
         build.initial_surface,
+        timing_summary=SlitTimingSummary(),
     )
     return SlitPreparationResult(system=target_attempt.system, report=report)
 
@@ -1899,7 +2013,9 @@ def prepare_functionalized_amorphous_slit_surface(config):
         Attach-ready functionalized slit system and its preparation report.
     """
     slit_config = config.slit_config
+    build_start = perf_counter()
     build = _build_base_slit_system(slit_config)
+    base_slit_build_s = perf_counter() - build_start
     alpha_auto, alpha_effective = _effective_alpha(
         build.total_surface_si,
         build.total_active_si,
@@ -1919,6 +2035,11 @@ def prepare_functionalized_amorphous_slit_surface(config):
         slit_config.surface_fraction_tolerance,
         tuple(slit_config.siloxane_distance_range_nm),
         ligand=config.ligand,
+        steric_settings=config.steric_settings,
+    )
+    timing_summary = replace(
+        target_attempt.timing_summary,
+        base_slit_build_s=base_slit_build_s,
     )
     report = _build_report(
         slit_config,
@@ -1927,6 +2048,7 @@ def prepare_functionalized_amorphous_slit_surface(config):
         derived_surface_target,
         target_attempt,
         build.initial_surface,
+        timing_summary=timing_summary,
     )
     return FunctionalizedSlitResult(system=target_attempt.system, report=report)
 
@@ -2039,7 +2161,10 @@ def write_functionalized_amorphous_slit(
     result = prepare_functionalized_amorphous_slit_surface(config)
     pms.utils.mkdirp(output_dir)
 
+    finalize_start = perf_counter()
     result.system.finalize()
+    finalize_s = perf_counter() - finalize_start
+    store_start = perf_counter()
     result.system.store(
         output_dir,
         write_object_files=write_object_files,
@@ -2048,6 +2173,15 @@ def write_functionalized_amorphous_slit(
         write_cif=write_cif,
         write_cif_bonds=write_cif_bonds,
         validate_connectivity=validate_connectivity,
+    )
+    store_export_s = perf_counter() - store_start
+    result.report = replace(
+        result.report,
+        timing_summary=replace(
+            result.report.timing_summary,
+            finalize_s=finalize_s,
+            store_export_s=store_export_s,
+        ),
     )
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")

@@ -1,0 +1,25 @@
+HETATM    1  Si  TSP     1      -1.933  -0.272   2.733  1.00  0.00          Si
+HETATM    2  CA1 TSP     1      -0.927  -0.105   1.178  1.00  0.00           C
+HETATM    3  CA2 TSP     1       0.476  -0.227   1.227  1.00  0.00           C
+HETATM    4  HA2 TSP     1       0.984  -0.443   2.167  1.00  0.00           H
+HETATM    5  CA3 TSP     1       1.258  -0.079   0.080  1.00  0.00           C
+HETATM    6  HA3 TSP     1       2.338  -0.170   0.143  1.00  0.00           H
+HETATM    7  CA4 TSP     1       0.649   0.181  -1.146  1.00  0.00           C
+HETATM    8  HA4 TSP     1       1.255   0.290  -2.040  1.00  0.00           H
+HETATM    9  CA5 TSP     1      -0.736   0.294  -1.219  1.00  0.00           C
+HETATM   10  HA5 TSP     1      -1.212   0.493  -2.177  1.00  0.00           H
+HETATM   11  CA6 TSP     1      -1.521   0.157  -0.070  1.00  0.00           C
+HETATM   12  HA6 TSP     1      -2.601   0.259  -0.161  1.00  0.00           H
+CONECT    1    2
+CONECT    2    1    3   11
+CONECT    3    2    4    5
+CONECT    4    3
+CONECT    5    3    6    7
+CONECT    6    5
+CONECT    7    5    8    9
+CONECT    8    7
+CONECT    9    7   10   11
+CONECT   10    9
+CONECT   11    2    9   12
+CONECT   12   11
+END

@@ -388,6 +388,22 @@ class TestUserModel:
         with pytest.raises(ValueError, match="Connectivity validation found"):
             store.gro("invalid_valence_strict.gro", use_atom_names=True, validate_connectivity="strict")
 
+    def test_connectivity_validation_allows_stretched_but_element_sane_bonds(self):
+        mol = pms.Molecule("stretched_silica_fragment", "SSF")
+        mol.add("Si", [0.0, 0.0, 0.0], name="SI1")
+        mol.add("O", [0.32, 0.0, 0.0], name="O1")
+        mol.add("H", [0.50, 0.0, 0.0], name="H1")
+        mol.add_bond(0, 1)
+        mol.add_bond(1, 2)
+
+        report = pms.Store(mol, "output").validate_connectivity(use_atom_names=True)
+
+        assert report.is_valid
+        assert not any(
+            finding.code in {"invalid_silica_bond", "hydrogen_degree", "unexpected_degree"}
+            for finding in report.findings
+        )
+
     def test_pdb_warns_when_fixed_width_limits_are_exceeded(self):
         atom = pms.Molecule("single_atom", "SIN")
         atom.add("H", [0.0, 0.0, 0.0], name="H1")
@@ -400,6 +416,59 @@ class TestUserModel:
             store._warn_if_pdb_limits_exceeded(records)
 
         assert any("fixed-width fields are exceeded" in str(w.message) for w in caught)
+
+    def test_steric_grid_matches_bruteforce_clearance(self):
+        block = pms.Molecule("steric_block", "SBL")
+        block.set_box([1.0, 1.0, 1.0])
+        block.add("Si", [0.10, 0.10, 0.10], name="SI1")
+        block.add("O", [0.26, 0.10, 0.10], name="OM1")
+        block.add("Si", [0.42, 0.10, 0.10], name="SI2")
+
+        pore = pms.Pore(block, pms.Matrix([[0, [1]], [2, [1]]]))
+
+        attached = pms.Molecule("attached_probe", "ATP")
+        attached.set_box([1.0, 1.0, 1.0])
+        attached.add("C", [0.30, 0.30, 0.10], name="C1")
+        attached.add("H", [0.40, 0.30, 0.10], name="H1")
+        pore._mol_dict["in"]["ATP"] = [attached]
+
+        candidate = pms.Molecule("candidate_probe", "CDP")
+        candidate.set_box([1.0, 1.0, 1.0])
+        candidate.add("Si", [0.22, 0.23, 0.10], name="SI1")
+        candidate.add("C", [0.34, 0.23, 0.10], name="C1")
+
+        ignored = {0}
+        brute_force = pore._placement_clearance(candidate, ignored_block_atoms=ignored)
+        grid = pore._build_steric_grid()
+        local_grid = pore._placement_clearance(
+            candidate,
+            steric_grid=grid,
+            ignored_block_atoms=ignored,
+        )
+
+        assert local_grid == pytest.approx(brute_force, abs=1e-12)
+
+    def test_attachment_clearance_scale_can_relax_a_crowded_pose(self):
+        block = pms.Molecule("clearance_block", "CLB")
+        block.set_box([1.0, 1.0, 1.0])
+        block.add("O", [0.00, 0.00, 0.00], name="O1")
+        pore = pms.Pore(block, pms.Matrix([[0, []]]))
+
+        candidate = pms.Molecule("clearance_candidate", "CLC")
+        candidate.set_box([1.0, 1.0, 1.0])
+        candidate.add("C", [0.10, 0.00, 0.00], name="C1")
+
+        strict_clearance = pore._placement_clearance(
+            candidate,
+            steric_clearance_scale=0.85,
+        )
+        relaxed_clearance = pore._placement_clearance(
+            candidate,
+            steric_clearance_scale=0.60,
+        )
+
+        assert strict_clearance < 0
+        assert relaxed_clearance > 0
 
 
     ###########

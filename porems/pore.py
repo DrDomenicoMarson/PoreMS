@@ -23,6 +23,7 @@ from porems.molecule import Molecule
 
 _VALID_SITE_TYPES = {"in", "ex"}
 _STERIC_CLEARANCE_SCALE = 0.85
+_STERIC_GRID_CELL_SIZE_NM = 0.25
 
 
 @dataclass
@@ -138,6 +139,186 @@ class SurfacePreparationDiagnostics:
             + self.stripped_excess_surface_oxygen_si
             + self.removed_orphan_silicon
         )
+
+
+@dataclass(frozen=True)
+class _StericAtomRecord:
+    """One atom stored in the local steric-search grid.
+
+    Parameters
+    ----------
+    position : tuple[float, float, float]
+        Cartesian atom position in nanometers.
+    radius : float
+        Covalent radius used for the steric cutoff estimate.
+    block_atom_id : int or None, optional
+        Source block atom id when the record belongs to the live silica
+        scaffold. ``None`` for previously attached ligand atoms.
+    """
+
+    position: tuple[float, float, float]
+    radius: float
+    block_atom_id: int | None = None
+
+
+@dataclass
+class _StericGrid:
+    """Local spatial index for attachment steric checks.
+
+    Parameters
+    ----------
+    box : tuple[float, float, float]
+        Periodic box lengths in nanometers.
+    cell_size_nm : float, optional
+        Cubic cell size used to bin atoms for local clash queries.
+    """
+
+    box: tuple[float, float, float]
+    cell_size_nm: float = _STERIC_GRID_CELL_SIZE_NM
+    cells: dict[tuple[int, int, int], list[_StericAtomRecord]] = field(default_factory=dict)
+    block_cells: dict[int, tuple[int, int, int]] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Initialize wrapped grid dimensions from the box and cell size."""
+        self.dims = tuple(
+            max(1, int(length / self.cell_size_nm))
+            for length in self.box
+        )
+
+    def _wrap_component(self, value, dim):
+        """Wrap one Cartesian component into the periodic simulation box.
+
+        Parameters
+        ----------
+        value : float
+            Cartesian component in nanometers.
+        dim : int
+            Box dimension index.
+
+        Returns
+        -------
+        value : float
+            Wrapped coordinate component.
+        """
+        box_length = self.box[dim]
+        if box_length <= 0:
+            return value
+        return value % box_length
+
+    def _cell_key(self, position):
+        """Return the grid-cell key for one Cartesian position.
+
+        Parameters
+        ----------
+        position : list[float] or tuple[float, float, float]
+            Cartesian position in nanometers.
+
+        Returns
+        -------
+        key : tuple[int, int, int]
+            Wrapped three-dimensional cell index.
+        """
+        key = []
+        for dim in range(3):
+            wrapped = self._wrap_component(position[dim], dim)
+            dim_size = self.dims[dim]
+            key.append(min(dim_size - 1, int(wrapped / self.cell_size_nm)))
+        return tuple(key)
+
+    def add_block_atom(self, atom_id, position, radius):
+        """Add one live scaffold atom to the steric grid.
+
+        Parameters
+        ----------
+        atom_id : int
+            Source block atom id.
+        position : list[float] or tuple[float, float, float]
+            Cartesian atom position in nanometers.
+        radius : float
+            Covalent radius used for steric cutoff estimates.
+        """
+        key = self._cell_key(position)
+        self.cells.setdefault(key, []).append(
+            _StericAtomRecord(tuple(position), radius, block_atom_id=atom_id)
+        )
+        self.block_cells[atom_id] = key
+
+    def add_attached_atom(self, position, radius):
+        """Add one already attached ligand atom to the steric grid.
+
+        Parameters
+        ----------
+        position : list[float] or tuple[float, float, float]
+            Cartesian atom position in nanometers.
+        radius : float
+            Covalent radius used for steric cutoff estimates.
+        """
+        key = self._cell_key(position)
+        self.cells.setdefault(key, []).append(_StericAtomRecord(tuple(position), radius))
+
+    def add_molecule(self, mol):
+        """Add every valid atom of one attached molecule to the steric grid.
+
+        Parameters
+        ----------
+        mol : Molecule
+            Attached molecule whose atoms should participate in future clash
+            checks.
+        """
+        for atom in mol.get_atom_list():
+            try:
+                radius = db.get_covalent_radius(atom.get_atom_type())
+            except ValueError:
+                continue
+            self.add_attached_atom(atom.get_pos(), radius)
+
+    def remove_block_atoms(self, atom_ids):
+        """Remove scaffold atoms from the steric grid by source atom id.
+
+        Parameters
+        ----------
+        atom_ids : list[int] or tuple[int, ...]
+            Source block atom ids to remove.
+        """
+        for atom_id in atom_ids:
+            key = self.block_cells.pop(atom_id, None)
+            if key is None or key not in self.cells:
+                continue
+            self.cells[key] = [
+                record
+                for record in self.cells[key]
+                if record.block_atom_id != atom_id
+            ]
+            if not self.cells[key]:
+                del self.cells[key]
+
+    def neighbor_records(self, position):
+        """Yield steric-grid records from the local neighboring cells.
+
+        Parameters
+        ----------
+        position : list[float] or tuple[float, float, float]
+            Cartesian query position in nanometers.
+
+        Returns
+        -------
+        records : iterator[_StericAtomRecord]
+            Steric records from the query cell and its 26 wrapped neighbors.
+        """
+        center = self._cell_key(position)
+        seen_keys = set()
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    key = (
+                        (center[0] + dx) % self.dims[0],
+                        (center[1] + dy) % self.dims[1],
+                        (center[2] + dz) % self.dims[2],
+                    )
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    yield from self.cells.get(key, ())
 
 
 class Pore():
@@ -315,15 +496,52 @@ class Pore():
                 vector[dim] += box_length
         return vector
 
-    def _placement_clearance(self, mol, ignored_block_atoms=None):
+    def _build_steric_grid(self):
+        """Build a local steric-search grid for the current pore state.
+
+        Returns
+        -------
+        grid : _StericGrid
+            Spatial index containing active scaffold atoms and already attached
+            ligand atoms.
+        """
+        grid = _StericGrid(tuple(self._block.get_box()))
+        for atom_id in self._matrix.get_matrix():
+            try:
+                radius = db.get_covalent_radius(self._block.get_atom_type(atom_id))
+            except ValueError:
+                continue
+            grid.add_block_atom(atom_id, self._block.pos(atom_id), radius)
+
+        for site_group in ("in", "ex"):
+            for molecules in self._mol_dict[site_group].values():
+                for attached_molecule in molecules:
+                    grid.add_molecule(attached_molecule)
+
+        return grid
+
+    def _placement_clearance(
+        self,
+        mol,
+        steric_grid=None,
+        ignored_block_atoms=None,
+        steric_clearance_scale=_STERIC_CLEARANCE_SCALE,
+    ):
         """Return the minimum steric clearance of a candidate attached pose.
 
         Parameters
         ----------
         mol : Molecule
             Candidate attached molecule.
+        steric_grid : _StericGrid or None, optional
+            Spatial index used to restrict the steric check to local
+            neighboring atoms. When ``None``, the full current structure is
+            scanned directly.
         ignored_block_atoms : set[int] or None, optional
             Scaffold atom ids that should be ignored during the clash check.
+        steric_clearance_scale : float, optional
+            Multiplicative factor applied to the sum of covalent radii when
+            estimating the steric cutoff.
 
         Returns
         -------
@@ -334,46 +552,58 @@ class Pore():
         ignored_block_atoms = set() if ignored_block_atoms is None else set(ignored_block_atoms)
         min_clearance = float("inf")
 
-        matrix = self._matrix.get_matrix()
-        attached_molecules = []
-        for site_group in ("in", "ex"):
-            for molecules in self._mol_dict[site_group].values():
-                attached_molecules.extend(molecules)
-
         for atom in mol.get_atom_list():
             try:
                 radius_a = db.get_covalent_radius(atom.get_atom_type())
             except ValueError:
                 continue
 
-            for atom_id in matrix:
-                if atom_id in ignored_block_atoms:
-                    continue
-                try:
-                    radius_b = db.get_covalent_radius(self._block.get_atom_type(atom_id))
-                except ValueError:
-                    continue
+            if steric_grid is None:
+                matrix = self._matrix.get_matrix()
+                attached_molecules = []
+                for site_group in ("in", "ex"):
+                    for molecules in self._mol_dict[site_group].values():
+                        attached_molecules.extend(molecules)
 
-                distance = geometry.length(
-                    self._minimum_image_vector(atom.get_pos(), self._block.pos(atom_id))
-                )
-                clearance = distance - _STERIC_CLEARANCE_SCALE * (radius_a + radius_b)
-                if clearance < min_clearance:
-                    min_clearance = clearance
-
-            for attached_molecule in attached_molecules:
-                for attached_atom in attached_molecule.get_atom_list():
+                for atom_id in matrix:
+                    if atom_id in ignored_block_atoms:
+                        continue
                     try:
-                        radius_b = db.get_covalent_radius(attached_atom.get_atom_type())
+                        radius_b = db.get_covalent_radius(self._block.get_atom_type(atom_id))
                     except ValueError:
                         continue
 
                     distance = geometry.length(
-                        self._minimum_image_vector(atom.get_pos(), attached_atom.get_pos())
+                        self._minimum_image_vector(atom.get_pos(), self._block.pos(atom_id))
                     )
-                    clearance = distance - _STERIC_CLEARANCE_SCALE * (radius_a + radius_b)
+                    clearance = distance - steric_clearance_scale * (radius_a + radius_b)
                     if clearance < min_clearance:
                         min_clearance = clearance
+
+                for attached_molecule in attached_molecules:
+                    for attached_atom in attached_molecule.get_atom_list():
+                        try:
+                            radius_b = db.get_covalent_radius(attached_atom.get_atom_type())
+                        except ValueError:
+                            continue
+
+                        distance = geometry.length(
+                            self._minimum_image_vector(atom.get_pos(), attached_atom.get_pos())
+                        )
+                        clearance = distance - steric_clearance_scale * (radius_a + radius_b)
+                        if clearance < min_clearance:
+                            min_clearance = clearance
+                continue
+
+            for record in steric_grid.neighbor_records(atom.get_pos()):
+                if record.block_atom_id in ignored_block_atoms:
+                    continue
+                distance = geometry.length(
+                    self._minimum_image_vector(atom.get_pos(), record.position)
+                )
+                clearance = distance - steric_clearance_scale * (radius_a + record.radius)
+                if clearance < min_clearance:
+                    min_clearance = clearance
 
         return min_clearance
 
@@ -413,8 +643,10 @@ class Pore():
         mount,
         surf_axis,
         ignored_block_atoms,
+        steric_grid,
         is_rotate,
         rotate_step_deg,
+        steric_clearance_scale,
     ):
         """Rotate one candidate pose around the mount axis to reduce clashes.
 
@@ -429,10 +661,15 @@ class Pore():
             Surface-normal vector used as the rotation axis.
         ignored_block_atoms : set[int]
             Scaffold atom ids ignored during the steric check.
+        steric_grid : _StericGrid or None
+            Spatial index used to evaluate only local steric clashes.
         is_rotate : bool
             True to scan several rotations around the mount axis.
         rotate_step_deg : float
             Angular step in degrees used during the rotation scan.
+        steric_clearance_scale : float
+            Multiplicative factor applied to the sum of covalent radii when
+            estimating the steric cutoff.
 
         Returns
         -------
@@ -453,7 +690,12 @@ class Pore():
             candidate = copy.deepcopy(mol)
             if angle != 0:
                 candidate.rotate(axis, angle)
-            clearance = self._placement_clearance(candidate, ignored_block_atoms)
+            clearance = self._placement_clearance(
+                candidate,
+                steric_grid=steric_grid,
+                ignored_block_atoms=ignored_block_atoms,
+                steric_clearance_scale=steric_clearance_scale,
+            )
             if clearance > best_clearance:
                 best_clearance = clearance
                 best_molecule = candidate
@@ -908,6 +1150,7 @@ class Pore():
         rotate_step_deg=30,
         is_g=True,
         check_sterics=True,
+        steric_clearance_scale=_STERIC_CLEARANCE_SCALE,
     ):
         """Attach molecules to available pore surface sites.
 
@@ -948,6 +1191,9 @@ class Pore():
             molecule directly after geometric alignment without steric
             rejection. Final silanol saturation uses ``False`` so every
             remaining free site is consumed.
+        steric_clearance_scale : float, optional
+            Multiplicative factor applied to the sum of covalent radii when
+            estimating the steric cutoff for clash rejection.
 
         Returns
         -------
@@ -957,9 +1203,12 @@ class Pore():
         Raises
         ------
         ValueError
-            Raised when the requested site type is not supported.
+            Raised when the requested site type is not supported or when the
+            steric clearance scale is not strictly positive.
         """
         self._validate_site_type(site_type)
+        if steric_clearance_scale <= 0:
+            raise ValueError("Attachment steric clearance scale must be greater than zero.")
         pos_list = [] if pos_list is None else pos_list
 
         # Rotate molecule towards z-axis
@@ -973,6 +1222,8 @@ class Pore():
             si_dice = Dice(self._site_search_molecule(sites), mol_diam, True)
             si_proxi = si_dice.find(None, ["Si", "Si"], [-mol_diam, mol_diam])
             si_matrix = {x[0]: x[1] for x in si_proxi}
+
+        steric_grid = self._build_steric_grid() if check_sterics else None
 
         # Run through number of binding sites to add
         mol_list = []
@@ -1033,8 +1284,10 @@ class Pore():
                             mount,
                             surf_axis,
                             {si, *self._sites[si].oxygen_ids},
+                            steric_grid,
                             is_rotate,
                             rotate_step_deg,
+                            steric_clearance_scale,
                         )
                         if mol_temp is None:
                             self._sites[si].is_available = True
@@ -1064,6 +1317,9 @@ class Pore():
 
                     # Remove bonds of occupied binding site
                     self._invalidate_finalized_export_state()
+                    if steric_grid is not None:
+                        steric_grid.remove_block_atoms([si] + self._sites[si].oxygen_ids)
+                        steric_grid.add_molecule(mol_temp)
                     self._matrix.remove([si] + self._sites[si].oxygen_ids)
 
                     # Recursively fill sites in proximity with silanol and geminal silanol
@@ -1083,6 +1339,8 @@ class Pore():
                                     check_sterics=False,
                                 )
                             )
+                            if steric_grid is not None:
+                                steric_grid = self._build_steric_grid()
         return mol_list
 
     def siloxane(self, sites, amount, slx_dist=None, trials=1000, site_type="in"):

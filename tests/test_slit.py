@@ -1,5 +1,7 @@
+import inspect
 import json
 import os
+from pathlib import Path
 import pytest
 
 import porems as pms
@@ -33,6 +35,23 @@ def experimental_target_from_surface(surface_target, alpha, alpha_override=None)
         t3_fraction=alpha * surface_target.t3_fraction,
         alpha_override=alpha_override,
     )
+
+
+def teps_ligand(repo_root):
+    """Return the local explicit-bond TEPS ligand used for slit smoke tests.
+
+    Parameters
+    ----------
+    repo_root : Path
+        Repository root directory.
+
+    Returns
+    -------
+    ligand : Molecule
+        TEPS ligand loaded from the checked-in PDB fixture.
+    """
+    teps_path = Path(repo_root) / "scripts" / "TEPS.pdb"
+    return pms.Molecule("TEPS", "TEPS", str(teps_path))
 
 
 @pytest.fixture(scope="class", autouse=True)
@@ -544,6 +563,8 @@ class TestAmorphousSlitPreparation:
         assert hasattr(pms, "SiliconStateFractions")
         assert hasattr(pms, "SurfacePreparationDiagnostics")
         assert hasattr(pms, "SilaneAttachmentConfig")
+        assert hasattr(pms, "SlitTimingSummary")
+        assert hasattr(pms, "FunctionalizedSlitStericConfig")
         assert hasattr(pms, "FunctionalizedAmorphousSlitConfig")
         assert hasattr(pms, "FunctionalizedSlitResult")
         assert hasattr(pms, "GraphBond")
@@ -562,6 +583,55 @@ class TestFunctionalizedAmorphousSlit:
 
         assert ligand.rotate_about_axis
         assert ligand.rotate_step_deg == 10.0
+
+    def test_functionalized_steric_config_defaults_to_relaxed_slit_scale(self):
+        sterics = pms.FunctionalizedSlitStericConfig()
+
+        assert sterics.enabled
+        assert sterics.clearance_scale == pytest.approx(0.60)
+
+    def test_generic_attach_default_steric_scale_is_unchanged(self):
+        steric_parameter = inspect.signature(pms.Pore.attach).parameters["steric_clearance_scale"]
+
+        assert steric_parameter.default == pytest.approx(0.85)
+
+    def test_functionalized_path_uses_configured_steric_clearance_scale(self, monkeypatch):
+        recorded_scales = []
+        original_attach = pms.Pore.attach
+
+        def recording_attach(self, *args, **kwargs):
+            recorded_scales.append(kwargs.get("steric_clearance_scale"))
+            return original_attach(self, *args, **kwargs)
+
+        monkeypatch.setattr(pms.Pore, "attach", recording_attach)
+
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_custom_sterics",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+                rotate_about_axis=False,
+            ),
+            steric_settings=pms.FunctionalizedSlitStericConfig(clearance_scale=0.55),
+        )
+
+        pms.prepare_functionalized_amorphous_slit_surface(config)
+
+        assert recorded_scales
+        assert 0.55 in recorded_scales
 
     def test_exact_functionalized_target_is_realized(self):
         target = pms.ExperimentalSiliconStateTarget(
@@ -591,6 +661,11 @@ class TestFunctionalizedAmorphousSlit:
         assert result.report.prepared_surface == pms.SiliconStateComposition(957, 66, 652, 239)
         assert result.report.final_surface == pms.SiliconStateComposition(957, 63, 648, 239, 3, 4)
         assert result.report.final_surface == result.report.target_surface
+        assert isinstance(result.report.timing_summary, pms.SlitTimingSummary)
+        assert result.report.timing_summary.base_slit_build_s > 0
+        assert result.report.timing_summary.q_state_preparation_s > 0
+        assert result.report.timing_summary.t2_attachment_s > 0
+        assert result.report.timing_summary.t3_attachment_s > 0
         assert len(result.system._pore.get_site_dict()["in"]["TMSG"]) == 3
         assert len(result.system._pore.get_site_dict()["in"]["TMS"]) == 4
         assert "SLX" not in result.system._pore.get_mol_dict()
@@ -765,3 +840,37 @@ class TestFunctionalizedAmorphousSlit:
         assert f"SI {mol_counts['SI']}" in top_text
         assert f"TMS {mol_counts['TMS']}" in top_text
         assert f"TMSG {mol_counts['TMSG']}" in top_text
+        assert result.report.timing_summary.finalize_s > 0
+        assert result.report.timing_summary.store_export_s > 0
+
+    def test_small_teps_functionalized_smoke_populates_timing_summary(self, repo_root):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_teps_smoke",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=teps_ligand(repo_root),
+                mount=0,
+                axis=(0, 1),
+                rotate_about_axis=False,
+            ),
+            steric_settings=pms.FunctionalizedSlitStericConfig(clearance_scale=0.60),
+        )
+
+        result = pms.prepare_functionalized_amorphous_slit_surface(config)
+
+        assert result.report.final_surface == pms.SiliconStateComposition(957, 65, 651, 239, 1, 1)
+        assert result.report.timing_summary.base_slit_build_s > 0
+        assert result.report.timing_summary.q_state_preparation_s > 0
+        assert result.report.timing_summary.t2_attachment_s > 0
+        assert result.report.timing_summary.t3_attachment_s > 0
