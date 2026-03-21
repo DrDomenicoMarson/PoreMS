@@ -57,7 +57,10 @@ stripped silicon counts, removed orphan oxygens, inserted bridge oxygens, and
 the final valid surface/scaffold oxygen counts.
 `write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
 together with a JSON report in the selected output directory. Object backups are
-written only when `write_object_files=True` is requested explicitly.
+written only when `write_object_files=True` is requested explicitly. For
+inspection, the same writer can also emit a `.pdb` file, and
+`write_pdb_conect=True` adds `CONECT` records for the active silica
+connectivity and built-in `SL`/`SLG` surface groups.
 
 In the slit exact-target path, custom siloxane bridge oxygens are folded back
 into the silica scaffold representation and exported as regular scaffold oxygen

@@ -5,6 +5,7 @@
 ################################################################################
 
 
+from dataclasses import dataclass
 import os
 import shutil
 
@@ -13,6 +14,31 @@ import porems.database as db
 
 from porems.molecule import Molecule
 from porems.pore import Pore
+
+
+@dataclass(frozen=True)
+class _PdbAtomRecord:
+    """One atom record written to a PDB file.
+
+    Parameters
+    ----------
+    serial : int
+        PDB serial number written for the atom.
+    molecule_index : int
+        Zero-based molecule index in the writer output order.
+    local_atom_index : int
+        Zero-based atom index inside the source molecule.
+    residue_short : str
+        Short residue identifier of the source molecule.
+    source_id : int or None
+        Optional source atom identifier from the originating pore block.
+    """
+
+    serial: int
+    molecule_index: int
+    local_atom_index: int
+    residue_short: str
+    source_id: int | None
 
 
 class Store:
@@ -166,7 +192,96 @@ class Store:
         # Save object
         utils.save(self._inp, link)
 
-    def pdb(self, name="", use_atom_names=False):
+    def _pdb_known_residue_bonds(self, residue_short, atom_count):
+        """Return built-in internal bonds for known surface residue templates.
+
+        Parameters
+        ----------
+        residue_short : str
+            Short residue identifier of the written molecule.
+        atom_count : int
+            Number of atoms present in that molecule.
+
+        Returns
+        -------
+        bonds : tuple[tuple[int, int], ...]
+            Zero-based local atom-index pairs that should be written as
+            ``CONECT`` records.
+        """
+        if residue_short == "SL" and atom_count >= 3:
+            return ((0, 1), (1, 2))
+        if residue_short == "SLG" and atom_count >= 5:
+            return ((0, 1), (1, 2), (0, 3), (3, 4))
+        return ()
+
+    def _pdb_conect_pairs(self, atom_records, molecule_serials):
+        """Collect inspection-only PDB connectivity pairs.
+
+        Parameters
+        ----------
+        atom_records : list[_PdbAtomRecord]
+            All atom records written to the current PDB file.
+        molecule_serials : list[list[int]]
+            Atom serial numbers grouped per written molecule.
+
+        Returns
+        -------
+        bond_pairs : list[tuple[int, int]]
+            Sorted unique atom-serial pairs to emit as ``CONECT`` records.
+        """
+        bond_pairs = set()
+
+        source_serials = {
+            record.source_id: record.serial
+            for record in atom_records
+            if record.source_id is not None
+        }
+        if isinstance(self._inp, Pore):
+            for atom_id, props in self._inp._matrix.get_matrix().items():
+                if atom_id not in source_serials:
+                    continue
+                for neighbor_id in props["atoms"]:
+                    if neighbor_id not in source_serials:
+                        continue
+                    serial_a = source_serials[atom_id]
+                    serial_b = source_serials[neighbor_id]
+                    bond_pairs.add(tuple(sorted((serial_a, serial_b))))
+
+        for molecule_index, serials in enumerate(molecule_serials):
+            residue_short = self._mols[molecule_index].get_short()
+            for atom_a, atom_b in self._pdb_known_residue_bonds(residue_short, len(serials)):
+                if atom_a < len(serials) and atom_b < len(serials):
+                    bond_pairs.add(tuple(sorted((serials[atom_a], serials[atom_b]))))
+
+        return sorted(bond_pairs)
+
+    def _write_pdb_conect_records(self, file_out, bond_pairs):
+        """Write ``CONECT`` records for previously collected bond pairs.
+
+        Parameters
+        ----------
+        file_out : TextIO
+            Open output stream.
+        bond_pairs : list[tuple[int, int]]
+            Sorted unique atom-serial pairs.
+        """
+        neighbors = {}
+        for serial_a, serial_b in bond_pairs:
+            neighbors.setdefault(serial_a, []).append(serial_b)
+            neighbors.setdefault(serial_b, []).append(serial_a)
+
+        for serial in sorted(neighbors):
+            bonded = sorted(set(neighbors[serial]))
+            for start in range(0, len(bonded), 4):
+                chunk = bonded[start:start + 4]
+                file_out.write(
+                    "CONECT"
+                    + f"{serial:5d}"
+                    + "".join(f"{neighbor:5d}" for neighbor in chunk)
+                    + "\n"
+                )
+
+    def pdb(self, name="", use_atom_names=False, write_conect=False):
         """Write the current structure in PDB format.
 
         Parameters
@@ -176,6 +291,10 @@ class Store:
         use_atom_names : bool, optional
             True to preserve explicit atom names when available. False to
             enumerate atom names from atom types.
+        write_conect : bool, optional
+            When ``True``, also emit inspection-oriented ``CONECT`` records for
+            the active silica scaffold and the built-in ``SL``/``SLG`` surface
+            residues. Ligand-internal connectivity is not reconstructed here.
         """
         # Initialize
         link = self._link
@@ -186,13 +305,16 @@ class Store:
             # Set counter
             num_a = 1
             num_m = 1
+            atom_records = []
+            molecule_serials = []
 
             # Run through molecules
-            for mol in self._mols:
+            for molecule_index, mol in enumerate(self._mols):
                 atom_types = {}
                 temp_res_id = 0
+                molecule_serial = []
                 # Run through atoms
-                for atom in mol.get_atom_list():
+                for local_atom_index, atom in enumerate(mol.get_atom_list()):
                     # Process residue index
                     if not atom.get_residue() == temp_res_id:
                         num_m = num_m+1 if num_m < 9999 else 1
@@ -232,11 +354,28 @@ class Store:
                     out_string += "  "                     # 80-81 (2)    Charge on the atom
 
                     file_out.write(out_string+"\n")
+                    atom_records.append(
+                        _PdbAtomRecord(
+                            serial=num_a,
+                            molecule_index=molecule_index,
+                            local_atom_index=local_atom_index,
+                            residue_short=mol.get_short(),
+                            source_id=atom.get_source_id(),
+                        )
+                    )
+                    molecule_serial.append(num_a)
 
                     # Process counter
                     num_a = num_a+1 if num_a < 99999 else 1
                     atom_types[atom_type] = atom_types[atom_type]+1 if atom_types[atom_type] < 99 else 1
+                molecule_serials.append(molecule_serial)
                 num_m = num_m+1 if num_m < 9999 else 1
+
+            if write_conect:
+                self._write_pdb_conect_records(
+                    file_out,
+                    self._pdb_conect_pairs(atom_records, molecule_serials),
+                )
 
             # End statement
             file_out.write("TER\nEND\n")

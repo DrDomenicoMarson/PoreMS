@@ -15,6 +15,17 @@ from dataclasses import asdict, dataclass, field
 import porems as pms
 
 
+_BRIDGE_OFFSET_NM = 0.09
+_BRIDGE_STERIC_DISTANCE_CUTOFF_NM = 0.30
+_BRIDGE_STERIC_GRAPH_DEPTH = 6
+_BRIDGE_MIN_CLEARANCE_BY_TYPE_NM = {
+    "O": 0.18,
+    "Si": 0.22,
+    "H": 0.12,
+}
+_BRIDGE_CANDIDATE_ROTATIONS_DEG = (0, 45, -45, 90, -90, 135, -135, 180)
+
+
 @dataclass(frozen=True)
 class SiliconStateFractions:
     """Five-state silicon surface fractions.
@@ -553,6 +564,52 @@ def _site_distance(pos_a, pos_b):
     return pms.geom.length(pms.geom.vector(pos_a, pos_b))
 
 
+def _minimum_image_vector(pos_a, pos_b, box):
+    """Return the minimum-image vector between two positions.
+
+    Parameters
+    ----------
+    pos_a : list[float]
+        First Cartesian position.
+    pos_b : list[float]
+        Second Cartesian position.
+    box : list[float]
+        Periodic box lengths.
+
+    Returns
+    -------
+    vector : list[float]
+        Minimum-image vector from ``pos_a`` to ``pos_b``.
+    """
+    vector = pms.geom.vector(pos_a, pos_b)
+    for dim, length in enumerate(box):
+        if length > 0:
+            vector[dim] -= length * round(vector[dim] / length)
+    return vector
+
+
+def _wrap_position(pos, box):
+    """Wrap a Cartesian position back into the periodic box.
+
+    Parameters
+    ----------
+    pos : list[float]
+        Cartesian position.
+    box : list[float]
+        Periodic box lengths.
+
+    Returns
+    -------
+    wrapped_pos : list[float]
+        Box-wrapped Cartesian position.
+    """
+    wrapped_pos = pos[:]
+    for dim, length in enumerate(box):
+        if length > 0:
+            wrapped_pos[dim] %= length
+    return wrapped_pos
+
+
 def _active_silicon_count(system):
     """Count active silicon atoms in the current slit model.
 
@@ -1032,8 +1089,87 @@ def _find_pair(sites, adjacency, first_count, second_count):
     return None
 
 
-def _siloxane_bridge_position(kit, pair):
-    """Return the bridged oxygen position for a specific silicon pair.
+def _find_placeable_pair(kit, sites, adjacency, first_count, second_count):
+    """Find the next eligible siloxane pair with a valid bridge placement.
+
+    Parameters
+    ----------
+    kit : PoreKit
+        Slit system under preparation.
+    sites : dict[int, pms.BindingSite]
+        Current binding sites keyed by silicon identifier.
+    adjacency : dict[int, list[tuple[int, float]]]
+        Precomputed slit neighbor graph.
+    first_count : int
+        Required number of free oxygen atoms on the first site.
+    second_count : int
+        Required number of free oxygen atoms on the second site.
+
+    Returns
+    -------
+    result : tuple[tuple[int, int], list[float]] or tuple[None, None]
+        Pair of silicon identifiers and the selected bridge position, or
+        ``(None, None)`` when no currently placeable pair exists.
+    """
+    for site_a in sorted(sites):
+        if sites[site_a].site_type != "in" or sites[site_a].oxygen_count != first_count:
+            continue
+
+        for site_b, _distance in adjacency.get(site_a, []):
+            if site_b not in sites:
+                continue
+            if sites[site_b].site_type != "in" or sites[site_b].oxygen_count != second_count:
+                continue
+            if first_count == second_count and site_b < site_a:
+                continue
+
+            pair = (site_a, site_b)
+            bridge_position = _siloxane_bridge_position(kit, pair)
+            if bridge_position is not None:
+                return pair, bridge_position
+
+    return None, None
+
+
+def _bridge_base_direction(kit, pair, center_pos, axis_unit):
+    """Return a surface-guided transverse direction for bridge placement.
+
+    Parameters
+    ----------
+    kit : PoreKit
+        Slit system under preparation.
+    pair : tuple[int, int]
+        Pair of silicon site identifiers.
+    center_pos : list[float]
+        Minimum-image midpoint between the two silicon atoms.
+    axis_unit : list[float]
+        Unit vector along the silicon-silicon axis.
+
+    Returns
+    -------
+    direction : list[float]
+        Unit vector perpendicular to the silicon-silicon axis, biased towards
+        the local pore-facing surface normal.
+    """
+    site_dict = kit._pore.get_sites()
+    normal_a = site_dict[pair[0]].normal(center_pos)
+    normal_b = site_dict[pair[1]].normal(center_pos)
+    surface_axis = [normal_a[dim] + normal_b[dim] for dim in range(3)]
+    axis_projection = pms.geom.dot_product(surface_axis, axis_unit)
+    transverse = [
+        surface_axis[dim] - axis_projection * axis_unit[dim]
+        for dim in range(3)
+    ]
+
+    if pms.geom.length(transverse) < 1e-8:
+        fallback_axis = [1.0, 0.0, 0.0] if abs(axis_unit[0]) < 0.9 else [0.0, 1.0, 0.0]
+        transverse = pms.geom.cross_product(axis_unit, fallback_axis)
+
+    return pms.geom.unit(transverse)
+
+
+def _bridge_candidate_positions(kit, pair):
+    """Generate bridge-oxygen candidate positions for one silicon pair.
 
     Parameters
     ----------
@@ -1044,18 +1180,187 @@ def _siloxane_bridge_position(kit, pair):
 
     Returns
     -------
-    position : list[float]
-        Bridging oxygen position.
+    positions : list[list[float]]
+        Box-wrapped candidate positions for the bridging oxygen.
     """
-    pos_a = kit._pore.get_block().pos(pair[0])
-    pos_b = kit._pore.get_block().pos(pair[1])
-    center_pos = [pos_a[dim] + (pos_b[dim] - pos_a[dim]) / 2 for dim in range(3)]
+    block = kit._pore.get_block()
+    box = block.get_box()
+    pos_a = block.pos(pair[0])
+    pos_b = block.pos(pair[1])
+    pair_vector = _minimum_image_vector(pos_a, pos_b, box)
+    center_pos = _wrap_position(
+        [pos_a[dim] + 0.5 * pair_vector[dim] for dim in range(3)],
+        box,
+    )
+    axis_unit = pms.geom.unit(pair_vector)
+    base_direction = _bridge_base_direction(kit, pair, center_pos, axis_unit)
 
-    surface_axis = kit._pore.get_sites()[pair[0]].normal(center_pos)
-    return [center_pos[dim] + 0.09 * surface_axis[dim] for dim in range(3)]
+    positions = []
+    for angle in _BRIDGE_CANDIDATE_ROTATIONS_DEG:
+        direction = pms.geom.rotate(base_direction, axis_unit, angle, True)
+        positions.append(
+            _wrap_position(
+                [center_pos[dim] + _BRIDGE_OFFSET_NM * direction[dim] for dim in range(3)],
+                box,
+            )
+        )
+
+    return positions
 
 
-def _bridge_pair(kit, pair):
+def _bridge_steric_score(kit, pair, bridge_position):
+    """Score one bridge-oxygen candidate against nearby active scaffold atoms.
+
+    Parameters
+    ----------
+    kit : PoreKit
+        Slit system under preparation.
+    pair : tuple[int, int]
+        Pair of silicon site identifiers.
+    bridge_position : list[float]
+        Candidate bridge-oxygen position.
+
+    Returns
+    -------
+    score : float
+        Minimum steric clearance in nanometers. Negative values indicate that
+        at least one nonbonded atom overlaps the candidate more closely than
+        allowed.
+    """
+    block = kit._pore.get_block()
+    box = block.get_box()
+    matrix = kit._matrix.get_matrix()
+    sites = kit._pore.get_sites()
+    consumed_oxygen_ids = {
+        sites[pair[0]].oxygen_ids[0],
+        sites[pair[1]].oxygen_ids[0],
+    }
+    excluded_ids = {
+        pair[0],
+        pair[1],
+        *consumed_oxygen_ids,
+    }
+
+    frontier = list(pair)
+    local_ids = set(pair)
+    for _depth in range(_BRIDGE_STERIC_GRAPH_DEPTH):
+        next_frontier = []
+        for atom_id in frontier:
+            for neighbor_id in matrix[atom_id]["atoms"]:
+                if neighbor_id not in local_ids:
+                    local_ids.add(neighbor_id)
+                    next_frontier.append(neighbor_id)
+        if not next_frontier:
+            break
+        frontier = next_frontier
+
+    min_clearance = float("inf")
+    for atom_id in local_ids:
+        if atom_id in excluded_ids:
+            continue
+
+        atom_type = block.get_atom_type(atom_id)
+        min_distance = _BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(atom_type, 0.18)
+        delta = _minimum_image_vector(bridge_position, block.pos(atom_id), box)
+
+        if any(abs(component) > _BRIDGE_STERIC_DISTANCE_CUTOFF_NM for component in delta):
+            continue
+
+        clearance = pms.geom.length(delta) - min_distance
+        if clearance < min_clearance:
+            min_clearance = clearance
+            if min_clearance < 0:
+                return min_clearance
+
+    return min_clearance if min_clearance != float("inf") else _BRIDGE_STERIC_DISTANCE_CUTOFF_NM
+
+
+def _bridge_global_clearance(kit, pair, bridge_position):
+    """Return the full-structure steric clearance for one bridge candidate.
+
+    Parameters
+    ----------
+    kit : PoreKit
+        Slit system under preparation.
+    pair : tuple[int, int]
+        Pair of silicon site identifiers.
+    bridge_position : list[float]
+        Candidate bridge-oxygen position.
+
+    Returns
+    -------
+    score : float
+        Minimum steric clearance in nanometers over all active scaffold atoms.
+    """
+    block = kit._pore.get_block()
+    box = block.get_box()
+    matrix = kit._matrix.get_matrix()
+    sites = kit._pore.get_sites()
+    consumed_oxygen_ids = {
+        sites[pair[0]].oxygen_ids[0],
+        sites[pair[1]].oxygen_ids[0],
+    }
+    excluded_ids = {
+        pair[0],
+        pair[1],
+        *consumed_oxygen_ids,
+    }
+
+    min_clearance = float("inf")
+    for atom_id in matrix:
+        if atom_id in excluded_ids:
+            continue
+
+        atom_type = block.get_atom_type(atom_id)
+        min_distance = _BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(atom_type, 0.18)
+        delta = _minimum_image_vector(bridge_position, block.pos(atom_id), box)
+
+        if any(abs(component) > _BRIDGE_STERIC_DISTANCE_CUTOFF_NM for component in delta):
+            continue
+
+        clearance = pms.geom.length(delta) - min_distance
+        if clearance < min_clearance:
+            min_clearance = clearance
+            if min_clearance < 0:
+                return min_clearance
+
+    return min_clearance if min_clearance != float("inf") else _BRIDGE_STERIC_DISTANCE_CUTOFF_NM
+
+
+def _siloxane_bridge_position(kit, pair):
+    """Return the least crowded bridge-oxygen position for one silicon pair.
+
+    Parameters
+    ----------
+    kit : PoreKit
+        Slit system under preparation.
+    pair : tuple[int, int]
+        Pair of silicon site identifiers.
+
+    Returns
+    -------
+    position : list[float] or None
+        Bridging oxygen position, or ``None`` when no sterically acceptable
+        candidate was found for the pair.
+    """
+    candidate_scores = []
+    for candidate_position in _bridge_candidate_positions(kit, pair):
+        local_score = _bridge_steric_score(kit, pair, candidate_position)
+        if local_score >= 0:
+            candidate_scores.append((local_score, candidate_position))
+
+    for _local_score, candidate_position in sorted(
+        candidate_scores,
+        key=lambda item: item[0],
+        reverse=True,
+    ):
+        if _bridge_global_clearance(kit, pair, candidate_position) >= 0:
+            return candidate_position
+
+    return None
+
+
+def _bridge_pair(kit, pair, bridge_position=None):
     """Create one siloxane bridge between two specific surface silicon sites.
 
     Parameters
@@ -1064,6 +1369,9 @@ def _bridge_pair(kit, pair):
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
+    bridge_position : list[float] or None, optional
+        Optional preselected bridge-oxygen position. When omitted, the helper
+        searches for the least crowded valid bridge position automatically.
 
     Returns
     -------
@@ -1074,7 +1382,9 @@ def _bridge_pair(kit, pair):
     if pair[0] not in sites or pair[1] not in sites:
         raise ValueError("Cannot bridge a silicon pair that is no longer present in the site dictionary.")
 
-    bridge_position = _siloxane_bridge_position(kit, pair)
+    bridge_position = _siloxane_bridge_position(kit, pair) if bridge_position is None else bridge_position
+    if bridge_position is None:
+        raise ValueError("Cannot bridge a silicon pair without a sterically acceptable bridge-oxygen position.")
     block = kit._pore.get_block()
     bridge_atom_id = block.get_num()
     block.add("O", bridge_position, name="OM1")
@@ -1179,11 +1489,11 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
     current_surface = _surface_composition(total_surface_si, sites)
 
     while current_surface.q3_sites < target_surface.q3_sites:
-        pair = _find_pair(sites, adjacency, 2, 2)
+        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 2)
         if pair is None:
             raise ValueError("No remaining Q2/Q2 siloxane pair is available to increase the Q3 population.")
 
-        bridge_count += _bridge_pair(kit, pair)
+        bridge_count += _bridge_pair(kit, pair, bridge_position=bridge_position)
         _consume_pair(adjacency, pair)
         current_surface = _surface_composition(total_surface_si, sites)
 
@@ -1192,16 +1502,16 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
 
     while current_surface.q2_sites > target_surface.q2_sites:
         q2_delta = current_surface.q2_sites - target_surface.q2_sites
-        pair = _find_pair(sites, adjacency, 2, 1)
+        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 1)
 
         if pair is None:
             if q2_delta < 2:
                 raise ValueError("The slit surface cannot reach the requested Q2 count with the available siloxane pairs.")
-            pair = _find_pair(sites, adjacency, 2, 2)
+            pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 2)
             if pair is None:
                 raise ValueError("No remaining Q2/Q2 siloxane pair is available to reduce the Q2 population.")
 
-        bridge_count += _bridge_pair(kit, pair)
+        bridge_count += _bridge_pair(kit, pair, bridge_position=bridge_position)
         _consume_pair(adjacency, pair)
         current_surface = _surface_composition(total_surface_si, sites)
 
@@ -1209,11 +1519,11 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
         if (current_surface.q3_sites - target_surface.q3_sites) < 2:
             raise ValueError("The requested Q3 count is incompatible with the siloxane editing parity constraints.")
 
-        pair = _find_pair(sites, adjacency, 1, 1)
+        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 1, 1)
         if pair is None:
             raise ValueError("No remaining Q3/Q3 siloxane pair is available to reach the requested Q3 count.")
 
-        bridge_count += _bridge_pair(kit, pair)
+        bridge_count += _bridge_pair(kit, pair, bridge_position=bridge_position)
         _consume_pair(adjacency, pair)
         current_surface = _surface_composition(total_surface_si, sites)
 
@@ -1612,7 +1922,13 @@ def prepare_functionalized_amorphous_slit_surface(config):
     return FunctionalizedSlitResult(system=target_attempt.system, report=report)
 
 
-def write_bare_amorphous_slit(output_dir, config=None, write_object_files=False):
+def write_bare_amorphous_slit(
+    output_dir,
+    config=None,
+    write_object_files=False,
+    write_pdb=False,
+    write_pdb_conect=False,
+):
     """Prepare, finalize, and store a bare amorphous silica slit.
 
     Parameters
@@ -1625,6 +1941,11 @@ def write_bare_amorphous_slit(output_dir, config=None, write_object_files=False)
         When ``True``, also serialize the finalized pore structure and full
         :class:`porems.system.PoreKit` state as ``.obj`` files. The default is
         ``False`` so object exports remain an explicit opt-in.
+    write_pdb : bool, optional
+        When ``True``, also write a PDB structure file for inspection.
+    write_pdb_conect : bool, optional
+        When ``True``, emit inspection-oriented ``CONECT`` records in the
+        written PDB file. This flag implies PDB output.
 
     Returns
     -------
@@ -1635,7 +1956,12 @@ def write_bare_amorphous_slit(output_dir, config=None, write_object_files=False)
     pms.utils.mkdirp(output_dir)
 
     result.system.finalize()
-    result.system.store(output_dir, write_object_files=write_object_files)
+    result.system.store(
+        output_dir,
+        write_object_files=write_object_files,
+        write_pdb=write_pdb,
+        write_pdb_conect=write_pdb_conect,
+    )
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
     with open(report_path, "w") as file_out:
@@ -1644,7 +1970,13 @@ def write_bare_amorphous_slit(output_dir, config=None, write_object_files=False)
     return result
 
 
-def write_functionalized_amorphous_slit(output_dir, config, write_object_files=False):
+def write_functionalized_amorphous_slit(
+    output_dir,
+    config,
+    write_object_files=False,
+    write_pdb=False,
+    write_pdb_conect=False,
+):
     """Prepare, finalize, and store a functionalized amorphous silica slit.
 
     Parameters
@@ -1657,6 +1989,11 @@ def write_functionalized_amorphous_slit(output_dir, config, write_object_files=F
         When ``True``, also serialize the finalized pore structure and full
         :class:`porems.system.PoreKit` state as ``.obj`` files. The default is
         ``False`` so object exports remain an explicit opt-in.
+    write_pdb : bool, optional
+        When ``True``, also write a PDB structure file for inspection.
+    write_pdb_conect : bool, optional
+        When ``True``, emit inspection-oriented ``CONECT`` records in the
+        written PDB file. This flag implies PDB output.
 
     Returns
     -------
@@ -1667,7 +2004,12 @@ def write_functionalized_amorphous_slit(output_dir, config, write_object_files=F
     pms.utils.mkdirp(output_dir)
 
     result.system.finalize()
-    result.system.store(output_dir, write_object_files=write_object_files)
+    result.system.store(
+        output_dir,
+        write_object_files=write_object_files,
+        write_pdb=write_pdb,
+        write_pdb_conect=write_pdb_conect,
+    )
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
     with open(report_path, "w") as file_out:

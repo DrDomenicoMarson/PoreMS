@@ -52,7 +52,10 @@ diagnostics such as stripped silicon counts, removed orphan oxygens, inserted
 bridge oxygens, and the final valid surface/scaffold oxygen counts.
 ``write_bare_amorphous_slit(...)`` finalizes the prepared slit and stores the
 main structure files together with a JSON report. Object backups are written
-only when ``write_object_files=True`` is requested explicitly.
+only when ``write_object_files=True`` is requested explicitly. For inspection,
+the same writer can also emit a ``.pdb`` file, and ``write_pdb_conect=True``
+adds ``CONECT`` records for the active silica connectivity and the built-in
+``SL``/``SLG`` surface groups.
 
 The slit-preparation API is designed for the periodic bare-silica slit builder:
 

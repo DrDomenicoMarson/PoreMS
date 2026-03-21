@@ -601,7 +601,19 @@ class Molecule:
     #########
     # Atoms #
     #########
-    def add(self, atom_type, pos, bond=None, r=0, theta=0, phi=0, is_deg=True, name="", residue=0):
+    def add(
+        self,
+        atom_type,
+        pos,
+        bond=None,
+        r=0,
+        theta=0,
+        phi=0,
+        is_deg=True,
+        name="",
+        residue=0,
+        source_id=None,
+    ):
         """Add a new atom using spherical coordinates relative to a reference.
 
         ``pos`` defines the coordinate origin, either as an atom id or as an
@@ -628,6 +640,10 @@ class Molecule:
             Optional explicit atom name.
         residue : int, optional
             Residue index stored on the new atom.
+        source_id : int or None, optional
+            Optional identifier of the source atom in a parent structure. This
+            metadata can later be used by structure writers to reconstruct
+            connectivity for objectified scaffold atoms.
 
         Examples
         --------
@@ -656,7 +672,15 @@ class Molecule:
         coord = [x, y, z]
 
         # Create new atom
-        self._atom_list.append(Atom([pos[i]+coord[i] for i in range(self._dim)], atom_type, name, residue))
+        self._atom_list.append(
+            Atom(
+                [pos[i]+coord[i] for i in range(self._dim)],
+                atom_type,
+                name,
+                residue,
+                source_id=source_id,
+            )
+        )
 
     # Delete an atom
     def delete(self, atoms):

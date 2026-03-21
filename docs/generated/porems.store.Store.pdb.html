@@ -127,7 +127,7 @@
 <h1>Store.pdb<a class="headerlink" href="#store-pdb" title="Link to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.store.Store.pdb">
-<span class="sig-prename descclassname"><span class="pre">Store.</span></span><span class="sig-name descname"><span class="pre">pdb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_atom_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.store.Store.pdb" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Store.</span></span><span class="sig-name descname"><span class="pre">pdb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_atom_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_conect</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.store.Store.pdb" title="Link to this definition">¶</a></dt>
 <dd><p>Write the current structure in PDB format.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -136,6 +136,10 @@
 </dd>
 <dt><strong>use_atom_names</strong><span class="classifier">bool, optional</span></dt><dd><p>True to preserve explicit atom names when available. False to
 enumerate atom names from atom types.</p>
+</dd>
+<dt><strong>write_conect</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also emit inspection-oriented <code class="docutils literal notranslate"><span class="pre">CONECT</span></code> records for
+the active silica scaffold and the built-in <code class="docutils literal notranslate"><span class="pre">SL</span></code>/<code class="docutils literal notranslate"><span class="pre">SLG</span></code> surface
+residues. Ligand-internal connectivity is not reconstructed here.</p>
 </dd>
 </dl>
 </dd>

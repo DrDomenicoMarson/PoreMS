@@ -21,13 +21,16 @@ class Atom:
         Optional atom label.
     residue : int, optional
         Residue index used by structure writers.
+    source_id : int or None, optional
+        Optional identifier of the source atom in a parent pore/block object.
     """
-    def __init__(self, pos, atom_type, name="", residue=0):
+    def __init__(self, pos, atom_type, name="", residue=0, source_id=None):
         # Initialize
         self._pos = pos
         self._atom_type = atom_type
         self._name = name
         self._residue = residue
+        self._source_id = source_id
 
 
     ##################
@@ -95,6 +98,17 @@ class Atom:
         """
         self._residue = residue
 
+    def set_source_id(self, source_id):
+        """Update the optional source atom identifier.
+
+        Parameters
+        ----------
+        source_id : int or None
+            Original atom identifier from the parent pore/block object. ``None``
+            clears the source tracking metadata.
+        """
+        self._source_id = source_id
+
 
     ##################
     # Getter Methods #
@@ -138,3 +152,14 @@ class Atom:
             Residue index used by structure writers.
         """
         return self._residue
+
+    def get_source_id(self):
+        """Return the optional source atom identifier.
+
+        Returns
+        -------
+        source_id : int or None
+            Original atom identifier from the parent pore/block object, or
+            ``None`` when no source tracking metadata is present.
+        """
+        return self._source_id

@@ -898,10 +898,10 @@ class Pore():
             # Create molecule object
             if atom.get_atom_type() == "O":
                 mol = Molecule("om", "OM")
-                mol.add("O", atom.get_pos(), name="OM1")
+                mol.add("O", atom.get_pos(), name="OM1", source_id=atom_id)
             elif atom.get_atom_type() == "Si":
                 mol = Molecule("si", "SI")
-                mol.add("Si", atom.get_pos(), name="SI1")
+                mol.add("Si", atom.get_pos(), name="SI1", source_id=atom_id)
 
             # Add to molecule list and global dictionary
             mol_list.append(mol)

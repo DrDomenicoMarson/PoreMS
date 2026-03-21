@@ -127,7 +127,7 @@
 <h1>write_functionalized_amorphous_slit<a class="headerlink" href="#write-functionalized-amorphous-slit" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="porems.slit.write_functionalized_amorphous_slit">
-<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">write_functionalized_amorphous_slit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_object_files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.write_functionalized_amorphous_slit" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">write_functionalized_amorphous_slit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_object_files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_pdb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_pdb_conect</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.write_functionalized_amorphous_slit" title="Link to this definition">¶</a></dt>
 <dd><p>Prepare, finalize, and store a functionalized amorphous silica slit.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -139,6 +139,11 @@
 <dt><strong>write_object_files</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also serialize the finalized pore structure and full
 <a class="reference internal" href="porems.system.PoreKit.html#porems.system.PoreKit" title="porems.system.PoreKit"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.system.PoreKit</span></code></a> state as <code class="docutils literal notranslate"><span class="pre">.obj</span></code> files. The default is
 <code class="docutils literal notranslate"><span class="pre">False</span></code> so object exports remain an explicit opt-in.</p>
+</dd>
+<dt><strong>write_pdb</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also write a PDB structure file for inspection.</p>
+</dd>
+<dt><strong>write_pdb_conect</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, emit inspection-oriented <code class="docutils literal notranslate"><span class="pre">CONECT</span></code> records in the
+written PDB file. This flag implies PDB output.</p>
 </dd>
 </dl>
 </dd>

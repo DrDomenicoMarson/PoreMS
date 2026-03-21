@@ -226,6 +226,50 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertEqual(self.prepared_report.preparation_diagnostics.inserted_bridge_oxygen, 235)
         self.assertNotIn("SLX", self.prepared_result.system._pore.get_mol_dict())
 
+    def test_inserted_bridge_oxygen_respects_local_clearance_threshold(self):
+        history = self.prepared_result.system._pore.get_surface_edit_history()
+        bridge_ids = [
+            record.atom_id
+            for record in history
+            if record.reason == "inserted_bridge_oxygen"
+        ]
+        matrix = self.prepared_result.system._matrix.get_matrix()
+        block = self.prepared_result.system._pore.get_block()
+        box = block.get_box()
+
+        self.assertEqual(
+            len(bridge_ids),
+            self.prepared_report.preparation_diagnostics.inserted_bridge_oxygen,
+        )
+
+        for bridge_id in bridge_ids:
+            bonded_ids = set(matrix[bridge_id]["atoms"]) | {bridge_id}
+            for atom_id in matrix:
+                if atom_id in bonded_ids:
+                    continue
+
+                delta = slit_mod._minimum_image_vector(
+                    block.pos(bridge_id),
+                    block.pos(atom_id),
+                    box,
+                )
+                if any(
+                    abs(component) > slit_mod._BRIDGE_STERIC_DISTANCE_CUTOFF_NM
+                    for component in delta
+                ):
+                    continue
+
+                min_distance = slit_mod._BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(
+                    block.get_atom_type(atom_id),
+                    0.18,
+                )
+                clearance = pms.geom.length(delta) - min_distance
+                self.assertGreaterEqual(
+                    clearance,
+                    -1e-9,
+                    msg=f"Bridge oxygen {bridge_id} is too close to atom {atom_id}.",
+                )
+
     def test_repeat_y_one_reaches_requested_surface_target(self):
         result = pms.prepare_amorphous_slit_surface(
             config=pms.AmorphousSlitConfig(
@@ -346,12 +390,18 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
                     sorted(system._site_in),
                     config.siloxane_distance_range_nm,
                 )
-                pair = slit_mod._find_pair(sites, adjacency, *pair_counts)
+                pair, bridge_position = slit_mod._find_placeable_pair(
+                    system,
+                    sites,
+                    adjacency,
+                    *pair_counts,
+                )
 
                 self.assertIsNotNone(pair)
+                self.assertIsNotNone(bridge_position)
                 om_before = len(system._pore.get_mol_dict().get("OM", []))
                 si_before = len(system._pore.get_mol_dict().get("SI", []))
-                slit_mod._bridge_pair(system, pair)
+                slit_mod._bridge_pair(system, pair, bridge_position=bridge_position)
                 slit_mod._consume_pair(adjacency, pair)
 
                 after = slit_mod._surface_composition(
@@ -541,6 +591,34 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
                 )
             )
         )
+
+    def test_bare_slit_pdb_with_conect_is_opt_in(self):
+        output_dir = os.path.join(
+            os.path.dirname(__file__),
+            "output",
+            "bare_amorphous_slit_preparation_with_pdb",
+        )
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
+        pms.write_bare_amorphous_slit(
+            output_dir,
+            config=pms.AmorphousSlitConfig(
+                name="test_bare_amorphous_slit_with_pdb",
+                surface_target=self.surface_target,
+            ),
+            write_pdb=True,
+            write_pdb_conect=True,
+        )
+
+        pdb_path = os.path.join(output_dir, "test_bare_amorphous_slit_with_pdb.pdb")
+        self.assertTrue(os.path.isfile(pdb_path))
+
+        with open(pdb_path, "r") as file_in:
+            pdb_lines = file_in.readlines()
+
+        self.assertTrue(any(line.startswith("HETATM") for line in pdb_lines))
+        self.assertTrue(any(line.startswith("CONECT") for line in pdb_lines))
 
     def test_top_level_exports_and_version(self):
         self.assertEqual(pms.__version__, EXPECTED_VERSION)

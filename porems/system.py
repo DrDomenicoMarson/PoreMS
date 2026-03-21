@@ -1501,7 +1501,14 @@ class PoreKit():
         else:
             self._pore.set_box(self._box)
 
-    def store(self, link="./", sort_list=None, write_object_files=False):
+    def store(
+        self,
+        link="./",
+        sort_list=None,
+        write_object_files=False,
+        write_pdb=False,
+        write_pdb_conect=False,
+    ):
         """Write the finalized pore system and companion simulation files.
 
         Parameters
@@ -1515,6 +1522,12 @@ class PoreKit():
             When ``True``, also serialize the pore structure and full
             :class:`PoreKit` state as ``.obj`` files. The default keeps object
             serialization disabled unless the caller explicitly requests it.
+        write_pdb : bool, optional
+            When ``True``, also write a PDB structure file alongside the
+            default GROMACS outputs.
+        write_pdb_conect : bool, optional
+            When ``True``, emit inspection-oriented ``CONECT`` records in the
+            written PDB file. This flag implies PDB output.
         """
         sort_list = [] if sort_list is None else sort_list
 
@@ -1529,6 +1542,8 @@ class PoreKit():
 
         # Save files
         store.gro(use_atom_names=True)
+        if write_pdb or write_pdb_conect:
+            store.pdb(use_atom_names=True, write_conect=write_pdb_conect)
         store.top()
         store.grid()
         if write_object_files:

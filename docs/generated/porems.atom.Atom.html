@@ -127,7 +127,7 @@
 <h1>Atom<a class="headerlink" href="#atom" title="Link to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="porems.atom.Atom">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.atom.</span></span><span class="sig-name descname"><span class="pre">Atom</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">residue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.atom.Atom" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.atom.</span></span><span class="sig-name descname"><span class="pre">Atom</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">residue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.atom.Atom" title="Link to this definition">¶</a></dt>
 <dd><p>Represent a single atom with coordinates and lightweight metadata.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -139,6 +139,8 @@
 <dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>Optional atom label.</p>
 </dd>
 <dt><strong>residue</strong><span class="classifier">int, optional</span></dt><dd><p>Residue index used by structure writers.</p>
+</dd>
+<dt><strong>source_id</strong><span class="classifier">int or None, optional</span></dt><dd><p>Optional identifier of the source atom in a parent pore/block object.</p>
 </dd>
 </dl>
 </dd>
