@@ -103,10 +103,16 @@ residues.
           mount=0,
           axis=(0, 1),
       ),
+      progress_settings=pms.FunctionalizedSlitProgressConfig(),
   )
 
   result = pms.prepare_functionalized_amorphous_slit_surface(functionalized)
   print(result.report.final_surface)
+
+``FunctionalizedSlitProgressConfig`` enables built-in ``tqdm`` progress bars
+for the exact functionalized slit workflow. Auto mode shows progress in
+interactive terminals and notebooks while staying quiet in typical non-
+interactive test and batch contexts.
 
 
 Create surface molecules

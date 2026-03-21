@@ -54,6 +54,30 @@ def teps_ligand(repo_root):
     return pms.Molecule("TEPS", "TEPS", str(teps_path))
 
 
+class RecordingProgressBar:
+    """Simple test double for slit progress-bar instrumentation tests."""
+
+    def __init__(self, total, desc, unit, leave):
+        self.total = total
+        self.desc = desc
+        self.unit = unit
+        self.leave = leave
+        self.n = 0
+        self.closed = False
+        self.descriptions = [desc]
+
+    def update(self, value=1):
+        self.n += value
+
+    def set_description_str(self, desc, refresh=True):
+        del refresh
+        self.desc = desc
+        self.descriptions.append(desc)
+
+    def close(self):
+        self.closed = True
+
+
 @pytest.fixture(scope="class", autouse=True)
 def _bare_slit_case_context(request, bare_slit_context):
     """Expose the shared bare-slit context as class attributes."""
@@ -564,6 +588,7 @@ class TestAmorphousSlitPreparation:
         assert hasattr(pms, "SurfacePreparationDiagnostics")
         assert hasattr(pms, "SilaneAttachmentConfig")
         assert hasattr(pms, "SlitTimingSummary")
+        assert hasattr(pms, "FunctionalizedSlitProgressConfig")
         assert hasattr(pms, "FunctionalizedSlitStericConfig")
         assert hasattr(pms, "FunctionalizedAmorphousSlitConfig")
         assert hasattr(pms, "FunctionalizedSlitResult")
@@ -589,6 +614,62 @@ class TestFunctionalizedAmorphousSlit:
 
         assert sterics.enabled
         assert sterics.clearance_scale == pytest.approx(0.60)
+
+    def test_functionalized_progress_config_defaults_to_auto_quiet_leave_false(self):
+        progress = pms.FunctionalizedSlitProgressConfig()
+
+        assert progress.enabled is None
+        assert not (progress.leave)
+
+    def test_progress_auto_mode_is_quiet_under_pytest(self):
+        bar = slit_mod._create_progress_bar(
+            total=3,
+            desc="demo",
+            progress_config=pms.FunctionalizedSlitProgressConfig(),
+            unit="step",
+        )
+
+        assert isinstance(bar, slit_mod._NullProgressBar)
+
+    def test_progress_can_be_forced_off_even_in_interactive_mode(self, monkeypatch):
+        monkeypatch.setattr(slit_mod, "_is_interactive_progress_environment", lambda: True)
+
+        bar = slit_mod._create_progress_bar(
+            total=3,
+            desc="demo",
+            progress_config=pms.FunctionalizedSlitProgressConfig(enabled=False),
+            unit="step",
+        )
+
+        assert isinstance(bar, slit_mod._NullProgressBar)
+
+    def test_progress_can_be_forced_on_in_non_interactive_mode(self, monkeypatch):
+        created = []
+
+        def fake_tqdm(**kwargs):
+            bar = RecordingProgressBar(
+                total=kwargs["total"],
+                desc=kwargs["desc"],
+                unit=kwargs["unit"],
+                leave=kwargs["leave"],
+            )
+            created.append(bar)
+            return bar
+
+        monkeypatch.setattr(slit_mod, "_is_interactive_progress_environment", lambda: False)
+        monkeypatch.setattr(slit_mod, "_tqdm_auto", fake_tqdm)
+
+        bar = slit_mod._create_progress_bar(
+            total=4,
+            desc="forced",
+            progress_config=pms.FunctionalizedSlitProgressConfig(enabled=True, leave=True),
+            unit="stage",
+        )
+
+        assert created
+        assert bar is created[0]
+        assert created[0].leave
+        assert created[0].total == 4
 
     def test_generic_attach_default_steric_scale_is_unchanged(self):
         steric_parameter = inspect.signature(pms.Pore.attach).parameters["steric_clearance_scale"]
@@ -632,6 +713,104 @@ class TestFunctionalizedAmorphousSlit:
 
         assert recorded_scales
         assert 0.55 in recorded_scales
+
+    def test_prepare_progress_creates_outer_and_inner_bars(self, monkeypatch):
+        created = []
+
+        def fake_create_progress_bar(total, desc, progress_config, unit="it"):
+            del progress_config
+            bar = RecordingProgressBar(total=total, desc=desc, unit=unit, leave=False)
+            created.append(bar)
+            return bar
+
+        monkeypatch.setattr(slit_mod, "_create_progress_bar", fake_create_progress_bar)
+
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_progress_prepare",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+                rotate_about_axis=False,
+            ),
+            progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=True),
+        )
+
+        result = pms.prepare_functionalized_amorphous_slit_surface(config)
+
+        assert result.report.final_surface == pms.SiliconStateComposition(957, 65, 651, 239, 1, 1)
+        stage_bars = [bar for bar in created if bar.unit == "stage"]
+        site_bars = [bar for bar in created if bar.unit == "site"]
+        assert len(stage_bars) == 1
+        assert stage_bars[0].total == 4
+        assert stage_bars[0].n == 4
+        assert any(desc == "Base slit build" for desc in stage_bars[0].descriptions)
+        assert any(desc == "Q-state preparation" for desc in stage_bars[0].descriptions)
+        assert any(desc == "T2 attachment" for desc in stage_bars[0].descriptions)
+        assert any(desc == "T3 attachment" for desc in stage_bars[0].descriptions)
+        assert sorted(bar.total for bar in site_bars) == [1, 1]
+
+    def test_write_progress_includes_finalize_and_store_stages(self, monkeypatch, tmp_path):
+        created = []
+
+        def fake_create_progress_bar(total, desc, progress_config, unit="it"):
+            del progress_config
+            bar = RecordingProgressBar(total=total, desc=desc, unit=unit, leave=False)
+            created.append(bar)
+            return bar
+
+        monkeypatch.setattr(slit_mod, "_create_progress_bar", fake_create_progress_bar)
+
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_progress_write",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+                rotate_about_axis=False,
+            ),
+            progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=True),
+        )
+
+        result = pms.write_functionalized_amorphous_slit(
+            str(tmp_path / "functionalized_progress_write"),
+            config,
+            write_pdb=False,
+            write_cif=False,
+        )
+
+        assert result.report.timing_summary.finalize_s > 0
+        assert result.report.timing_summary.store_export_s > 0
+        stage_bars = [bar for bar in created if bar.unit == "stage"]
+        assert len(stage_bars) == 1
+        assert stage_bars[0].total == 6
+        assert stage_bars[0].n == 6
+        assert any(desc == "Finalize" for desc in stage_bars[0].descriptions)
+        assert any(desc == "Store/export" for desc in stage_bars[0].descriptions)
 
     def test_exact_functionalized_target_is_realized(self):
         target = pms.ExperimentalSiliconStateTarget(

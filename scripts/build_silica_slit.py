@@ -2,7 +2,7 @@
 
 import porems as pms
 
-LIGAND = "bare" # can be "TEPS" "TMS" or "bare"
+LIGAND = "TMS" # can be "TEPS" "TMS" or "bare"
 
 if LIGAND == "TEPS":
     lig = pms.Molecule("TEPS", "TEPS", "TEPS.pdb")
@@ -50,6 +50,7 @@ slit_config = pms.FunctionalizedAmorphousSlitConfig(
         rotate_step_deg=30.0,
         axis=(0, 1),
     ),
+    progress_settings=pms.FunctionalizedSlitProgressConfig(),
 )
 
 

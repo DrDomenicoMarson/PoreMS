@@ -107,7 +107,10 @@ Slit Preparation
     slit.SiliconStateComposition
     slit.SlitPreparationReport
     slit.SlitPreparationResult
+    slit.SlitTimingSummary
     slit.SilaneAttachmentConfig
+    slit.FunctionalizedSlitProgressConfig
+    slit.FunctionalizedSlitStericConfig
     slit.FunctionalizedAmorphousSlitConfig
     slit.FunctionalizedSlitResult
     slit.prepare_amorphous_slit_surface

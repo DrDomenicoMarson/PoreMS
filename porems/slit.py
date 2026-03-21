@@ -9,11 +9,13 @@ import copy
 import json
 import math
 import os
+import sys
 
 from dataclasses import asdict, dataclass, field, replace
 from time import perf_counter
 
 import porems as pms
+from tqdm.auto import tqdm as _tqdm_auto
 
 
 _BRIDGE_OFFSET_NM = 0.09
@@ -25,6 +27,162 @@ _BRIDGE_MIN_CLEARANCE_BY_TYPE_NM = {
     "H": 0.12,
 }
 _BRIDGE_CANDIDATE_ROTATIONS_DEG = (0, 45, -45, 90, -90, 135, -135, 180)
+
+
+@dataclass(frozen=True)
+class FunctionalizedSlitProgressConfig:
+    """Progress-bar settings for functionalized slit preparation.
+
+    Parameters
+    ----------
+    enabled : bool or None, optional
+        Progress-display mode. ``None`` enables auto mode, which shows
+        progress in interactive terminals and notebooks while staying quiet in
+        non-interactive or pytest-driven contexts.
+    leave : bool, optional
+        When ``True``, keep completed progress bars visible instead of clearing
+        them after completion.
+    """
+
+    enabled: bool | None = None
+    leave: bool = False
+
+
+@dataclass
+class _NullProgressBar:
+    """No-op progress bar used when live progress is disabled."""
+
+    total: int | None = None
+    desc: str = ""
+    unit: str = "it"
+    leave: bool = False
+    n: int = 0
+
+    def update(self, value=1):
+        """Advance the internal counter without rendering output."""
+        self.n += value
+
+    def set_description_str(self, desc, refresh=True):
+        """Store the last description without rendering output."""
+        del refresh
+        self.desc = desc
+
+    def close(self):
+        """Close the no-op progress bar."""
+        return None
+
+
+@dataclass
+class _FunctionalizedProgressTracker:
+    """Outer progress tracker for the functionalized slit workflow."""
+
+    total_stages: int
+    progress_config: FunctionalizedSlitProgressConfig
+    stage_bar: object = field(init=False)
+
+    def __post_init__(self):
+        """Create the outer workflow progress bar."""
+        self.stage_bar = _create_progress_bar(
+            total=self.total_stages,
+            desc="Functionalized slit",
+            progress_config=self.progress_config,
+            unit="stage",
+        )
+
+    def set_stage(self, desc):
+        """Update the current outer-stage description."""
+        self.stage_bar.set_description_str(desc)
+
+    def update_stage(self, value=1):
+        """Advance the outer-stage bar."""
+        self.stage_bar.update(value)
+
+    def site_bar(self, desc, total):
+        """Create an inner per-site progress bar."""
+        return _create_progress_bar(
+            total=total,
+            desc=desc,
+            progress_config=self.progress_config,
+            unit="site",
+        )
+
+    def close(self):
+        """Close the outer workflow bar."""
+        self.stage_bar.close()
+
+
+def _is_interactive_progress_environment():
+    """Return whether live progress bars should auto-enable."""
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return False
+
+    try:
+        from IPython import get_ipython
+
+        shell = get_ipython()
+        if shell is not None and shell.__class__.__name__ in {
+            "TerminalInteractiveShell",
+            "ZMQInteractiveShell",
+        }:
+            return True
+    except Exception:
+        pass
+
+    return any(
+        getattr(stream, "isatty", lambda: False)()
+        for stream in (sys.stderr, sys.stdout)
+    )
+
+
+def _progress_is_enabled(progress_config):
+    """Return whether a progress bar should render live output.
+
+    Parameters
+    ----------
+    progress_config : FunctionalizedSlitProgressConfig
+        Functionalized slit progress settings.
+
+    Returns
+    -------
+    enabled : bool
+        True when live progress should be displayed.
+    """
+    if progress_config.enabled is not None:
+        return progress_config.enabled
+    return _is_interactive_progress_environment()
+
+
+def _create_progress_bar(total, desc, progress_config, unit="it"):
+    """Create one built-in progress bar or a no-op fallback.
+
+    Parameters
+    ----------
+    total : int or None
+        Total number of expected updates.
+    desc : str
+        Human-readable progress description.
+    progress_config : FunctionalizedSlitProgressConfig
+        Functionalized slit progress settings.
+    unit : str, optional
+        Unit label shown by the progress bar backend.
+
+    Returns
+    -------
+    bar : object
+        Live ``tqdm`` progress bar when enabled, otherwise a no-op fallback
+        with the same ``update`` / ``set_description_str`` / ``close``
+        interface.
+    """
+    if not _progress_is_enabled(progress_config):
+        return _NullProgressBar(total=total, desc=desc, unit=unit, leave=progress_config.leave)
+
+    return _tqdm_auto(
+        total=total,
+        desc=desc,
+        leave=progress_config.leave,
+        unit=unit,
+        dynamic_ncols=True,
+    )
 
 
 @dataclass(frozen=True)
@@ -470,12 +628,18 @@ class FunctionalizedAmorphousSlitConfig:
     steric_settings : FunctionalizedSlitStericConfig, optional
         Slit-only steric acceptance settings forwarded to the exact
         deterministic ``T2/T3`` attachment workflow.
+    progress_settings : FunctionalizedSlitProgressConfig, optional
+        Built-in progress-bar settings for the exact functionalized slit
+        workflow.
     """
 
     slit_config: AmorphousSlitConfig
     ligand: SilaneAttachmentConfig
     steric_settings: FunctionalizedSlitStericConfig = field(
         default_factory=FunctionalizedSlitStericConfig
+    )
+    progress_settings: FunctionalizedSlitProgressConfig = field(
+        default_factory=FunctionalizedSlitProgressConfig
     )
 
 
@@ -1617,7 +1781,14 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
     return bridge_count
 
 
-def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal, steric_settings=None):
+def _attach_to_specific_sites(
+    kit,
+    ligand,
+    site_ids,
+    allow_geminal,
+    steric_settings=None,
+    progress_bar=None,
+):
     """Attach one silane family to a deterministic list of specific sites.
 
     Parameters
@@ -1633,6 +1804,8 @@ def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal, steric_setti
     steric_settings : FunctionalizedSlitStericConfig or None, optional
         Slit-only steric acceptance settings. When ``None``, the default
         relaxed slit steric settings are used.
+    progress_bar : object or None, optional
+        Progress-bar-like object updated once per requested site.
 
     Returns
     -------
@@ -1640,6 +1813,8 @@ def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal, steric_setti
         Attached molecules returned by :meth:`porems.pore.Pore.attach`.
     """
     if not site_ids:
+        if progress_bar is not None:
+            progress_bar.close()
         return []
 
     steric_settings = (
@@ -1647,22 +1822,32 @@ def _attach_to_specific_sites(kit, ligand, site_ids, allow_geminal, steric_setti
         if steric_settings is None
         else steric_settings
     )
-    mols = kit._pore.attach(
-        copy.deepcopy(ligand.molecule),
-        ligand.mount,
-        list(ligand.axis),
-        site_ids,
-        len(site_ids),
-        pos_list=[],
-        site_type="in",
-        is_proxi=False,
-        is_random=False,
-        is_rotate=ligand.rotate_about_axis,
-        rotate_step_deg=ligand.rotate_step_deg,
-        is_g=allow_geminal,
-        check_sterics=steric_settings.enabled,
-        steric_clearance_scale=steric_settings.clearance_scale,
-    )
+    progress_bar = _NullProgressBar(total=len(site_ids)) if progress_bar is None else progress_bar
+
+    mols = []
+    try:
+        for site_id in site_ids:
+            attached = kit._pore.attach(
+                copy.deepcopy(ligand.molecule),
+                ligand.mount,
+                list(ligand.axis),
+                [site_id],
+                1,
+                pos_list=[],
+                site_type="in",
+                is_proxi=False,
+                is_random=False,
+                is_rotate=ligand.rotate_about_axis,
+                rotate_step_deg=ligand.rotate_step_deg,
+                is_g=allow_geminal,
+                check_sterics=steric_settings.enabled,
+                steric_clearance_scale=steric_settings.clearance_scale,
+            )
+            progress_bar.update(1)
+            mols.extend(attached)
+    finally:
+        progress_bar.close()
+
     for mol in mols:
         if mol.get_short() not in kit._sort_list:
             kit._sort_list.append(mol.get_short())
@@ -1702,6 +1887,7 @@ def _realize_surface_target(
     distance_range,
     ligand=None,
     steric_settings=None,
+    progress_tracker=None,
 ):
     """Select and realize a compatible final slit-surface composition.
 
@@ -1728,6 +1914,9 @@ def _realize_surface_target(
     steric_settings : FunctionalizedSlitStericConfig or None, optional
         Slit-only steric acceptance settings used for the deterministic
         functionalized attachment path.
+    progress_tracker : _FunctionalizedProgressTracker or None, optional
+        Optional outer workflow progress tracker used to update live stage
+        descriptions and inner attachment bars.
 
     Returns
     -------
@@ -1757,6 +1946,8 @@ def _realize_surface_target(
             continue
 
         trial_system = copy.deepcopy(base_system)
+        if progress_tracker is not None:
+            progress_tracker.set_stage("Q-state preparation")
         q_state_start = perf_counter()
         try:
             bridge_count = _enforce_surface_target(
@@ -1777,6 +1968,11 @@ def _realize_surface_target(
             geminal_sites = _available_site_ids(trial_system, oxygen_count=2)
             if len(geminal_sites) < candidate_surface.t2_sites:
                 continue
+            t2_bar = None
+            if progress_tracker is not None:
+                progress_tracker.set_stage("T2 attachment")
+            if progress_tracker is not None and candidate_surface.t2_sites:
+                t2_bar = progress_tracker.site_bar("T2 attachment", candidate_surface.t2_sites)
             t2_start = perf_counter()
             _attach_to_specific_sites(
                 trial_system,
@@ -1784,12 +1980,18 @@ def _realize_surface_target(
                 geminal_sites[:candidate_surface.t2_sites],
                 allow_geminal=True,
                 steric_settings=steric_settings,
+                progress_bar=t2_bar,
             )
             t2_attachment_s = perf_counter() - t2_start
 
             single_sites = _available_site_ids(trial_system, oxygen_count=1)
             if len(single_sites) < candidate_surface.t3_sites:
                 continue
+            t3_bar = None
+            if progress_tracker is not None:
+                progress_tracker.set_stage("T3 attachment")
+            if progress_tracker is not None and candidate_surface.t3_sites:
+                t3_bar = progress_tracker.site_bar("T3 attachment", candidate_surface.t3_sites)
             t3_start = perf_counter()
             _attach_to_specific_sites(
                 trial_system,
@@ -1797,6 +1999,7 @@ def _realize_surface_target(
                 single_sites[:candidate_surface.t3_sites],
                 allow_geminal=False,
                 steric_settings=steric_settings,
+                progress_bar=t3_bar,
             )
             t3_attachment_s = perf_counter() - t3_start
 
@@ -2012,10 +2215,40 @@ def prepare_functionalized_amorphous_slit_surface(config):
     result : FunctionalizedSlitResult
         Attach-ready functionalized slit system and its preparation report.
     """
+    progress_tracker = _FunctionalizedProgressTracker(
+        total_stages=4,
+        progress_config=config.progress_settings,
+    )
+    try:
+        return _prepare_functionalized_amorphous_slit_surface(
+            config,
+            progress_tracker=progress_tracker,
+        )
+    finally:
+        progress_tracker.close()
+
+
+def _prepare_functionalized_amorphous_slit_surface(config, progress_tracker):
+    """Prepare a functionalized slit using an optional shared progress tracker.
+
+    Parameters
+    ----------
+    config : FunctionalizedAmorphousSlitConfig
+        Functionalized slit configuration.
+    progress_tracker : _FunctionalizedProgressTracker
+        Shared outer workflow progress tracker.
+
+    Returns
+    -------
+    result : FunctionalizedSlitResult
+        Attach-ready functionalized slit system and its preparation report.
+    """
     slit_config = config.slit_config
+    progress_tracker.set_stage("Base slit build")
     build_start = perf_counter()
     build = _build_base_slit_system(slit_config)
     base_slit_build_s = perf_counter() - build_start
+    progress_tracker.update_stage(1)
     alpha_auto, alpha_effective = _effective_alpha(
         build.total_surface_si,
         build.total_active_si,
@@ -2036,7 +2269,9 @@ def prepare_functionalized_amorphous_slit_surface(config):
         tuple(slit_config.siloxane_distance_range_nm),
         ligand=config.ligand,
         steric_settings=config.steric_settings,
+        progress_tracker=progress_tracker,
     )
+    progress_tracker.update_stage(3)
     timing_summary = replace(
         target_attempt.timing_summary,
         base_slit_build_s=base_slit_build_s,
@@ -2158,34 +2393,49 @@ def write_functionalized_amorphous_slit(
     result : FunctionalizedSlitResult
         Finalized functionalized slit system and its preparation report.
     """
-    result = prepare_functionalized_amorphous_slit_surface(config)
-    pms.utils.mkdirp(output_dir)
-
-    finalize_start = perf_counter()
-    result.system.finalize()
-    finalize_s = perf_counter() - finalize_start
-    store_start = perf_counter()
-    result.system.store(
-        output_dir,
-        write_object_files=write_object_files,
-        write_pdb=write_pdb,
-        write_pdb_conect=write_pdb_conect,
-        write_cif=write_cif,
-        write_cif_bonds=write_cif_bonds,
-        validate_connectivity=validate_connectivity,
+    progress_tracker = _FunctionalizedProgressTracker(
+        total_stages=6,
+        progress_config=config.progress_settings,
     )
-    store_export_s = perf_counter() - store_start
-    result.report = replace(
-        result.report,
-        timing_summary=replace(
-            result.report.timing_summary,
-            finalize_s=finalize_s,
-            store_export_s=store_export_s,
-        ),
-    )
+    try:
+        result = _prepare_functionalized_amorphous_slit_surface(
+            config,
+            progress_tracker=progress_tracker,
+        )
+        pms.utils.mkdirp(output_dir)
 
-    report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
-    with open(report_path, "w") as file_out:
-        json.dump(asdict(result.report), file_out, indent=2)
+        progress_tracker.set_stage("Finalize")
+        finalize_start = perf_counter()
+        result.system.finalize()
+        finalize_s = perf_counter() - finalize_start
+        progress_tracker.update_stage(1)
 
-    return result
+        progress_tracker.set_stage("Store/export")
+        store_start = perf_counter()
+        result.system.store(
+            output_dir,
+            write_object_files=write_object_files,
+            write_pdb=write_pdb,
+            write_pdb_conect=write_pdb_conect,
+            write_cif=write_cif,
+            write_cif_bonds=write_cif_bonds,
+            validate_connectivity=validate_connectivity,
+        )
+        store_export_s = perf_counter() - store_start
+        progress_tracker.update_stage(1)
+        result.report = replace(
+            result.report,
+            timing_summary=replace(
+                result.report.timing_summary,
+                finalize_s=finalize_s,
+                store_export_s=store_export_s,
+            ),
+        )
+
+        report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
+        with open(report_path, "w") as file_out:
+            json.dump(asdict(result.report), file_out, indent=2)
+
+        return result
+    finally:
+        progress_tracker.close()

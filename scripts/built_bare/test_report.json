@@ -74,5 +74,13 @@
     "inserted_bridge_oxygen": 339,
     "final_surface_oxygen_handles": 588,
     "final_framework_oxygen": 11476
+  },
+  "timing_summary": {
+    "base_slit_build_s": 2.0638367499923334,
+    "q_state_preparation_s": 9.910128000017721,
+    "t2_attachment_s": 1.4159595593810081e-06,
+    "t3_attachment_s": 3.3300602808594704e-07,
+    "finalize_s": 0.07618899998487905,
+    "store_export_s": 0.21582233300432563
   }
 }

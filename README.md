@@ -21,7 +21,7 @@ The [slit preparation guide](https://porems.github.io/PoreMS/slit.html) shows ho
 
 PoreMS targets Python 3.14.
 
-Installation requires [numpy](https://numpy.org/), [pandas](https://pandas.pydata.org/), [matplotlib](https://matplotlib.org/), [seaborn](https://seaborn.pydata.org/) and [PyYAML](https://pyyaml.org/).
+Installation requires [numpy](https://numpy.org/), [pandas](https://pandas.pydata.org/), [matplotlib](https://matplotlib.org/), [seaborn](https://seaborn.pydata.org/), [PyYAML](https://pyyaml.org/) and [tqdm](https://tqdm.github.io/).
 
 ## Bare Amorphous Slit Preparation
 
@@ -71,6 +71,9 @@ atoms rather than as standalone `SLX` residues.
 
 For exact functionalized targets, use `prepare_functionalized_amorphous_slit_surface(...)`
 with the same `ExperimentalSiliconStateTarget` and a `SilaneAttachmentConfig`.
+Built-in `tqdm` progress bars are available through
+`FunctionalizedSlitProgressConfig`; auto mode shows progress in interactive
+terminal and notebook sessions while staying quiet in typical test contexts.
 
 
 ## Installation
