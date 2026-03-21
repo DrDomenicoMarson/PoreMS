@@ -1928,6 +1928,8 @@ def write_bare_amorphous_slit(
     write_object_files=False,
     write_pdb=False,
     write_pdb_conect=False,
+    write_cif=False,
+    write_cif_bonds=False,
 ):
     """Prepare, finalize, and store a bare amorphous silica slit.
 
@@ -1946,6 +1948,11 @@ def write_bare_amorphous_slit(
     write_pdb_conect : bool, optional
         When ``True``, emit inspection-oriented ``CONECT`` records in the
         written PDB file. This flag implies PDB output.
+    write_cif : bool, optional
+        When ``True``, also write an mmCIF structure file for inspection.
+    write_cif_bonds : bool, optional
+        When ``True``, emit an inspection-oriented ``_struct_conn`` loop in
+        the written mmCIF file. This flag implies mmCIF output.
 
     Returns
     -------
@@ -1961,6 +1968,8 @@ def write_bare_amorphous_slit(
         write_object_files=write_object_files,
         write_pdb=write_pdb,
         write_pdb_conect=write_pdb_conect,
+        write_cif=write_cif,
+        write_cif_bonds=write_cif_bonds,
     )
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
@@ -1976,6 +1985,8 @@ def write_functionalized_amorphous_slit(
     write_object_files=False,
     write_pdb=False,
     write_pdb_conect=False,
+    write_cif=False,
+    write_cif_bonds=False,
 ):
     """Prepare, finalize, and store a functionalized amorphous silica slit.
 
@@ -1994,6 +2005,11 @@ def write_functionalized_amorphous_slit(
     write_pdb_conect : bool, optional
         When ``True``, emit inspection-oriented ``CONECT`` records in the
         written PDB file. This flag implies PDB output.
+    write_cif : bool, optional
+        When ``True``, also write an mmCIF structure file for inspection.
+    write_cif_bonds : bool, optional
+        When ``True``, emit an inspection-oriented ``_struct_conn`` loop in
+        the written mmCIF file. This flag implies mmCIF output.
 
     Returns
     -------
@@ -2009,6 +2025,8 @@ def write_functionalized_amorphous_slit(
         write_object_files=write_object_files,
         write_pdb=write_pdb,
         write_pdb_conect=write_pdb_conect,
+        write_cif=write_cif,
+        write_cif_bonds=write_cif_bonds,
     )
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")

@@ -16,6 +16,7 @@ Store
   .. autosummary::
 
     ~Store.gro
+    ~Store.cif
     ~Store.pdb
     ~Store.lmp
     ~Store.xyz

@@ -4,6 +4,7 @@ import warnings
 
 import shutil
 import unittest
+import warnings
 import matplotlib.pyplot as plt
 
 import porems as pms
@@ -286,15 +287,35 @@ class UserModelCase(unittest.TestCase):
         pms.Store(mol, "output").obj("store_obj.obj")
         pms.Store(mol, "output").gro("store_gro.gro", True)
         pms.Store(mol, "output").pdb("store_pdb.pdb", True)
+        pms.Store(mol, "output").cif("store_cif.cif", True)
         pms.Store(mol, "output").xyz("store_xyz.xyz")
         pms.Store(mol, "output").lmp("store_lmp.lmp")
         pms.Store(mol, "output").grid("store_grid.itp")
+
+        with open("output/store_cif.cif", "r") as file_in:
+            cif_text = file_in.read()
+        self.assertIn("_atom_site.Cartn_x", cif_text)
 
         print()
         with self.assertRaisesRegex(TypeError, "Unsupported input type"):
             pms.Store({})
         with self.assertRaisesRegex(TypeError, "Unsupported input type for topology creation"):
             pms.Store(mol).top()
+
+    def test_pdb_warns_when_fixed_width_limits_are_exceeded(self):
+        atom = pms.Molecule("single_atom", "SIN")
+        atom.add("H", [0.0, 0.0, 0.0], name="H1")
+        store = pms.Store(atom, "output")
+        store._mols = [atom] * 100000
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            records, _ = store._collect_structure_records(use_atom_names=True)
+            store._warn_if_pdb_limits_exceeded(records)
+
+        self.assertTrue(
+            any("fixed-width fields are exceeded" in str(w.message) for w in caught)
+        )
 
 
     ###########

@@ -1508,6 +1508,8 @@ class PoreKit():
         write_object_files=False,
         write_pdb=False,
         write_pdb_conect=False,
+        write_cif=False,
+        write_cif_bonds=False,
     ):
         """Write the finalized pore system and companion simulation files.
 
@@ -1528,6 +1530,11 @@ class PoreKit():
         write_pdb_conect : bool, optional
             When ``True``, emit inspection-oriented ``CONECT`` records in the
             written PDB file. This flag implies PDB output.
+        write_cif : bool, optional
+            When ``True``, also write an mmCIF structure file.
+        write_cif_bonds : bool, optional
+            When ``True``, emit an inspection-oriented ``_struct_conn`` loop in
+            the written mmCIF file. This flag implies mmCIF output.
         """
         sort_list = [] if sort_list is None else sort_list
 
@@ -1544,6 +1551,8 @@ class PoreKit():
         store.gro(use_atom_names=True)
         if write_pdb or write_pdb_conect:
             store.pdb(use_atom_names=True, write_conect=write_pdb_conect)
+        if write_cif or write_cif_bonds:
+            store.cif(use_atom_names=True, write_bonds=write_cif_bonds)
         store.top()
         store.grid()
         if write_object_files:

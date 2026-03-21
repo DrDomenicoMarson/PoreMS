@@ -12,7 +12,7 @@ setup(
     name="porems",
     version=version_ns["__version__"],
     packages=["porems"],
-    package_data={"porems": ["templates/*"]},
+    package_data={"porems": ["templates/*", "py.typed"]},
     install_requires=["numpy", "matplotlib", "pandas", "seaborn", "pyyaml"],
     python_requires=">=3.14",
 )

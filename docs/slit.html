@@ -175,7 +175,9 @@ main structure files together with a JSON report. Object backups are written
 only when <code class="docutils literal notranslate"><span class="pre">write_object_files=True</span></code> is requested explicitly. For inspection,
 the same writer can also emit a <code class="docutils literal notranslate"><span class="pre">.pdb</span></code> file, and <code class="docutils literal notranslate"><span class="pre">write_pdb_conect=True</span></code>
 adds <code class="docutils literal notranslate"><span class="pre">CONECT</span></code> records for the active silica connectivity and the built-in
-<code class="docutils literal notranslate"><span class="pre">SL</span></code>/<code class="docutils literal notranslate"><span class="pre">SLG</span></code> surface groups.</p>
+<code class="docutils literal notranslate"><span class="pre">SL</span></code>/<code class="docutils literal notranslate"><span class="pre">SLG</span></code> surface groups. For larger systems, <code class="docutils literal notranslate"><span class="pre">write_cif=True</span></code> writes
+an mmCIF file, and <code class="docutils literal notranslate"><span class="pre">write_cif_bonds=True</span></code> adds an inspection-oriented
+<code class="docutils literal notranslate"><span class="pre">_struct_conn</span></code> bond loop.</p>
 <p>The slit-preparation API is designed for the periodic bare-silica slit builder:</p>
 <ul class="simple">
 <li><p>zero exterior sites after preparation</p></li>

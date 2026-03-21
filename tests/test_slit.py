@@ -620,6 +620,34 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
         self.assertTrue(any(line.startswith("HETATM") for line in pdb_lines))
         self.assertTrue(any(line.startswith("CONECT") for line in pdb_lines))
 
+    def test_bare_slit_cif_with_bonds_is_opt_in(self):
+        output_dir = os.path.join(
+            os.path.dirname(__file__),
+            "output",
+            "bare_amorphous_slit_preparation_with_cif",
+        )
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
+        pms.write_bare_amorphous_slit(
+            output_dir,
+            config=pms.AmorphousSlitConfig(
+                name="test_bare_amorphous_slit_with_cif",
+                surface_target=self.surface_target,
+            ),
+            write_cif=True,
+            write_cif_bonds=True,
+        )
+
+        cif_path = os.path.join(output_dir, "test_bare_amorphous_slit_with_cif.cif")
+        self.assertTrue(os.path.isfile(cif_path))
+
+        with open(cif_path, "r") as file_in:
+            cif_text = file_in.read()
+
+        self.assertIn("_atom_site.Cartn_x", cif_text)
+        self.assertIn("_struct_conn.id", cif_text)
+
     def test_top_level_exports_and_version(self):
         self.assertEqual(pms.__version__, EXPECTED_VERSION)
         self.assertTrue(callable(pms.prepare_amorphous_slit_surface))
