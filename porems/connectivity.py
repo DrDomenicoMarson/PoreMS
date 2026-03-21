@@ -1,7 +1,7 @@
 ################################################################################
 # Connectivity Models                                                          #
 #                                                                              #
-"""Shared connectivity dataclasses for bonded structure export."""
+"""Shared connectivity dataclasses for bonded structure export and validation."""
 ################################################################################
 
 
@@ -98,6 +98,71 @@ class AttachmentRecord:
     scaffold_oxygen_source_ids: tuple[int, ...]
     surface_oxygen_source_ids: tuple[int, ...] = ()
     molecule: object | None = None
+
+
+@dataclass(frozen=True)
+class ConnectivityValidationFinding:
+    """One connectivity-validation issue found on an assembled structure.
+
+    Parameters
+    ----------
+    code : str
+        Stable issue code describing the validation rule that failed.
+    message : str
+        Human-readable explanation of the issue.
+    atom_ids : tuple[int, ...]
+        One-based atom ids involved in the issue.
+    atom_types : tuple[str, ...]
+        Atom types of the involved atoms in the same order as ``atom_ids``.
+    residue_shorts : tuple[str, ...], optional
+        Residue short names of the involved atoms.
+    degrees : tuple[int, ...], optional
+        Bond degrees of the involved atoms in the assembled graph.
+    is_error : bool, optional
+        True when the finding should make strict validation fail.
+    """
+
+    code: str
+    message: str
+    atom_ids: tuple[int, ...]
+    atom_types: tuple[str, ...]
+    residue_shorts: tuple[str, ...] = ()
+    degrees: tuple[int, ...] = ()
+    is_error: bool = True
+
+
+@dataclass(frozen=True)
+class ConnectivityValidationReport:
+    """Structured connectivity-validation result for one assembled structure.
+
+    Parameters
+    ----------
+    atom_count : int
+        Number of atoms in the validated assembled structure.
+    bond_count : int
+        Number of bonds in the validated assembled graph.
+    findings : tuple[ConnectivityValidationFinding, ...]
+        Validation findings collected for the structure.
+    """
+
+    atom_count: int
+    bond_count: int
+    findings: tuple[ConnectivityValidationFinding, ...]
+
+    @property
+    def error_count(self):
+        """Return the number of error-level findings."""
+        return sum(1 for finding in self.findings if finding.is_error)
+
+    @property
+    def warning_count(self):
+        """Return the number of warning-level findings."""
+        return sum(1 for finding in self.findings if not finding.is_error)
+
+    @property
+    def is_valid(self):
+        """Return whether no error-level findings were collected."""
+        return self.error_count == 0
 
 
 @dataclass(frozen=True)

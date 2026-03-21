@@ -114,11 +114,11 @@ class SurfacePreparationDiagnostics:
     inserted_bridge_oxygen : int, optional
         Number of bridge oxygens inserted during later siloxane editing.
     final_surface_oxygen_handles : int, optional
-        Number of valid one-coordinate surface oxygen handles present on the
-        final prepared slit surface.
+        Number of free one-coordinate surface oxygen handles currently present
+        on the prepared or finalized silica surface.
     final_framework_oxygen : int, optional
-        Number of valid two-coordinate framework oxygens present in the final
-        active scaffold.
+        Number of oxygen atoms currently exported as ``OM`` in the active
+        scaffold snapshot.
     """
 
     stripped_undercoordinated_si: int = 0
@@ -173,6 +173,7 @@ class Pore():
         self._surface_edit_history = []
         self._surface_preparation_diagnostics = SurfacePreparationDiagnostics()
         self._attachment_records = []
+        self._is_finalized = False
 
         self._mol_dict = {"block": {}, "in": {}, "ex": {}}
 
@@ -180,6 +181,31 @@ class Pore():
         """Reset internal surface-edit provenance and diagnostics."""
         self._surface_edit_history = []
         self._surface_preparation_diagnostics = SurfacePreparationDiagnostics()
+
+    def _invalidate_finalized_export_state(self):
+        """Mark the current pore representation as not finalized."""
+        self._is_finalized = False
+
+    def _clear_block_objectification(self):
+        """Drop the current block-residue snapshot built from objectification."""
+        self._mol_dict["block"] = {}
+        self._objectified_atoms = set()
+
+    def _attachment_scaffold_oxygen_ids(self):
+        """Return scaffold oxygens already committed to silica-ligand junctions.
+
+        Returns
+        -------
+        oxygen_ids : set[int]
+            Active scaffold oxygen ids referenced by attachment records.
+        """
+        matrix = self._matrix.get_matrix()
+        return {
+            oxygen_id
+            for record in self._attachment_records
+            for oxygen_id in record.scaffold_oxygen_source_ids
+            if oxygen_id in matrix
+        }
 
     def _record_surface_edit(self, atom_id, reason):
         """Store one surface-edit event and update diagnostics counters.
@@ -442,11 +468,15 @@ class Pore():
         Returns
         -------
         oxygen_ids : list[int]
-            Degree-one oxygen atoms bonded to exactly one silicon atom.
+            Degree-one oxygen atoms bonded to exactly one silicon atom and not
+            already committed to an existing silica-ligand junction.
         """
         oxygen_ids = []
+        attachment_oxygen = self._attachment_scaffold_oxygen_ids()
         for atom_id, props in self._matrix.get_matrix().items():
             if self._block.get_atom_type(atom_id) != "O":
+                continue
+            if atom_id in attachment_oxygen:
                 continue
             if len(props["atoms"]) != 1:
                 continue
@@ -454,6 +484,47 @@ class Pore():
                 continue
             oxygen_ids.append(atom_id)
         return oxygen_ids
+
+    def _final_scaffold_oxygen_ids(self):
+        """Return oxygen atoms that belong to the finalized scaffold export.
+
+        Returns
+        -------
+        oxygen_ids : list[int]
+            Matrix oxygen ids exported as ``OM`` after finalization, including
+            framework oxygens and retained silica-ligand junction oxygens.
+        """
+        attachment_oxygen = self._attachment_scaffold_oxygen_ids()
+        oxygen_ids = []
+        for atom_id, props in self._matrix.get_matrix().items():
+            if self._block.get_atom_type(atom_id) != "O":
+                continue
+
+            neighbor_types = [self._block.get_atom_type(neighbor) for neighbor in props["atoms"]]
+            if len(props["atoms"]) == 2 and all(atom_type == "Si" for atom_type in neighbor_types):
+                oxygen_ids.append(atom_id)
+            elif (
+                atom_id in attachment_oxygen
+                and len(props["atoms"]) == 1
+                and neighbor_types == ["Si"]
+            ):
+                oxygen_ids.append(atom_id)
+
+        return sorted(oxygen_ids)
+
+    def _final_scaffold_silicon_ids(self):
+        """Return silicon atoms that belong to the finalized scaffold export.
+
+        Returns
+        -------
+        silicon_ids : list[int]
+            Active silicon ids that remain part of the finalized scaffold.
+        """
+        return sorted(
+            atom_id
+            for atom_id, props in self._matrix.get_matrix().items()
+            if self._block.get_atom_type(atom_id) == "Si" and len(props["atoms"]) > 0
+        )
 
     def _framework_oxygen_ids(self):
         """Return oxygen atoms that qualify as framework oxygens.
@@ -538,22 +609,29 @@ class Pore():
         """Refresh the final surface/scaffold counts stored in diagnostics."""
         diagnostics = self._surface_preparation_diagnostics
         diagnostics.final_surface_oxygen_handles = len(self._surface_handle_oxygen_ids())
-        diagnostics.final_framework_oxygen = len(self._framework_oxygen_ids())
+        diagnostics.final_framework_oxygen = len(self._final_scaffold_oxygen_ids())
 
-    def validate_scaffold_atoms(self, atoms):
+    def validate_scaffold_atoms(self, atoms, allow_attachment_oxygen=False):
         """Validate scaffold atoms before they are exported as one-atom residues.
 
         Parameters
         ----------
         atoms : list[int]
             Active scaffold atom identifiers that are about to be objectified.
+        allow_attachment_oxygen : bool, optional
+            When ``True``, also accept retained silica-ligand junction oxygens
+            as valid ``OM`` export atoms.
 
         Raises
         ------
         ValueError
             Raised when an atom does not match a valid scaffold role.
         """
-        framework_oxygen = set(self._framework_oxygen_ids())
+        framework_oxygen = (
+            set(self._final_scaffold_oxygen_ids())
+            if allow_attachment_oxygen
+            else set(self._framework_oxygen_ids())
+        )
         for atom_id in atoms:
             if atom_id not in self._matrix.get_matrix():
                 raise ValueError(f"Scaffold atom {atom_id} is not present in the active matrix.")
@@ -582,6 +660,7 @@ class Pore():
         unsaturated oxygen atoms become attachment handles for later surface
         chemistry.
         """
+        self._invalidate_finalized_export_state()
         self._reset_surface_preparation_tracking()
 
         while True:
@@ -828,6 +907,7 @@ class Pore():
         is_rotate=False,
         rotate_step_deg=30,
         is_g=True,
+        check_sterics=True,
     ):
         """Attach molecules to available pore surface sites.
 
@@ -862,6 +942,12 @@ class Pore():
             Angular step in degrees used when ``is_rotate`` is enabled.
         is_g : bool, optional
             True to allow geminal surface sites as mounting positions.
+        check_sterics : bool, optional
+            True to reject placements whose final pose clashes with the current
+            silica scaffold or already attached molecules. False to place the
+            molecule directly after geometric alignment without steric
+            rejection. Final silanol saturation uses ``False`` so every
+            remaining free site is consumed.
 
         Returns
         -------
@@ -941,17 +1027,18 @@ class Pore():
                     # Move molecule to mounting position
                     mol_temp.move(mount, self._block.pos(si))
 
-                    mol_temp = self._optimize_attachment_pose(
-                        mol_temp,
-                        mount,
-                        surf_axis,
-                        {si, *self._sites[si].oxygen_ids},
-                        is_rotate,
-                        rotate_step_deg,
-                    )
-                    if mol_temp is None:
-                        self._sites[si].is_available = True
-                        continue
+                    if check_sterics:
+                        mol_temp = self._optimize_attachment_pose(
+                            mol_temp,
+                            mount,
+                            surf_axis,
+                            {si, *self._sites[si].oxygen_ids},
+                            is_rotate,
+                            rotate_step_deg,
+                        )
+                        if mol_temp is None:
+                            self._sites[si].is_available = True
+                            continue
 
                     # Add molecule to molecule list and global dictionary
                     mol_list.append(mol_temp)
@@ -976,6 +1063,7 @@ class Pore():
                     )
 
                     # Remove bonds of occupied binding site
+                    self._invalidate_finalized_export_state()
                     self._matrix.remove([si] + self._sites[si].oxygen_ids)
 
                     # Recursively fill sites in proximity with silanol and geminal silanol
@@ -992,6 +1080,7 @@ class Pore():
                                     site_type=site_type,
                                     is_proxi=False,
                                     is_random=False,
+                                    check_sterics=False,
                                 )
                             )
         return mol_list
@@ -1097,6 +1186,7 @@ class Pore():
                 self._mol_dict[site_type][mol_temp.get_short()].append(mol_temp)
 
                 # Remove oxygen atom and if not geminal delete site
+                self._invalidate_finalized_export_state()
                 for si_id in si:
                     self._matrix.remove(self._sites[si_id].oxygen_ids[0])
                     if self._sites[si_id].is_geminal:
@@ -1120,9 +1210,20 @@ class Pore():
         Returns
         -------
         mol_list : list
-            Added silanol molecules.
+            Added silanol molecules. Final silanol saturation does not apply
+            steric rejection, so every remaining free handle is consumed.
         """
-        mol_list = self.attach(generic.silanol(), 0, [0, 1], sites, len(sites), site_type=site_type, is_proxi=False, is_random=False)
+        mol_list = self.attach(
+            generic.silanol(),
+            0,
+            [0, 1],
+            sites,
+            len(sites),
+            site_type=site_type,
+            is_proxi=False,
+            is_random=False,
+            check_sterics=False,
+        )
         
         return mol_list
 
@@ -1130,20 +1231,23 @@ class Pore():
     ###############
     # Final Edits #
     ###############
-    def objectify(self, atoms):
+    def objectify(self, atoms, allow_attachment_oxygen=False):
         """Convert standalone scaffold atoms into one-atom molecule objects.
 
         Parameters
         ----------
         atoms : list
             Atom ids to convert.
+        allow_attachment_oxygen : bool, optional
+            When ``True``, allow retained silica-ligand junction oxygens to be
+            exported as ``OM`` atoms in addition to pure framework oxygens.
 
         Returns
         -------
         mol_list : list
             One-atom molecule objects created from the selected atoms.
         """
-        self.validate_scaffold_atoms(atoms)
+        self.validate_scaffold_atoms(atoms, allow_attachment_oxygen=allow_attachment_oxygen)
 
         # Initialize
         mol_list = []
@@ -1172,6 +1276,21 @@ class Pore():
             self._objectified_atoms.add(atom_id)
 
         # Output
+        return mol_list
+
+    def rebuild_final_scaffold_state(self):
+        """Rebuild the finalized scaffold snapshot from the live matrix.
+
+        Returns
+        -------
+        mol_list : list
+            Rebuilt one-atom scaffold molecules in the finalized export state.
+        """
+        self._clear_block_objectification()
+        scaffold_atoms = self._final_scaffold_oxygen_ids() + self._final_scaffold_silicon_ids()
+        mol_list = self.objectify(scaffold_atoms, allow_attachment_oxygen=True)
+        self.refresh_surface_preparation_diagnostics()
+        self._is_finalized = True
         return mol_list
 
     def reservoir(self, size):
@@ -1318,6 +1437,17 @@ class Pore():
             Attachment records in placement order.
         """
         return list(self._attachment_records)
+
+    def is_finalized(self):
+        """Return whether the current pore has a rebuilt final scaffold state.
+
+        Returns
+        -------
+        is_finalized : bool
+            True when the block scaffold snapshot matches the finalized live
+            matrix state.
+        """
+        return self._is_finalized
 
     def get_site_dict(self):
         """Return molecules grouped by site family.

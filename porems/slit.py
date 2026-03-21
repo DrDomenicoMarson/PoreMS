@@ -1394,6 +1394,7 @@ def _bridge_pair(kit, pair, bridge_position=None):
         raise ValueError("Cannot bridge a silicon pair without a sterically acceptable bridge-oxygen position.")
     block = kit._pore.get_block()
     bridge_atom_id = block.get_num()
+    kit._pore._invalidate_finalized_export_state()
     block.add("O", bridge_position, name="OM1")
     kit._matrix.add(pair[0], bridge_atom_id)
     kit._matrix.add(pair[1], bridge_atom_id)
@@ -1938,6 +1939,7 @@ def write_bare_amorphous_slit(
     write_pdb_conect=True,
     write_cif=False,
     write_cif_bonds=True,
+    validate_connectivity="warn",
 ):
     """Prepare, finalize, and store a bare amorphous silica slit.
 
@@ -1962,6 +1964,9 @@ def write_bare_amorphous_slit(
         When ``True`` (the default), emit an inspection-oriented
         ``_struct_conn`` loop in the written mmCIF file whenever mmCIF output
         is requested.
+    validate_connectivity : str, optional
+        Connectivity validation mode forwarded to structure writers.
+        Supported values are ``"off"``, ``"warn"``, and ``"strict"``.
 
     Returns
     -------
@@ -1979,6 +1984,7 @@ def write_bare_amorphous_slit(
         write_pdb_conect=write_pdb_conect,
         write_cif=write_cif,
         write_cif_bonds=write_cif_bonds,
+        validate_connectivity=validate_connectivity,
     )
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
@@ -1996,6 +2002,7 @@ def write_functionalized_amorphous_slit(
     write_pdb_conect=True,
     write_cif=False,
     write_cif_bonds=True,
+    validate_connectivity="warn",
 ):
     """Prepare, finalize, and store a functionalized amorphous silica slit.
 
@@ -2020,6 +2027,9 @@ def write_functionalized_amorphous_slit(
         When ``True`` (the default), emit an inspection-oriented
         ``_struct_conn`` loop in the written mmCIF file whenever mmCIF output
         is requested.
+    validate_connectivity : str, optional
+        Connectivity validation mode forwarded to structure writers.
+        Supported values are ``"off"``, ``"warn"``, and ``"strict"``.
 
     Returns
     -------
@@ -2037,6 +2047,7 @@ def write_functionalized_amorphous_slit(
         write_pdb_conect=write_pdb_conect,
         write_cif=write_cif,
         write_cif_bonds=write_cif_bonds,
+        validate_connectivity=validate_connectivity,
     )
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")

@@ -560,6 +560,13 @@ class AmorphousSlitPreparationCase(unittest.TestCase):
             )
         )
 
+    def test_finalized_bare_slit_connectivity_is_valid(self):
+        report = pms.Store(self.stored_result.system._pore).validate_connectivity(
+            use_atom_names=True
+        )
+
+        self.assertTrue(report.is_valid)
+
     def test_bare_slit_object_files_are_opt_in(self):
         output_dir = os.path.join(
             os.path.dirname(__file__),
@@ -783,6 +790,7 @@ class FunctionalizedAmorphousSlitCase(unittest.TestCase):
         result = pms.prepare_functionalized_amorphous_slit_surface(config)
         store = pms.Store(result.system._pore)
         graph = store.assembled_graph(use_atom_names=True)
+        report = store.validate_connectivity(use_atom_names=True)
         atom_records, molecule_serials = store._collect_structure_records(use_atom_names=True)
         serials_by_molecule = {
             id(molecule): serials
@@ -790,6 +798,13 @@ class FunctionalizedAmorphousSlitCase(unittest.TestCase):
         }
 
         self.assertIsInstance(graph, pms.AssembledStructureGraph)
+        self.assertIsInstance(report, pms.ConnectivityValidationReport)
+        self.assertFalse(
+            any(
+                finding.code in {"framework_oxygen_environment", "framework_silicon_environment"}
+                for finding in report.findings
+            )
+        )
         self.assertTrue(any(bond.provenance == "graft_junction" for bond in graph.bonds))
         self.assertTrue(any(bond.provenance == "ligand_explicit" for bond in graph.bonds))
         self.assertFalse(any(bond.provenance == "ligand_inferred" for bond in graph.bonds))
@@ -817,6 +832,34 @@ class FunctionalizedAmorphousSlitCase(unittest.TestCase):
         self.assertTrue(
             all(record_by_serial[serial].atom_type == "O" for serial in graft_neighbors)
         )
+
+    def test_finalized_functionalized_connectivity_is_valid(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=63 / 957,
+            q3_fraction=648 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=3 / 957,
+            t3_fraction=4 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_final_validation_slit",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+            ),
+        )
+
+        result = pms.prepare_functionalized_amorphous_slit_surface(config)
+        result.system.finalize()
+        report = pms.Store(result.system._pore).validate_connectivity(use_atom_names=True)
+
+        self.assertTrue(report.is_valid)
 
     def test_functionalized_bonded_exports_include_graft_connectivity(self):
         output_dir = os.path.join(
@@ -848,7 +891,7 @@ class FunctionalizedAmorphousSlitCase(unittest.TestCase):
             ),
         )
 
-        pms.write_functionalized_amorphous_slit(
+        result = pms.write_functionalized_amorphous_slit(
             output_dir,
             config,
             write_pdb=True,
@@ -859,10 +902,20 @@ class FunctionalizedAmorphousSlitCase(unittest.TestCase):
             pdb_text = file_in.read()
         with open(os.path.join(output_dir, "functionalized_export_slit.cif"), "r") as file_in:
             cif_text = file_in.read()
+        with open(os.path.join(output_dir, "functionalized_export_slit.top"), "r") as file_in:
+            top_text = file_in.read()
 
         self.assertIn("CONECT", pdb_text)
         self.assertIn("_struct_conn.id", cif_text)
         self.assertIn(" TMS ", pdb_text)
+        mol_counts = {
+            short: len(mols)
+            for short, mols in result.system._pore.get_mol_dict().items()
+        }
+        self.assertIn(f"OM {mol_counts['OM']}", top_text)
+        self.assertIn(f"SI {mol_counts['SI']}", top_text)
+        self.assertIn(f"TMS {mol_counts['TMS']}", top_text)
+        self.assertIn(f"TMSG {mol_counts['TMSG']}", top_text)
 
 
 if __name__ == "__main__":

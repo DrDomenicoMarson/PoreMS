@@ -378,11 +378,41 @@ class UserModelCase(unittest.TestCase):
         self.assertTrue(all(bond.provenance == "ligand_inferred" for bond in graph.bonds))
         self.assertGreater(len(graph.angles), 0)
 
+        report = pms.Store(mol, "output").validate_connectivity(use_atom_names=True)
+        self.assertIsInstance(report, pms.ConnectivityValidationReport)
+        self.assertTrue(report.is_valid)
+
         print()
         with self.assertRaisesRegex(TypeError, "Unsupported input type"):
             pms.Store({})
         with self.assertRaisesRegex(TypeError, "Unsupported input type for topology creation"):
             pms.Store(mol).top()
+
+    def test_connectivity_validation_reports_invalid_local_valence(self):
+        mol = pms.Molecule("invalid_valence", "IVL")
+        mol.add("O", [0.0, 0.0, 0.0], name="O1")
+        mol.add("H", 0, r=0.098, name="H1")
+        mol.add("H", 0, r=0.098, theta=120, name="H2")
+        mol.add("H", 0, r=0.098, theta=240, name="H3")
+
+        store = pms.Store(mol, "output")
+        report = store.validate_connectivity(use_atom_names=True)
+
+        self.assertFalse(report.is_valid)
+        self.assertGreater(report.error_count, 0)
+        self.assertTrue(
+            any(finding.code == "unexpected_degree" for finding in report.findings)
+        )
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            store.gro("invalid_valence_warn.gro", use_atom_names=True, validate_connectivity="warn")
+        self.assertTrue(
+            any("Connectivity validation found" in str(warning.message) for warning in caught)
+        )
+
+        with self.assertRaisesRegex(ValueError, "Connectivity validation found"):
+            store.gro("invalid_valence_strict.gro", use_atom_names=True, validate_connectivity="strict")
 
     def test_pdb_warns_when_fixed_width_limits_are_exceeded(self):
         atom = pms.Molecule("single_atom", "SIN")

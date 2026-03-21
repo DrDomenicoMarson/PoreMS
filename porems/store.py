@@ -13,7 +13,12 @@ import warnings
 import porems.utils as utils
 import porems.database as db
 
-from porems.connectivity import AssembledStructureGraph, GraphBond
+from porems.connectivity import (
+    AssembledStructureGraph,
+    ConnectivityValidationFinding,
+    ConnectivityValidationReport,
+    GraphBond,
+)
 from porems.molecule import Molecule
 from porems.pore import Pore
 
@@ -487,7 +492,248 @@ class Store:
                 f"A {record_b.residue_short} {record_b.residue_id} {record_b.atom_name}\n"
             )
 
-    def cif(self, name="", use_atom_names=False, write_bonds=True):
+    def _connectivity_validation_neighbors(self, graph):
+        """Build an adjacency map for one assembled graph.
+
+        Parameters
+        ----------
+        graph : AssembledStructureGraph
+            Graph whose neighbor lists should be assembled.
+
+        Returns
+        -------
+        neighbors : dict[int, set[int]]
+            One-based neighbor ids grouped by central atom id.
+        """
+        neighbors = {atom_id: set() for atom_id in graph.atom_ids}
+        for bond in graph.bonds:
+            if bond.atom_a in neighbors:
+                neighbors[bond.atom_a].add(bond.atom_b)
+            if bond.atom_b in neighbors:
+                neighbors[bond.atom_b].add(bond.atom_a)
+        return neighbors
+
+    def _connectivity_validation_findings(self, atom_records, graph):
+        """Collect connectivity-validation findings for one assembled graph.
+
+        Parameters
+        ----------
+        atom_records : list[_StructureAtomRecord]
+            Serialized atom metadata in writer order.
+        graph : AssembledStructureGraph
+            Assembled bond graph matching ``atom_records``.
+
+        Returns
+        -------
+        findings : tuple[ConnectivityValidationFinding, ...]
+            Sorted validation findings for the assembled structure.
+        """
+        record_by_serial = {record.serial: record for record in atom_records}
+        neighbors = self._connectivity_validation_neighbors(graph)
+        findings = {}
+        is_finalized_pore = not isinstance(self._inp, Pore) or self._inp.is_finalized()
+
+        allowed_degrees = {
+            "H": {1},
+            "B": {3, 4},
+            "C": {1, 2, 3, 4},
+            "N": {1, 2, 3, 4},
+            "O": {1, 2},
+            "F": {1},
+            "P": {1, 2, 3, 4, 5},
+            "S": {1, 2, 3, 4, 5, 6},
+            "Cl": {1},
+            "Br": {1},
+            "I": {1},
+            "Si": {1, 2, 3, 4},
+        }
+
+        def add_finding(code, message, atom_ids, is_error=True):
+            atom_ids = tuple(atom_ids)
+            key = (code, atom_ids)
+            if key in findings:
+                return
+            findings[key] = ConnectivityValidationFinding(
+                code=code,
+                message=message,
+                atom_ids=atom_ids,
+                atom_types=tuple(record_by_serial[atom_id].atom_type for atom_id in atom_ids if atom_id in record_by_serial),
+                residue_shorts=tuple(record_by_serial[atom_id].residue_short for atom_id in atom_ids if atom_id in record_by_serial),
+                degrees=tuple(len(neighbors.get(atom_id, ())) for atom_id in atom_ids),
+                is_error=is_error,
+            )
+
+        for atom_id in graph.atom_ids:
+            if atom_id not in record_by_serial:
+                continue
+            record = record_by_serial[atom_id]
+            degree = len(neighbors.get(atom_id, ()))
+            is_pre_finalized_scaffold = (
+                isinstance(self._inp, Pore)
+                and not is_finalized_pore
+                and record.residue_short in {"OM", "SI"}
+            )
+            try:
+                element = db.get_element(record.atom_type)
+            except ValueError:
+                add_finding(
+                    "unknown_element",
+                    f"Atom {atom_id} has unsupported atom type '{record.atom_type}' for connectivity validation.",
+                    (atom_id,),
+                )
+                continue
+
+            if (
+                not is_pre_finalized_scaffold
+                and element in allowed_degrees
+                and degree not in allowed_degrees[element]
+            ):
+                add_finding(
+                    "unexpected_degree",
+                    f"Atom {atom_id} ({record.atom_type}) has degree {degree}, which is outside the supported range for {element}.",
+                    (atom_id,),
+                )
+
+            neighbor_elements = []
+            for neighbor_id in sorted(neighbors.get(atom_id, ())):
+                try:
+                    neighbor_elements.append(db.get_element(record_by_serial[neighbor_id].atom_type))
+                except (KeyError, ValueError):
+                    neighbor_elements.append(record_by_serial[neighbor_id].atom_type)
+
+            if element == "H":
+                if degree != 1:
+                    add_finding(
+                        "hydrogen_degree",
+                        f"Hydrogen atom {atom_id} must have degree 1, found {degree}.",
+                        (atom_id,),
+                    )
+                elif neighbor_elements and neighbor_elements[0] == "H":
+                    add_finding(
+                        "hydrogen_neighbor",
+                        f"Hydrogen atom {atom_id} is bonded to another hydrogen atom.",
+                        (atom_id, next(iter(sorted(neighbors[atom_id])))),
+                    )
+
+            if is_pre_finalized_scaffold:
+                continue
+
+            if record.residue_short == "OM":
+                if degree != 2 or sorted(neighbor_elements) != ["Si", "Si"]:
+                    add_finding(
+                        "framework_oxygen_environment",
+                        f"Framework oxygen atom {atom_id} must be bonded to exactly two silicon atoms.",
+                        (atom_id, *sorted(neighbors.get(atom_id, ()))),
+                    )
+
+            if record.residue_short == "SI":
+                if degree not in {4}:
+                    add_finding(
+                        "framework_silicon_environment",
+                        f"Framework silicon atom {atom_id} must have degree 4 after export.",
+                        (atom_id,),
+                    )
+
+        for bond in graph.bonds:
+            if bond.atom_a not in record_by_serial or bond.atom_b not in record_by_serial:
+                continue
+            try:
+                element_a = db.get_element(record_by_serial[bond.atom_a].atom_type)
+                element_b = db.get_element(record_by_serial[bond.atom_b].atom_type)
+            except ValueError:
+                continue
+
+            if bond.provenance in {"scaffold", "siloxane_bridge", "graft_junction"}:
+                if sorted((element_a, element_b)) != ["O", "Si"]:
+                    add_finding(
+                        "invalid_silica_bond",
+                        f"{bond.provenance.replace('_', ' ')} bond {bond.atom_a}-{bond.atom_b} must connect silicon and oxygen atoms.",
+                        (bond.atom_a, bond.atom_b),
+                    )
+
+        return tuple(sorted(findings.values(), key=lambda finding: (finding.code, finding.atom_ids)))
+
+    def validate_connectivity(self, use_atom_names=False):
+        """Validate the assembled bond graph against simple chemistry rules.
+
+        Parameters
+        ----------
+        use_atom_names : bool, optional
+            True to preserve explicit atom names while matching the validation
+            atom order to the same order used by structure writers.
+
+        Returns
+        -------
+        report : ConnectivityValidationReport
+            Structured validation report for the current assembled structure.
+            Full framework-oxygen checks are applied only to finalized pore
+            states.
+        """
+        atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
+        graph = self._assembled_structure_graph(atom_records, molecule_serials)
+        return ConnectivityValidationReport(
+            atom_count=len(atom_records),
+            bond_count=len(graph.bonds),
+            findings=self._connectivity_validation_findings(atom_records, graph),
+        )
+
+    def _handle_connectivity_validation(self, use_atom_names, validate_connectivity):
+        """Validate one structure before writing and handle the chosen mode.
+
+        Parameters
+        ----------
+        use_atom_names : bool
+            Forwarded atom-name handling mode used for structure serialization.
+        validate_connectivity : str
+            Validation mode: ``"off"``, ``"warn"``, or ``"strict"``.
+
+        Returns
+        -------
+        report : ConnectivityValidationReport or None
+            Validation report when the mode is not ``"off"``, otherwise
+            ``None``.
+
+        Raises
+        ------
+        ValueError
+            Raised when ``validate_connectivity`` is unsupported or when the
+            mode is ``"strict"`` and the validation report contains errors.
+        """
+        if validate_connectivity not in {"off", "warn", "strict"}:
+            raise ValueError(
+                "Unsupported connectivity validation mode. "
+                "Expected one of: ['off', 'strict', 'warn']."
+            )
+
+        if validate_connectivity == "off":
+            return None
+
+        report = self.validate_connectivity(use_atom_names=use_atom_names)
+        if report.is_valid:
+            return report
+
+        summary = (
+            "Connectivity validation found "
+            f"{report.error_count} error(s) and {report.warning_count} warning(s)."
+        )
+        preview = "; ".join(
+            finding.message for finding in report.findings[:3]
+        )
+        message = summary + (" " + preview if preview else "")
+
+        if validate_connectivity == "strict":
+            raise ValueError(message)
+
+        warnings.warn(message, UserWarning, stacklevel=3)
+        return report
+
+    def cif(
+        self,
+        name="",
+        use_atom_names=False,
+        write_bonds=True,
+        validate_connectivity="warn",
+    ):
         """Write the current structure in mmCIF format.
 
         Parameters
@@ -501,7 +747,12 @@ class Store:
             When ``True`` (the default), also emit an ``_struct_conn`` loop
             for the full assembled bond graph, including silica scaffold,
             siloxane bridges, ligand-internal bonds, and graft junctions.
+        validate_connectivity : str, optional
+            Connectivity validation mode: ``"off"``, ``"warn"``, or
+            ``"strict"``. The default warns on invalid assembled local
+            chemistry before writing the file.
         """
+        self._handle_connectivity_validation(use_atom_names, validate_connectivity)
         link = self._link
         link += name if name else self._name + ".cif"
         atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
@@ -578,7 +829,13 @@ class Store:
 
             file_out.write("#\n")
 
-    def pdb(self, name="", use_atom_names=False, write_conect=True):
+    def pdb(
+        self,
+        name="",
+        use_atom_names=False,
+        write_conect=True,
+        validate_connectivity="warn",
+    ):
         """Write the current structure in PDB format.
 
         Parameters
@@ -593,7 +850,12 @@ class Store:
             ``CONECT`` records for the full assembled bond graph, including
             silica scaffold, siloxane bridges, ligand-internal bonds, and
             graft junctions.
+        validate_connectivity : str, optional
+            Connectivity validation mode: ``"off"``, ``"warn"``, or
+            ``"strict"``. The default warns on invalid assembled local
+            chemistry before writing the file.
         """
+        self._handle_connectivity_validation(use_atom_names, validate_connectivity)
         # Initialize
         link = self._link
         link += name if name else self._name+".pdb"
@@ -634,7 +896,7 @@ class Store:
             # End statement
             file_out.write("TER\nEND\n")
 
-    def gro(self, name="", use_atom_names=False):
+    def gro(self, name="", use_atom_names=False, validate_connectivity="warn"):
         """Write the current structure in GROMACS GRO format.
 
         Parameters
@@ -644,7 +906,12 @@ class Store:
         use_atom_names : bool, optional
             True to preserve explicit atom names when available. False to
             enumerate atom names from atom types.
+        validate_connectivity : str, optional
+            Connectivity validation mode: ``"off"``, ``"warn"``, or
+            ``"strict"``. The default warns on invalid assembled local
+            chemistry before writing the file.
         """
+        self._handle_connectivity_validation(use_atom_names, validate_connectivity)
         # Initialize
         link = self._link
         link += name if name else self._name+".gro"

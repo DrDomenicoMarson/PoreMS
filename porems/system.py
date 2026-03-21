@@ -1515,8 +1515,10 @@ class PoreKit():
         """Finalize the pore by saturating remaining sites and boxing it.
 
         Remaining free interior and exterior sites are filled with silanol
-        groups. If a reservoir length was requested, the pore is translated and
-        re-boxed accordingly; otherwise the original block box is preserved.
+        groups. The finalized scaffold ``OM/SI`` snapshot is then rebuilt from
+        the live connectivity matrix. If a reservoir length was requested, the
+        pore is translated and re-boxed accordingly; otherwise the original
+        block box is preserved.
         """
 
         # Fill silanol on the exterior surface
@@ -1531,6 +1533,10 @@ class PoreKit():
             for mol in mols_in:
                 if not mol.get_short() in self._sort_list:
                     self._sort_list.append(mol.get_short())
+
+        # Rebuild the scaffold snapshot from the finalized live matrix so
+        # exported OM/SI residues match the final chemistry.
+        self._pore.rebuild_final_scaffold_state()
 
         # Create reservoir
         if self._res > 0:
@@ -1547,6 +1553,7 @@ class PoreKit():
         write_pdb_conect=True,
         write_cif=False,
         write_cif_bonds=True,
+        validate_connectivity="warn",
     ):
         """Write the finalized pore system and companion simulation files.
 
@@ -1573,6 +1580,9 @@ class PoreKit():
             When ``True`` (the default), emit an inspection-oriented
             ``_struct_conn`` loop in the written mmCIF file whenever mmCIF
             output is requested.
+        validate_connectivity : str, optional
+            Connectivity validation mode forwarded to structure writers.
+            Supported values are ``"off"``, ``"warn"``, and ``"strict"``.
         """
         sort_list = [] if sort_list is None else sort_list
 
@@ -1586,11 +1596,19 @@ class PoreKit():
         store = pms.Store(self._pore, link, sort_list)
 
         # Save files
-        store.gro(use_atom_names=True)
+        store.gro(use_atom_names=True, validate_connectivity=validate_connectivity)
         if write_pdb:
-            store.pdb(use_atom_names=True, write_conect=write_pdb_conect)
+            store.pdb(
+                use_atom_names=True,
+                write_conect=write_pdb_conect,
+                validate_connectivity=validate_connectivity,
+            )
         if write_cif:
-            store.cif(use_atom_names=True, write_bonds=write_cif_bonds)
+            store.cif(
+                use_atom_names=True,
+                write_bonds=write_cif_bonds,
+                validate_connectivity=validate_connectivity,
+            )
         store.top()
         store.grid()
         if write_object_files:
