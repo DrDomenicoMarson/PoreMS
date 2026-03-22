@@ -973,8 +973,8 @@ class PoreKit():
         for shape_spec in self._shapes:
             del_list += [
                 atom_id
-                for atom_id, atom in enumerate(self._block.get_atom_list())
-                if shape_spec.shape.is_in(atom.get_pos())
+                for atom_id, pos in enumerate(self._block.positions_view())
+                if shape_spec.shape.is_in(pos.tolist())
             ]
         self._matrix.strip(del_list)
 

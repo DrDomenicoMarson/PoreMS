@@ -12,6 +12,8 @@ from collections.abc import Callable
 from collections import Counter
 from dataclasses import dataclass, field
 
+import numpy as np
+
 import porems.database as db
 import porems.geometry as geometry
 import porems.generic as generic
@@ -139,6 +141,31 @@ class SurfacePreparationDiagnostics:
             + self.stripped_excess_surface_oxygen_si
             + self.removed_orphan_silicon
         )
+
+
+@dataclass(frozen=True)
+class _ScaffoldClassificationCache:
+    """Cached scaffold and surface classifications for the active matrix.
+
+    Parameters
+    ----------
+    attachment_scaffold_oxygen_ids : frozenset[int]
+        Active scaffold oxygen ids referenced by attachment records.
+    surface_handle_oxygen_ids : tuple[int, ...]
+        Degree-one surface oxygen ids currently available as handles.
+    framework_oxygen_ids : tuple[int, ...]
+        Degree-two oxygen ids bonded to two silicon atoms.
+    final_scaffold_oxygen_ids : tuple[int, ...]
+        Oxygen ids exported as scaffold atoms in the finalized state.
+    final_scaffold_silicon_ids : tuple[int, ...]
+        Silicon ids exported as scaffold atoms in the finalized state.
+    """
+
+    attachment_scaffold_oxygen_ids: frozenset[int]
+    surface_handle_oxygen_ids: tuple[int, ...]
+    framework_oxygen_ids: tuple[int, ...]
+    final_scaffold_oxygen_ids: tuple[int, ...]
+    final_scaffold_silicon_ids: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -354,6 +381,7 @@ class Pore():
         self._surface_edit_history = []
         self._surface_preparation_diagnostics = SurfacePreparationDiagnostics()
         self._attachment_records = []
+        self._scaffold_cache = None
         self._is_finalized = False
 
         self._mol_dict = {"block": {}, "in": {}, "ex": {}}
@@ -366,6 +394,11 @@ class Pore():
     def _invalidate_finalized_export_state(self):
         """Mark the current pore representation as not finalized."""
         self._is_finalized = False
+        self._invalidate_scaffold_cache()
+
+    def _invalidate_scaffold_cache(self):
+        """Drop cached scaffold and surface classifications."""
+        self._scaffold_cache = None
 
     def _clear_block_objectification(self):
         """Drop the current block-residue snapshot built from objectification."""
@@ -380,13 +413,80 @@ class Pore():
         oxygen_ids : set[int]
             Active scaffold oxygen ids referenced by attachment records.
         """
+        return set(self._get_scaffold_cache().attachment_scaffold_oxygen_ids)
+
+    def _build_scaffold_cache(self):
+        """Build cached scaffold and surface classifications for the matrix.
+
+        Returns
+        -------
+        cache : _ScaffoldClassificationCache
+            Cached classifications derived from the current matrix and
+            attachment state.
+        """
         matrix = self._matrix.get_matrix()
-        return {
+        atom_types = self._block.atom_types_view()
+
+        attachment_scaffold_oxygen_ids = frozenset(
             oxygen_id
             for record in self._attachment_records
             for oxygen_id in record.scaffold_oxygen_source_ids
             if oxygen_id in matrix
-        }
+        )
+
+        surface_handle_oxygen_ids = []
+        framework_oxygen_ids = []
+        final_scaffold_oxygen_ids = []
+        final_scaffold_silicon_ids = []
+
+        for atom_id, props in matrix.items():
+            atom_type = atom_types[atom_id]
+            neighbors = props["atoms"]
+            degree = len(neighbors)
+
+            if atom_type == "O":
+                neighbor_types = [atom_types[neighbor] for neighbor in neighbors]
+                is_framework_oxygen = (
+                    degree == 2 and all(neighbor_type == "Si" for neighbor_type in neighbor_types)
+                )
+                if is_framework_oxygen:
+                    framework_oxygen_ids.append(atom_id)
+                    final_scaffold_oxygen_ids.append(atom_id)
+                elif (
+                    atom_id not in attachment_scaffold_oxygen_ids
+                    and degree == 1
+                    and neighbor_types == ["Si"]
+                ):
+                    surface_handle_oxygen_ids.append(atom_id)
+                elif (
+                    atom_id in attachment_scaffold_oxygen_ids
+                    and degree == 1
+                    and neighbor_types == ["Si"]
+                ):
+                    final_scaffold_oxygen_ids.append(atom_id)
+
+            elif atom_type == "Si" and degree > 0:
+                final_scaffold_silicon_ids.append(atom_id)
+
+        return _ScaffoldClassificationCache(
+            attachment_scaffold_oxygen_ids=attachment_scaffold_oxygen_ids,
+            surface_handle_oxygen_ids=tuple(surface_handle_oxygen_ids),
+            framework_oxygen_ids=tuple(sorted(framework_oxygen_ids)),
+            final_scaffold_oxygen_ids=tuple(sorted(final_scaffold_oxygen_ids)),
+            final_scaffold_silicon_ids=tuple(sorted(final_scaffold_silicon_ids)),
+        )
+
+    def _get_scaffold_cache(self):
+        """Return cached scaffold classifications for the current matrix.
+
+        Returns
+        -------
+        cache : _ScaffoldClassificationCache
+            Cached scaffold and surface classifications.
+        """
+        if self._scaffold_cache is None:
+            self._scaffold_cache = self._build_scaffold_cache()
+        return self._scaffold_cache
 
     def _record_surface_edit(self, atom_id, reason):
         """Store one surface-edit event and update diagnostics counters.
@@ -442,6 +542,7 @@ class Pore():
         for atom_id in atoms:
             self._record_surface_edit(atom_id, reason)
         self._matrix.remove(atoms)
+        self._invalidate_scaffold_cache()
 
     def _retained_scaffold_oxygen_ids(self, site_id, oxygen_ids):
         """Return scaffold oxygens that stay bonded to an attached mount atom.
@@ -713,19 +814,7 @@ class Pore():
             Degree-one oxygen atoms bonded to exactly one silicon atom and not
             already committed to an existing silica-ligand junction.
         """
-        oxygen_ids = []
-        attachment_oxygen = self._attachment_scaffold_oxygen_ids()
-        for atom_id, props in self._matrix.get_matrix().items():
-            if self._block.get_atom_type(atom_id) != "O":
-                continue
-            if atom_id in attachment_oxygen:
-                continue
-            if len(props["atoms"]) != 1:
-                continue
-            if self._block.get_atom_type(props["atoms"][0]) != "Si":
-                continue
-            oxygen_ids.append(atom_id)
-        return oxygen_ids
+        return list(self._get_scaffold_cache().surface_handle_oxygen_ids)
 
     def _final_scaffold_oxygen_ids(self):
         """Return oxygen atoms that belong to the finalized scaffold export.
@@ -736,23 +825,7 @@ class Pore():
             Matrix oxygen ids exported as ``OM`` after finalization, including
             framework oxygens and retained silica-ligand junction oxygens.
         """
-        attachment_oxygen = self._attachment_scaffold_oxygen_ids()
-        oxygen_ids = []
-        for atom_id, props in self._matrix.get_matrix().items():
-            if self._block.get_atom_type(atom_id) != "O":
-                continue
-
-            neighbor_types = [self._block.get_atom_type(neighbor) for neighbor in props["atoms"]]
-            if len(props["atoms"]) == 2 and all(atom_type == "Si" for atom_type in neighbor_types):
-                oxygen_ids.append(atom_id)
-            elif (
-                atom_id in attachment_oxygen
-                and len(props["atoms"]) == 1
-                and neighbor_types == ["Si"]
-            ):
-                oxygen_ids.append(atom_id)
-
-        return sorted(oxygen_ids)
+        return list(self._get_scaffold_cache().final_scaffold_oxygen_ids)
 
     def _final_scaffold_silicon_ids(self):
         """Return silicon atoms that belong to the finalized scaffold export.
@@ -762,11 +835,7 @@ class Pore():
         silicon_ids : list[int]
             Active silicon ids that remain part of the finalized scaffold.
         """
-        return sorted(
-            atom_id
-            for atom_id, props in self._matrix.get_matrix().items()
-            if self._block.get_atom_type(atom_id) == "Si" and len(props["atoms"]) > 0
-        )
+        return list(self._get_scaffold_cache().final_scaffold_silicon_ids)
 
     def _framework_oxygen_ids(self):
         """Return oxygen atoms that qualify as framework oxygens.
@@ -776,15 +845,7 @@ class Pore():
         oxygen_ids : list[int]
             Degree-two oxygen atoms bonded to two silicon atoms.
         """
-        oxygen_ids = []
-        for atom_id, props in self._matrix.get_matrix().items():
-            if self._block.get_atom_type(atom_id) != "O":
-                continue
-            if len(props["atoms"]) != 2:
-                continue
-            if all(self._block.get_atom_type(neighbor) == "Si" for neighbor in props["atoms"]):
-                oxygen_ids.append(atom_id)
-        return oxygen_ids
+        return list(self._get_scaffold_cache().framework_oxygen_ids)
 
     def _invalid_oxygen_ids(self):
         """Return oxygen atoms whose active connectivity is chemically invalid.
@@ -960,9 +1021,7 @@ class Pore():
 
         # Run through atoms that have bond partners
         for atom_id in self._matrix.bound(0, "gt"):
-            # Create testing atom
-            atom_temp = copy.deepcopy(self._block.get_atom_list()[atom_id])
-            atom_temp_pos = atom_temp.get_pos()[:]
+            atom_temp_pos = self._block.pos(atom_id)
 
             # Run through trials
             for i in range(trials):
@@ -970,20 +1029,17 @@ class Pore():
                 disp_vec = [random.uniform(-dist, dist) for x in range(self._dim)]
                 disp_pos = [atom_temp_pos[x]+disp_vec[x] for x in range(self._dim)]
 
-                # Displace test atom
-                atom_temp.set_pos(disp_pos)
-
                 # Calculate new bond lengths
                 is_disp = True
                 for bond in connect[atom_id]["atoms"]:
-                    bond_length = geometry.length(self._block.bond(atom_id, bond))
+                    bond_length = geometry.length(geometry.vector(disp_pos, self._block.pos(bond)))
                     if bond_length < accept[0] or bond_length > accept[1]:
                         is_disp = False
                         break
 
                 # Displace if new bond length is in acceptance range
                 if is_disp:
-                    self._block.get_atom_list()[atom_id].set_pos(disp_pos)
+                    self._block.put(atom_id, disp_pos)
                     break
 
     def exterior(self):
@@ -996,14 +1052,13 @@ class Pore():
         """
         # Initialize
         box = self._block.get_box()
-        atom_list = self._block.get_atom_list()
         bound_list = self._matrix.get_matrix()
 
         # Get gap
         gap = [-2*x for x in self._block.zero()]
 
         # Get list of all si atoms
-        si_list = [atom_id for atom_id, atom in enumerate(self._block.get_atom_list()) if atom.get_atom_type()=="Si"]
+        si_list = np.where(self._block.atom_types_view() == "Si")[0].tolist()
 
         # Run through silicon atoms
         add_list = []
@@ -1014,7 +1069,10 @@ class Pore():
             # Run through bound oxygen atoms
             for o in bound_list[si]["atoms"]:
                 # Calculate bond vector
-                bond_vector = [atom_list[si].get_pos()[dim]-atom_list[o].get_pos()[dim] for dim in range(3)]
+                bond_vector = [
+                    self._block.pos(si)[dim] - self._block.pos(o)[dim]
+                    for dim in range(3)
+                ]
 
                 # Check if z dimension of bond - after rotation in pattern class - goes over boundary
                 if abs(bond_vector[2]) > box[2]/2:
@@ -1046,6 +1104,8 @@ class Pore():
         # Add bonds to new oxygens
         for bond in add_list:
             self._matrix.add(bond[0], bond[1])
+        if break_list or add_list:
+            self._invalidate_scaffold_cache()
 
         # Add atoms to exterior oxygen list
         self.prepare()
@@ -1065,7 +1125,7 @@ class Pore():
             Temporary molecule containing deep-copied silicon atoms translated
             so that all coordinates are non-negative.
         """
-        site_atoms = [copy.deepcopy(self._block.get_atom_list()[atom]) for atom in sites]
+        site_atoms = [self._block._materialize_atom(atom) for atom in sites]
         site_molecule = Molecule(inp=site_atoms)
         site_molecule.zero()
 
@@ -1228,119 +1288,128 @@ class Pore():
         # Run through number of binding sites to add
         mol_list = []
         for i in range(amount):
-            si = None
-            # Find nearest free site if a position list is given
             if pos_list:
                 pos = pos_list[i]
-                min_dist = 100000000
-                for site in sites:
-                    if self._sites[site].is_available:
-                        length = geometry.length(geometry.vector(self._block.pos(site), pos))
-                        if length < min_dist:
-                            si = site
-                            min_dist = length
-            # Randomly pick an available site
+                candidate_sites = [
+                    site
+                    for site in sites
+                    if self._sites[site].is_available
+                    and (is_g or not self._sites[site].is_geminal)
+                ]
+                candidate_sites.sort(
+                    key=lambda site: geometry.length(
+                        geometry.vector(self._block.pos(site), pos)
+                    )
+                )
             elif is_random:
-                for j in range(trials):
-                    si_rand = random.choice(sites)
-                    if self._sites[si_rand].is_available:
-                        if is_g is False and self._sites[si_rand].is_geminal:
-                            pass  
-                        else: 
-                            si = si_rand                  
-                            break
-            # Or use next binding site in given list
+                candidate_sites = [
+                    site
+                    for site in sites
+                    if self._sites[site].is_available
+                    and (is_g or not self._sites[site].is_geminal)
+                ]
+                random.shuffle(candidate_sites)
             else:
-                si = sites[i] if i<len(sites) else None
+                candidate_sites = [
+                    site
+                    for site in sites[i:]
+                    if self._sites[site].is_available
+                    and (is_g or not self._sites[site].is_geminal)
+                ]
+
+            if trials > 0:
+                candidate_sites = candidate_sites[:trials]
 
             # Place molecule on surface
-            if si is not None and self._sites[si].is_available: 
-                if is_g is False and self._sites[si].is_geminal:
-                    pass
-                else:
-                    # Disable binding site
-                    self._sites[si].is_available = False
-                
-                    # Create a copy of the molecule
-                    mol_temp = copy.deepcopy(mol)
+            for si in candidate_sites:
+                # Disable binding site
+                self._sites[si].is_available = False
 
-                    # Check if geminal
-                    if self._sites[si].is_geminal:
-                        mol_temp.add("O", mount, r=0.164, theta=45)
-                        mol_temp.add("H", mol_temp.get_num()-1, r=0.098)
-                        mol_temp.set_name(mol.get_name()+"g")
-                        mol_temp.set_short(mol.get_short()+"G")
+                # Create a copy of the molecule
+                mol_temp = copy.deepcopy(mol)
 
-                    # Rotate molecule towards surface normal vector
-                    surf_axis = self._sites[si].normal(self._block.pos(si))
-                    mol_temp.rotate(geometry.cross_product([0, 0, 1], surf_axis), -geometry.angle([0, 0, 1], surf_axis))
+                # Check if geminal
+                if self._sites[si].is_geminal:
+                    mol_temp.add("O", mount, r=0.164, theta=45)
+                    mol_temp.add("H", mol_temp.get_num() - 1, r=0.098)
+                    mol_temp.set_name(mol.get_name() + "g")
+                    mol_temp.set_short(mol.get_short() + "G")
 
-                    # Move molecule to mounting position
-                    mol_temp.move(mount, self._block.pos(si))
+                # Rotate molecule towards surface normal vector
+                surf_axis = self._sites[si].normal(self._block.pos(si))
+                mol_temp.rotate(
+                    geometry.cross_product([0, 0, 1], surf_axis),
+                    -geometry.angle([0, 0, 1], surf_axis),
+                )
 
-                    if check_sterics:
-                        mol_temp = self._optimize_attachment_pose(
-                            mol_temp,
-                            mount,
-                            surf_axis,
-                            {si, *self._sites[si].oxygen_ids},
-                            steric_grid,
-                            is_rotate,
-                            rotate_step_deg,
-                            steric_clearance_scale,
-                        )
-                        if mol_temp is None:
-                            self._sites[si].is_available = True
-                            continue
+                # Move molecule to mounting position
+                mol_temp.move(mount, self._block.pos(si))
 
-                    # Add molecule to molecule list and global dictionary
-                    mol_list.append(mol_temp)
-                    if not mol_temp.get_short() in self._mol_dict[site_type]:
-                        self._mol_dict[site_type][mol_temp.get_short()] = []
-                    self._mol_dict[site_type][mol_temp.get_short()].append(mol_temp)
-
-                    scaffold_oxygen_source_ids = self._retained_scaffold_oxygen_ids(
-                        si,
-                        self._sites[si].oxygen_ids,
+                if check_sterics:
+                    mol_temp = self._optimize_attachment_pose(
+                        mol_temp,
+                        mount,
+                        surf_axis,
+                        {si, *self._sites[si].oxygen_ids},
+                        steric_grid,
+                        is_rotate,
+                        rotate_step_deg,
+                        steric_clearance_scale,
                     )
-                    self._attachment_records.append(
-                        AttachmentRecord(
-                            site_id=si,
-                            site_type=site_type,
-                            mount_atom_local_id=mount,
-                            is_geminal=self._sites[si].is_geminal,
-                            scaffold_oxygen_source_ids=scaffold_oxygen_source_ids,
-                            surface_oxygen_source_ids=tuple(self._sites[si].oxygen_ids),
-                            molecule=mol_temp,
-                        )
+                    if mol_temp is None:
+                        self._sites[si].is_available = True
+                        continue
+
+                # Add molecule to molecule list and global dictionary
+                mol_list.append(mol_temp)
+                if not mol_temp.get_short() in self._mol_dict[site_type]:
+                    self._mol_dict[site_type][mol_temp.get_short()] = []
+                self._mol_dict[site_type][mol_temp.get_short()].append(mol_temp)
+
+                scaffold_oxygen_source_ids = self._retained_scaffold_oxygen_ids(
+                    si,
+                    self._sites[si].oxygen_ids,
+                )
+                self._attachment_records.append(
+                    AttachmentRecord(
+                        site_id=si,
+                        site_type=site_type,
+                        mount_atom_local_id=mount,
+                        is_geminal=self._sites[si].is_geminal,
+                        scaffold_oxygen_source_ids=scaffold_oxygen_source_ids,
+                        surface_oxygen_source_ids=tuple(self._sites[si].oxygen_ids),
+                        molecule=mol_temp,
                     )
+                )
 
-                    # Remove bonds of occupied binding site
-                    self._invalidate_finalized_export_state()
-                    if steric_grid is not None:
-                        steric_grid.remove_block_atoms([si] + self._sites[si].oxygen_ids)
-                        steric_grid.add_molecule(mol_temp)
-                    self._matrix.remove([si] + self._sites[si].oxygen_ids)
+                # Remove bonds of occupied binding site
+                self._invalidate_finalized_export_state()
+                if steric_grid is not None:
+                    steric_grid.remove_block_atoms([si] + self._sites[si].oxygen_ids)
+                    steric_grid.add_molecule(mol_temp)
+                self._matrix.remove([si] + self._sites[si].oxygen_ids)
+                self._invalidate_scaffold_cache()
 
-                    # Recursively fill sites in proximity with silanol and geminal silanol
-                    if is_proxi:
-                        proxi_list = [sites[x] for x in si_matrix[sites.index(si)]]
-                        if len(proxi_list) > 0:
-                            mol_list.extend(
-                                self.attach(
-                                    generic.silanol(),
-                                    0,
-                                    [0, 1],
-                                    proxi_list,
-                                    len(proxi_list),
-                                    site_type=site_type,
-                                    is_proxi=False,
-                                    is_random=False,
-                                    check_sterics=False,
-                                )
+                # Recursively fill sites in proximity with silanol and geminal silanol
+                if is_proxi:
+                    proxi_list = [sites[x] for x in si_matrix[sites.index(si)]]
+                    if len(proxi_list) > 0:
+                        mol_list.extend(
+                            self.attach(
+                                generic.silanol(),
+                                0,
+                                [0, 1],
+                                proxi_list,
+                                len(proxi_list),
+                                site_type=site_type,
+                                is_proxi=False,
+                                is_random=False,
+                                check_sterics=False,
                             )
-                            if steric_grid is not None:
-                                steric_grid = self._build_steric_grid()
+                        )
+                        if steric_grid is not None:
+                            steric_grid = self._build_steric_grid()
+                break
         return mol_list
 
     def siloxane(self, sites, amount, slx_dist=None, trials=1000, site_type="in"):
@@ -1452,6 +1521,7 @@ class Pore():
                     else:
                         del self._sites[si_id]
                     del si_matrix[sites.index(si_id)]
+                self._invalidate_scaffold_cache()
 
         return mol_list
 
@@ -1515,16 +1585,16 @@ class Pore():
             if atom_id in self._objectified_atoms:
                 continue
 
-            # Get atom object
-            atom = self._block.get_atom_list()[atom_id]
+            atom_type = self._block.get_atom_type(atom_id)
+            atom_pos = self._block.pos(atom_id)
 
             # Create molecule object
-            if atom.get_atom_type() == "O":
+            if atom_type == "O":
                 mol = Molecule("om", "OM")
-                mol.add("O", atom.get_pos(), name="OM1", source_id=atom_id)
-            elif atom.get_atom_type() == "Si":
+                mol.add("O", atom_pos, name="OM1", source_id=atom_id)
+            elif atom_type == "Si":
                 mol = Molecule("si", "SI")
-                mol.add("Si", atom.get_pos(), name="SI1", source_id=atom_id)
+                mol.add("Si", atom_pos, name="SI1", source_id=atom_id)
 
             # Add to molecule list and global dictionary
             mol_list.append(mol)

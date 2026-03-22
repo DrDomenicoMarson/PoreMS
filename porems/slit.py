@@ -14,6 +14,7 @@ import sys
 from dataclasses import asdict, dataclass, field, replace
 from time import perf_counter
 
+import numpy as np
 import porems as pms
 from tqdm.auto import tqdm as _tqdm_auto
 
@@ -109,6 +110,54 @@ class _FunctionalizedProgressTracker:
     def close(self):
         """Close the outer workflow bar."""
         self.stage_bar.close()
+
+
+@dataclass(frozen=True)
+class _SlitSiteArrayCache:
+    """Array-backed site geometry cache used for slit adjacency searches.
+
+    Parameters
+    ----------
+    site_ids : tuple[int, ...]
+        Surface silicon identifiers in the cached array order.
+    positions : np.ndarray
+        Cartesian silicon positions with shape ``(n, 3)``.
+    site_index : dict[int, int]
+        Mapping from silicon identifiers to row indices in ``positions``.
+    direct_connection_mask : np.ndarray
+        Boolean ``(n, n)`` mask marking silicon pairs that already share a
+        bonded oxygen atom.
+    """
+
+    site_ids: tuple[int, ...]
+    positions: np.ndarray
+    site_index: dict[int, int]
+    direct_connection_mask: np.ndarray
+
+
+@dataclass(frozen=True)
+class _BridgeStericCache:
+    """Array-backed steric cache for one candidate silicon pair.
+
+    Parameters
+    ----------
+    box : np.ndarray
+        Periodic box lengths with shape ``(3,)``.
+    local_positions : np.ndarray
+        Nearby atom positions used for the fast local steric score.
+    local_min_distances : np.ndarray
+        Per-atom steric cutoffs for ``local_positions``.
+    global_positions : np.ndarray
+        Active scaffold atom positions used for the global clearance check.
+    global_min_distances : np.ndarray
+        Per-atom steric cutoffs for ``global_positions``.
+    """
+
+    box: np.ndarray
+    local_positions: np.ndarray
+    local_min_distances: np.ndarray
+    global_positions: np.ndarray
+    global_min_distances: np.ndarray
 
 
 def _is_interactive_progress_environment():
@@ -1261,6 +1310,57 @@ def _are_sites_directly_connected(matrix, site_a, site_b):
     return any(atom_o in atoms_b for atom_o in atoms_a)
 
 
+def _build_slit_site_array_cache(kit, site_ids):
+    """Build array-backed site geometry data for slit adjacency searches.
+
+    Parameters
+    ----------
+    kit : PoreKit
+        Slit system under preparation.
+    site_ids : list[int]
+        Surface silicon identifiers that should populate the cache.
+
+    Returns
+    -------
+    cache : _SlitSiteArrayCache
+        Array-backed site geometry and direct-connection metadata.
+    """
+    site_ids = tuple(site_ids)
+    if not site_ids:
+        return _SlitSiteArrayCache(
+            site_ids=(),
+            positions=np.empty((0, 3), dtype=float),
+            site_index={},
+            direct_connection_mask=np.empty((0, 0), dtype=bool),
+        )
+
+    block = kit._pore.get_block()
+    matrix = kit._matrix.get_matrix()
+    site_index = {site_id: idx for idx, site_id in enumerate(site_ids)}
+    positions = block.positions_view()[np.asarray(site_ids, dtype=int)].copy()
+    direct_connection_mask = np.zeros((len(site_ids), len(site_ids)), dtype=bool)
+
+    oxygen_owners = {}
+    for site_id in site_ids:
+        row_index = site_index[site_id]
+        for oxygen_id in matrix[site_id]["atoms"]:
+            oxygen_owners.setdefault(oxygen_id, []).append(row_index)
+
+    for owners in oxygen_owners.values():
+        if len(owners) < 2:
+            continue
+        owner_indices = np.asarray(owners, dtype=int)
+        direct_connection_mask[np.ix_(owner_indices, owner_indices)] = True
+
+    np.fill_diagonal(direct_connection_mask, False)
+    return _SlitSiteArrayCache(
+        site_ids=site_ids,
+        positions=positions,
+        site_index=site_index,
+        direct_connection_mask=direct_connection_mask,
+    )
+
+
 def _build_slit_site_adjacency(kit, site_ids, distance_range):
     """Build a static neighbor graph for potential siloxane formation.
 
@@ -1279,17 +1379,26 @@ def _build_slit_site_adjacency(kit, site_ids, distance_range):
         Mapping of surface silicon identifiers to sorted neighbor lists.
     """
     adjacency = {site: [] for site in site_ids}
-    positions = {site: kit._pore.get_block().pos(site) for site in site_ids}
+    cache = _build_slit_site_array_cache(kit, site_ids)
+    if not cache.site_ids:
+        return adjacency
 
-    for site_index, site_a in enumerate(site_ids):
-        for site_b in site_ids[site_index + 1:]:
-            if _are_sites_directly_connected(kit._matrix, site_a, site_b):
-                continue
+    delta = cache.positions[:, None, :] - cache.positions[None, :, :]
+    distances = np.sqrt(np.einsum("ijk,ijk->ij", delta, delta))
+    pair_mask = (
+        (distances >= distance_range[0])
+        & (distances <= distance_range[1])
+        & (~cache.direct_connection_mask)
+    )
+    pair_mask &= np.triu(np.ones(distances.shape, dtype=bool), k=1)
 
-            distance = _site_distance(positions[site_a], positions[site_b])
-            if distance_range[0] <= distance <= distance_range[1]:
-                adjacency[site_a].append((site_b, distance))
-                adjacency[site_b].append((site_a, distance))
+    row_indices, col_indices = np.where(pair_mask)
+    for row_index, col_index in zip(row_indices.tolist(), col_indices.tolist()):
+        site_a = cache.site_ids[row_index]
+        site_b = cache.site_ids[col_index]
+        distance = float(distances[row_index, col_index])
+        adjacency[site_a].append((site_b, distance))
+        adjacency[site_b].append((site_a, distance))
 
     for site in adjacency:
         adjacency[site].sort(key=lambda item: (item[1], item[0]))
@@ -1453,8 +1562,55 @@ def _bridge_candidate_positions(kit, pair):
     return positions
 
 
-def _bridge_steric_score(kit, pair, bridge_position):
-    """Score one bridge-oxygen candidate against nearby active scaffold atoms.
+def _minimum_image_delta_array(reference_position, positions, box):
+    """Return minimum-image displacement vectors to many positions.
+
+    Parameters
+    ----------
+    reference_position : list[float] or np.ndarray
+        Cartesian reference position.
+    positions : np.ndarray
+        Cartesian partner positions with shape ``(n, 3)``.
+    box : np.ndarray
+        Periodic box lengths with shape ``(3,)``.
+
+    Returns
+    -------
+    delta : np.ndarray
+        Minimum-image displacement vectors with shape ``(n, 3)``.
+    """
+    delta = positions - np.asarray(reference_position, dtype=float)
+    delta -= box * np.round(delta / box)
+    return delta
+
+
+def _min_clearance_by_atom_ids(block, atom_ids):
+    """Return per-atom steric cutoff distances for the selected atoms.
+
+    Parameters
+    ----------
+    block : Molecule
+        Active slit block.
+    atom_ids : np.ndarray
+        Atom identifiers whose steric cutoff distances should be collected.
+
+    Returns
+    -------
+    min_distances : np.ndarray
+        Per-atom steric cutoffs in nanometers.
+    """
+    atom_types = block.atom_types_view()
+    return np.asarray(
+        [
+            _BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(atom_types[atom_id], 0.18)
+            for atom_id in atom_ids.tolist()
+        ],
+        dtype=float,
+    )
+
+
+def _build_bridge_steric_cache(kit, pair):
+    """Build array-backed steric data for one silicon-pair bridge search.
 
     Parameters
     ----------
@@ -1462,18 +1618,15 @@ def _bridge_steric_score(kit, pair, bridge_position):
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
-    bridge_position : list[float]
-        Candidate bridge-oxygen position.
 
     Returns
     -------
-    score : float
-        Minimum steric clearance in nanometers. Negative values indicate that
-        at least one nonbonded atom overlaps the candidate more closely than
-        allowed.
+    cache : _BridgeStericCache
+        Cached local and global steric-search arrays for ``pair``.
     """
     block = kit._pore.get_block()
-    box = block.get_box()
+    box = np.asarray(block.get_box(), dtype=float)
+    positions = block.positions_view()
     matrix = kit._matrix.get_matrix()
     sites = kit._pore.get_sites()
     consumed_oxygen_ids = {
@@ -1499,28 +1652,106 @@ def _bridge_steric_score(kit, pair, bridge_position):
             break
         frontier = next_frontier
 
-    min_clearance = float("inf")
-    for atom_id in local_ids:
-        if atom_id in excluded_ids:
-            continue
+    global_ids = np.asarray(
+        [atom_id for atom_id in matrix if atom_id not in excluded_ids],
+        dtype=int,
+    )
+    local_ids = np.asarray(
+        [atom_id for atom_id in local_ids if atom_id not in excluded_ids],
+        dtype=int,
+    )
 
-        atom_type = block.get_atom_type(atom_id)
-        min_distance = _BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(atom_type, 0.18)
-        delta = _minimum_image_vector(bridge_position, block.pos(atom_id), box)
+    global_positions = (
+        positions[global_ids].copy()
+        if global_ids.size
+        else np.empty((0, 3), dtype=float)
+    )
+    local_positions = (
+        positions[local_ids].copy()
+        if local_ids.size
+        else np.empty((0, 3), dtype=float)
+    )
 
-        if any(abs(component) > _BRIDGE_STERIC_DISTANCE_CUTOFF_NM for component in delta):
-            continue
-
-        clearance = pms.geom.length(delta) - min_distance
-        if clearance < min_clearance:
-            min_clearance = clearance
-            if min_clearance < 0:
-                return min_clearance
-
-    return min_clearance if min_clearance != float("inf") else _BRIDGE_STERIC_DISTANCE_CUTOFF_NM
+    return _BridgeStericCache(
+        box=box,
+        local_positions=local_positions,
+        local_min_distances=_min_clearance_by_atom_ids(block, local_ids),
+        global_positions=global_positions,
+        global_min_distances=_min_clearance_by_atom_ids(block, global_ids),
+    )
 
 
-def _bridge_global_clearance(kit, pair, bridge_position):
+def _bridge_clearance_from_arrays(bridge_position, box, positions, min_distances):
+    """Return the minimum clearance against an array-backed atom set.
+
+    Parameters
+    ----------
+    bridge_position : list[float]
+        Candidate bridge-oxygen position.
+    box : np.ndarray
+        Periodic box lengths with shape ``(3,)``.
+    positions : np.ndarray
+        Cartesian atom positions with shape ``(n, 3)``.
+    min_distances : np.ndarray
+        Per-atom steric cutoffs in nanometers.
+
+    Returns
+    -------
+    clearance : float
+        Minimum steric clearance in nanometers.
+    """
+    if positions.size == 0:
+        return _BRIDGE_STERIC_DISTANCE_CUTOFF_NM
+
+    delta = _minimum_image_delta_array(bridge_position, positions, box)
+    local_mask = np.all(np.abs(delta) <= _BRIDGE_STERIC_DISTANCE_CUTOFF_NM, axis=1)
+    if not np.any(local_mask):
+        return _BRIDGE_STERIC_DISTANCE_CUTOFF_NM
+
+    local_delta = delta[local_mask]
+    clearances = np.sqrt(np.einsum("ij,ij->i", local_delta, local_delta))
+    clearances -= min_distances[local_mask]
+    negative_clearances = clearances[clearances < 0]
+    if negative_clearances.size:
+        return float(negative_clearances[0])
+    return float(clearances.min())
+
+
+def _bridge_steric_score(kit, pair, bridge_position, steric_cache=None):
+    """Score one bridge-oxygen candidate against nearby active scaffold atoms.
+
+    Parameters
+    ----------
+    kit : PoreKit
+        Slit system under preparation.
+    pair : tuple[int, int]
+        Pair of silicon site identifiers.
+    bridge_position : list[float]
+        Candidate bridge-oxygen position.
+    steric_cache : _BridgeStericCache or None, optional
+        Optional prebuilt local/global steric cache for ``pair``.
+
+    Returns
+    -------
+    score : float
+        Minimum steric clearance in nanometers. Negative values indicate that
+        at least one nonbonded atom overlaps the candidate more closely than
+        allowed.
+    """
+    steric_cache = (
+        _build_bridge_steric_cache(kit, pair)
+        if steric_cache is None
+        else steric_cache
+    )
+    return _bridge_clearance_from_arrays(
+        bridge_position,
+        steric_cache.box,
+        steric_cache.local_positions,
+        steric_cache.local_min_distances,
+    )
+
+
+def _bridge_global_clearance(kit, pair, bridge_position, steric_cache=None):
     """Return the full-structure steric clearance for one bridge candidate.
 
     Parameters
@@ -1531,45 +1762,25 @@ def _bridge_global_clearance(kit, pair, bridge_position):
         Pair of silicon site identifiers.
     bridge_position : list[float]
         Candidate bridge-oxygen position.
+    steric_cache : _BridgeStericCache or None, optional
+        Optional prebuilt local/global steric cache for ``pair``.
 
     Returns
     -------
     score : float
         Minimum steric clearance in nanometers over all active scaffold atoms.
     """
-    block = kit._pore.get_block()
-    box = block.get_box()
-    matrix = kit._matrix.get_matrix()
-    sites = kit._pore.get_sites()
-    consumed_oxygen_ids = {
-        sites[pair[0]].oxygen_ids[0],
-        sites[pair[1]].oxygen_ids[0],
-    }
-    excluded_ids = {
-        pair[0],
-        pair[1],
-        *consumed_oxygen_ids,
-    }
-
-    min_clearance = float("inf")
-    for atom_id in matrix:
-        if atom_id in excluded_ids:
-            continue
-
-        atom_type = block.get_atom_type(atom_id)
-        min_distance = _BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(atom_type, 0.18)
-        delta = _minimum_image_vector(bridge_position, block.pos(atom_id), box)
-
-        if any(abs(component) > _BRIDGE_STERIC_DISTANCE_CUTOFF_NM for component in delta):
-            continue
-
-        clearance = pms.geom.length(delta) - min_distance
-        if clearance < min_clearance:
-            min_clearance = clearance
-            if min_clearance < 0:
-                return min_clearance
-
-    return min_clearance if min_clearance != float("inf") else _BRIDGE_STERIC_DISTANCE_CUTOFF_NM
+    steric_cache = (
+        _build_bridge_steric_cache(kit, pair)
+        if steric_cache is None
+        else steric_cache
+    )
+    return _bridge_clearance_from_arrays(
+        bridge_position,
+        steric_cache.box,
+        steric_cache.global_positions,
+        steric_cache.global_min_distances,
+    )
 
 
 def _siloxane_bridge_position(kit, pair):
@@ -1588,9 +1799,15 @@ def _siloxane_bridge_position(kit, pair):
         Bridging oxygen position, or ``None`` when no sterically acceptable
         candidate was found for the pair.
     """
+    steric_cache = _build_bridge_steric_cache(kit, pair)
     candidate_scores = []
     for candidate_position in _bridge_candidate_positions(kit, pair):
-        local_score = _bridge_steric_score(kit, pair, candidate_position)
+        local_score = _bridge_steric_score(
+            kit,
+            pair,
+            candidate_position,
+            steric_cache=steric_cache,
+        )
         if local_score >= 0:
             candidate_scores.append((local_score, candidate_position))
 
@@ -1599,7 +1816,12 @@ def _siloxane_bridge_position(kit, pair):
         key=lambda item: item[0],
         reverse=True,
     ):
-        if _bridge_global_clearance(kit, pair, candidate_position) >= 0:
+        if _bridge_global_clearance(
+            kit,
+            pair,
+            candidate_position,
+            steric_cache=steric_cache,
+        ) >= 0:
             return candidate_position
 
     return None
@@ -1650,6 +1872,7 @@ def _bridge_pair(kit, pair, bridge_position=None):
             newly_condensed_si.append(site_id)
             del sites[site_id]
 
+    kit._pore._invalidate_scaffold_cache()
     if newly_condensed_si:
         kit._pore.objectify(newly_condensed_si)
 

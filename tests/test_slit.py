@@ -2,6 +2,7 @@ import inspect
 import json
 import os
 from pathlib import Path
+import numpy as np
 import pytest
 
 import porems as pms
@@ -52,6 +53,90 @@ def teps_ligand(repo_root):
     """
     teps_path = Path(repo_root) / "scripts" / "TEPS.pdb"
     return pms.Molecule("TEPS", "TEPS", str(teps_path))
+
+
+def naive_slit_adjacency(kit, site_ids, distance_range):
+    """Return the original loop-based slit adjacency reference."""
+
+    adjacency = {site: [] for site in site_ids}
+    positions = {site: kit._pore.get_block().pos(site) for site in site_ids}
+
+    for site_index, site_a in enumerate(site_ids):
+        for site_b in site_ids[site_index + 1 :]:
+            if slit_mod._are_sites_directly_connected(kit._matrix, site_a, site_b):
+                continue
+
+            distance = slit_mod._site_distance(positions[site_a], positions[site_b])
+            if distance_range[0] <= distance <= distance_range[1]:
+                adjacency[site_a].append((site_b, distance))
+                adjacency[site_b].append((site_a, distance))
+
+    for site in adjacency:
+        adjacency[site].sort(key=lambda item: (item[1], item[0]))
+
+    return adjacency
+
+
+def naive_bridge_local_ids(kit, pair):
+    """Return the local steric graph used by the original bridge scorer."""
+
+    matrix = kit._matrix.get_matrix()
+    frontier = list(pair)
+    local_ids = set(pair)
+    for _depth in range(slit_mod._BRIDGE_STERIC_GRAPH_DEPTH):
+        next_frontier = []
+        for atom_id in frontier:
+            for neighbor_id in matrix[atom_id]["atoms"]:
+                if neighbor_id not in local_ids:
+                    local_ids.add(neighbor_id)
+                    next_frontier.append(neighbor_id)
+        if not next_frontier:
+            break
+        frontier = next_frontier
+    return local_ids
+
+
+def naive_bridge_clearance(kit, pair, bridge_position, local_only):
+    """Return the original loop-based bridge clearance reference."""
+
+    block = kit._pore.get_block()
+    box = block.get_box()
+    matrix = kit._matrix.get_matrix()
+    sites = kit._pore.get_sites()
+    consumed_oxygen_ids = {
+        sites[pair[0]].oxygen_ids[0],
+        sites[pair[1]].oxygen_ids[0],
+    }
+    excluded_ids = {
+        pair[0],
+        pair[1],
+        *consumed_oxygen_ids,
+    }
+
+    atom_ids = naive_bridge_local_ids(kit, pair) if local_only else matrix.keys()
+    min_clearance = float("inf")
+    for atom_id in atom_ids:
+        if atom_id in excluded_ids:
+            continue
+
+        atom_type = block.get_atom_type(atom_id)
+        min_distance = slit_mod._BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(atom_type, 0.18)
+        delta = slit_mod._minimum_image_vector(bridge_position, block.pos(atom_id), box)
+
+        if any(abs(component) > slit_mod._BRIDGE_STERIC_DISTANCE_CUTOFF_NM for component in delta):
+            continue
+
+        clearance = pms.geom.length(delta) - min_distance
+        if clearance < min_clearance:
+            min_clearance = clearance
+            if min_clearance < 0:
+                return min_clearance
+
+    return (
+        min_clearance
+        if min_clearance != float("inf")
+        else slit_mod._BRIDGE_STERIC_DISTANCE_CUTOFF_NM
+    )
 
 
 class RecordingProgressBar:
@@ -260,6 +345,107 @@ class TestAmorphousSlitPreparation:
                 )
                 clearance = pms.geom.length(delta) - min_distance
                 assert clearance >= -1e-9, f"Bridge oxygen {bridge_id} is too close to atom {atom_id}."
+
+    def test_slit_adjacency_matches_naive_reference(self):
+        site_ids = sorted(self.prepared_result.system._site_in)
+        adjacency = slit_mod._build_slit_site_adjacency(
+            self.prepared_result.system,
+            site_ids,
+            self.config.siloxane_distance_range_nm,
+        )
+        reference = naive_slit_adjacency(
+            self.prepared_result.system,
+            site_ids,
+            self.config.siloxane_distance_range_nm,
+        )
+
+        adjacency_pairs = {
+            tuple(sorted((site_a, site_b)))
+            for site_a, neighbors in adjacency.items()
+            for site_b, _distance in neighbors
+        }
+        reference_pairs = {
+            tuple(sorted((site_a, site_b)))
+            for site_a, neighbors in reference.items()
+            for site_b, _distance in neighbors
+        }
+        assert adjacency_pairs == reference_pairs
+
+    def test_bridge_clearance_matches_naive_reference_for_valid_candidate(self):
+        system = self.prepared_result.system
+        adjacency = slit_mod._build_slit_site_adjacency(
+            system,
+            sorted(system._site_in),
+            self.config.siloxane_distance_range_nm,
+        )
+
+        pair = None
+        bridge_position = None
+        for site_a, neighbors in adjacency.items():
+            for site_b, _distance in neighbors:
+                candidate_pair = (site_a, site_b)
+                candidate_position = slit_mod._siloxane_bridge_position(system, candidate_pair)
+                if candidate_position is not None:
+                    pair = candidate_pair
+                    bridge_position = candidate_position
+                    break
+            if pair is not None:
+                break
+
+        assert pair is not None
+        assert bridge_position is not None
+        assert slit_mod._bridge_steric_score(system, pair, bridge_position) == pytest.approx(
+            naive_bridge_clearance(system, pair, bridge_position, local_only=True),
+            abs=1e-12,
+        )
+        assert slit_mod._bridge_global_clearance(system, pair, bridge_position) == pytest.approx(
+            naive_bridge_clearance(system, pair, bridge_position, local_only=False),
+            abs=1e-12,
+        )
+
+    def test_bridge_clearance_matches_naive_reference_for_invalid_candidate(self):
+        system = self.prepared_result.system
+        adjacency = slit_mod._build_slit_site_adjacency(
+            system,
+            sorted(system._site_in),
+            self.config.siloxane_distance_range_nm,
+        )
+
+        pair = None
+        for site_a, neighbors in adjacency.items():
+            if neighbors:
+                pair = (site_a, neighbors[0][0])
+                break
+
+        assert pair is not None
+        block = system._pore.get_block()
+        sites = system._pore.get_sites()
+        excluded_ids = {
+            pair[0],
+            pair[1],
+            sites[pair[0]].oxygen_ids[0],
+            sites[pair[1]].oxygen_ids[0],
+        }
+        local_ids = naive_bridge_local_ids(system, pair)
+        reference_atom_id = next(
+            atom_id
+            for atom_id in sorted(local_ids)
+            if atom_id not in excluded_ids
+        )
+        invalid_position = block.pos(reference_atom_id)
+
+        local_score = slit_mod._bridge_steric_score(system, pair, invalid_position)
+        global_score = slit_mod._bridge_global_clearance(system, pair, invalid_position)
+        assert local_score < 0
+        assert global_score < 0
+        assert local_score == pytest.approx(
+            naive_bridge_clearance(system, pair, invalid_position, local_only=True),
+            abs=1e-12,
+        )
+        assert global_score == pytest.approx(
+            naive_bridge_clearance(system, pair, invalid_position, local_only=False),
+            abs=1e-12,
+        )
 
     def test_repeat_y_one_reaches_requested_surface_target(self):
         result = pms.prepare_amorphous_slit_surface(
