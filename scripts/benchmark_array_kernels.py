@@ -106,6 +106,86 @@ def benchmark_slit_prepare(repeats):
     )
 
 
+def _build_prepared_cylinder_pore():
+    """Build a prepared cylinder pore and its interior site list.
+
+    Returns
+    -------
+    result : tuple[pms.Pore, list[int]]
+        Prepared pore object and the interior silicon site ids used for the
+        attachment benchmark.
+    """
+    pattern = pms.BetaCristobalit()
+    pattern.generate([6, 6, 6], "z")
+    block = pattern.get_block()
+
+    dice = pms.Dice(block, 0.4, True)
+    bond_list = dice.find(None, ["Si", "O"], [0.155 - 1e-2, 0.155 + 1e-2])
+    matrix = pms.Matrix(bond_list)
+    pore = pms.Pore(block, matrix)
+    pore.exterior()
+
+    centroid = block.centroid()
+    central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
+    cylinder = pms.Cylinder(
+        pms.CylinderConfig(
+            centroid=tuple(centroid),
+            central=tuple(central),
+            length=6,
+            diameter=4,
+        )
+    )
+
+    del_list = [
+        atom_id
+        for atom_id, atom in enumerate(block.get_atom_list())
+        if cylinder.is_in(atom.get_pos())
+    ]
+    matrix.strip(del_list)
+
+    pore.prepare()
+    pore.amorph()
+    pore.sites()
+    site_list = pore.get_sites()
+    site_in = [
+        site_key
+        for site_key, site_val in site_list.items()
+        if site_val.site_type == "in"
+    ]
+    for site in site_in:
+        site_list[site].normal = cylinder.normal
+
+    return pore, site_in
+
+
+def benchmark_pore_attach(repeats):
+    """Benchmark the interior attachment phase on a prepared cylinder pore.
+
+    Parameters
+    ----------
+    repeats : int
+        Number of timing repeats.
+
+    Returns
+    -------
+    result : BenchmarkResult
+        Timing summary for the attachment benchmark.
+    """
+    timings = []
+    for _repeat in range(repeats):
+        pore, site_in = _build_prepared_cylinder_pore()
+        start = perf_counter()
+        pore.attach(pms.gen.tms(), 0, [0, 1], site_in, 100, site_type="in")
+        timings.append(perf_counter() - start)
+
+    return BenchmarkResult(
+        name="pore_attach_tms_interior_100_sites",
+        repeats=repeats,
+        timings_s=timings,
+        mean_s=mean(timings),
+    )
+
+
 def main():
     """Run the available benchmark scenarios."""
     parser = argparse.ArgumentParser(
@@ -122,6 +202,7 @@ def main():
     results = [
         benchmark_build(args.repeats),
         benchmark_slit_prepare(args.repeats),
+        benchmark_pore_attach(args.repeats),
     ]
     print(json.dumps([asdict(result) for result in results], indent=2))
 

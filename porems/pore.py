@@ -712,7 +712,7 @@ class Pore():
                 vector[dim] += box_length
         return vector
 
-    def _minimum_image_displacements(self, pos_a, positions_b):
+    def _minimum_image_displacements(self, pos_a, positions_b, box=None):
         """Return shortest periodic vectors from one point to many targets.
 
         Parameters
@@ -721,6 +721,8 @@ class Pore():
             Reference position.
         positions_b : np.ndarray
             Target positions with shape ``(n, 3)``.
+        box : list[float] or np.ndarray or None, optional
+            Periodic box lengths. When ``None``, the current block box is used.
 
         Returns
         -------
@@ -732,20 +734,16 @@ class Pore():
             return np.empty((0, self._dim), dtype=float)
 
         vectors = positions_b - np.asarray(pos_a, dtype=float)
-        for dim, box_length in enumerate(self._block.get_box()):
+        box = np.asarray(self._block.get_box() if box is None else box, dtype=float)
+        for dim, box_length in enumerate(box):
             if box_length <= 0:
                 continue
             half_box = box_length / 2
-            while True:
-                positive_mask = vectors[:, dim] > half_box
-                if not np.any(positive_mask):
-                    break
-                vectors[positive_mask, dim] -= box_length
-            while True:
-                negative_mask = vectors[:, dim] < -half_box
-                if not np.any(negative_mask):
-                    break
-                vectors[negative_mask, dim] += box_length
+            component = vectors[:, dim]
+            original_positive = component > 0
+            component[:] = np.mod(component + half_box, box_length) - half_box
+            boundary_mask = (np.abs(component + half_box) <= 1e-12) & original_positive
+            component[boundary_mask] = half_box
 
         return vectors
 
@@ -849,6 +847,8 @@ class Pore():
         reference_batch,
         ignored_block_atoms,
         steric_clearance_scale,
+        box=None,
+        ignored_block_atom_ids=None,
     ):
         """Return the minimum clearance from one atom to one reference batch.
 
@@ -864,6 +864,11 @@ class Pore():
             Scaffold atom ids that should be ignored.
         steric_clearance_scale : float
             Multiplicative factor applied to steric cutoffs.
+        box : np.ndarray or None, optional
+            Periodic box lengths used for minimum-image corrections.
+        ignored_block_atom_ids : np.ndarray or None, optional
+            Sorted integer array of ignored scaffold atom ids. When ``None``,
+            it is derived from ``ignored_block_atoms``.
 
         Returns
         -------
@@ -878,20 +883,25 @@ class Pore():
         radii = reference_batch.radii
         block_atom_ids = reference_batch.block_atom_ids
 
-        if ignored_block_atoms:
-            keep_mask = (block_atom_ids < 0) | ~np.isin(
-                block_atom_ids,
-                np.asarray(sorted(ignored_block_atoms), dtype=int),
+        if ignored_block_atom_ids is None:
+            ignored_block_atom_ids = (
+                np.asarray(sorted(ignored_block_atoms), dtype=int)
+                if ignored_block_atoms
+                else np.empty(0, dtype=int)
             )
+
+        if ignored_block_atom_ids.size > 0:
+            ignored_mask = np.zeros(block_atom_ids.shape[0], dtype=bool)
+            for atom_id in ignored_block_atom_ids:
+                ignored_mask |= block_atom_ids == atom_id
+            keep_mask = (block_atom_ids < 0) | ~ignored_mask
             if not np.any(keep_mask):
                 return float("inf")
             positions = positions[keep_mask]
             radii = radii[keep_mask]
 
-        distances = np.linalg.norm(
-            self._minimum_image_displacements(position, positions),
-            axis=1,
-        )
+        deltas = self._minimum_image_displacements(position, positions, box=box)
+        distances = np.sqrt(np.sum(deltas * deltas, axis=1))
         clearances = distances - steric_clearance_scale * (radius + radii)
         return float(clearances.min())
 
@@ -902,6 +912,7 @@ class Pore():
         steric_grid,
         ignored_block_atoms,
         steric_clearance_scale,
+        box=None,
     ):
         """Return the minimum steric clearance for array-backed positions.
 
@@ -918,6 +929,9 @@ class Pore():
             Scaffold atom ids that should be ignored.
         steric_clearance_scale : float
             Multiplicative factor applied to steric cutoffs.
+        box : np.ndarray or None, optional
+            Periodic box lengths used for minimum-image corrections. When
+            ``None``, the current block box is used.
 
         Returns
         -------
@@ -928,6 +942,12 @@ class Pore():
         radii = np.asarray(radii, dtype=float).reshape(-1)
         if radii.size == 0:
             return float("inf")
+        box = np.asarray(self._block.get_box() if box is None else box, dtype=float)
+        ignored_block_atom_ids = (
+            np.asarray(sorted(ignored_block_atoms), dtype=int)
+            if ignored_block_atoms
+            else np.empty(0, dtype=int)
+        )
 
         min_clearance = float("inf")
         if steric_grid is None:
@@ -939,6 +959,8 @@ class Pore():
                     reference_batch,
                     ignored_block_atoms,
                     steric_clearance_scale,
+                    box=box,
+                    ignored_block_atom_ids=ignored_block_atom_ids,
                 )
                 if clearance < min_clearance:
                     min_clearance = clearance
@@ -955,6 +977,8 @@ class Pore():
                 neighbor_cache[cell_key],
                 ignored_block_atoms,
                 steric_clearance_scale,
+                box=box,
+                ignored_block_atom_ids=ignored_block_atom_ids,
             )
             if clearance < min_clearance:
                 min_clearance = clearance
@@ -1052,6 +1076,7 @@ class Pore():
         steric_grid=None,
         ignored_block_atoms=None,
         steric_clearance_scale=_STERIC_CLEARANCE_SCALE,
+        box=None,
     ):
         """Return the minimum steric clearance of a candidate attached pose.
 
@@ -1068,6 +1093,9 @@ class Pore():
         steric_clearance_scale : float, optional
             Multiplicative factor applied to the sum of covalent radii when
             estimating the steric cutoff.
+        box : np.ndarray or None, optional
+            Periodic box lengths used for minimum-image corrections. When
+            ``None``, the current block box is used.
 
         Returns
         -------
@@ -1083,6 +1111,7 @@ class Pore():
             steric_grid,
             ignored_block_atoms,
             steric_clearance_scale,
+            box=box,
         )
 
     def _rotation_angles(self, rotate_step_deg):
@@ -1125,6 +1154,7 @@ class Pore():
         is_rotate,
         rotate_step_deg,
         steric_clearance_scale,
+        box=None,
     ):
         """Rotate one candidate pose around the mount axis to reduce clashes.
 
@@ -1148,6 +1178,9 @@ class Pore():
         steric_clearance_scale : float
             Multiplicative factor applied to the sum of covalent radii when
             estimating the steric cutoff.
+        box : np.ndarray or None, optional
+            Periodic box lengths used for minimum-image corrections. When
+            ``None``, the current block box is used.
 
         Returns
         -------
@@ -1160,6 +1193,7 @@ class Pore():
         base_positions = np.asarray(mol.positions_view(), dtype=float).copy()
         molecule_batch = self._molecule_steric_batch(mol)
         mount_position = base_positions[mount].copy()
+        box = np.asarray(self._block.get_box() if box is None else box, dtype=float)
 
         for angle in angles:
             candidate_positions = (
@@ -1178,6 +1212,7 @@ class Pore():
                 steric_grid,
                 ignored_block_atoms,
                 steric_clearance_scale,
+                box=box,
             )
             if clearance > best_clearance:
                 best_clearance = clearance
@@ -1595,6 +1630,7 @@ class Pore():
         is_g=True,
         check_sterics=True,
         steric_clearance_scale=_STERIC_CLEARANCE_SCALE,
+        _steric_grid=None,
     ):
         """Attach molecules to available pore surface sites.
 
@@ -1638,6 +1674,9 @@ class Pore():
         steric_clearance_scale : float, optional
             Multiplicative factor applied to the sum of covalent radii when
             estimating the steric cutoff for clash rejection.
+        _steric_grid : _StericGrid or None, optional
+            Internal steric-grid cache reused across recursive proximity-fill
+            calls. External callers should keep the default ``None``.
 
         Returns
         -------
@@ -1667,7 +1706,12 @@ class Pore():
             si_proxi = si_dice.find(None, ["Si", "Si"], [-mol_diam, mol_diam])
             si_matrix = {x[0]: x[1] for x in si_proxi}
 
-        steric_grid = self._build_steric_grid() if check_sterics else None
+        steric_grid = (
+            _steric_grid
+            if _steric_grid is not None
+            else (self._build_steric_grid() if check_sterics else None)
+        )
+        box = np.asarray(self._block.get_box(), dtype=float)
 
         # Run through number of binding sites to add
         mol_list = []
@@ -1739,6 +1783,7 @@ class Pore():
                         is_rotate,
                         rotate_step_deg,
                         steric_clearance_scale,
+                        box=box,
                     )
                     if mol_temp is None:
                         self._sites[si].is_available = True
@@ -1794,10 +1839,9 @@ class Pore():
                                 is_proxi=False,
                                 is_random=False,
                                 check_sterics=False,
+                                _steric_grid=steric_grid,
                             )
                         )
-                        if steric_grid is not None:
-                            steric_grid = self._build_steric_grid()
                 break
         return mol_list
 
