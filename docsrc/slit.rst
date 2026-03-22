@@ -51,9 +51,10 @@ bare surface, the final surface composition, and surface-preparation
 diagnostics such as stripped silicon counts, removed orphan oxygens, inserted
 bridge oxygens, and the final valid surface/scaffold oxygen counts.
 ``write_bare_amorphous_slit(...)`` finalizes the prepared slit and stores the
-main structure files together with a JSON report. Object backups are written
-only when ``write_object_files=True`` is requested explicitly. For inspection,
-the same writer can also emit a ``.pdb`` file, and ``write_pdb_conect=True``
+main structure files together with a self-contained full-slab ``.itp`` /
+``.top`` pair and a JSON report. Object backups are written only when
+``write_object_files=True`` is requested explicitly. For inspection, the same
+writer can also emit a ``.pdb`` file, and ``write_pdb_conect=True``
 adds ``CONECT`` records for the assembled bond graph, including silica
 scaffold bonds, siloxane bridges, ligand-internal bonds, and graft junctions.
 For larger systems, ``write_cif=True`` writes an mmCIF file, and
@@ -112,7 +113,10 @@ residues.
 ``FunctionalizedSlitProgressConfig`` enables built-in ``tqdm`` progress bars
 for the exact functionalized slit workflow. Auto mode shows progress in
 interactive terminals and notebooks while staying quiet in typical non-
-interactive test and batch contexts.
+interactive test and batch contexts. Built-in TMS ligands resolve to a bundled
+flat topology automatically. Other silanes can participate in the same
+self-contained full-slab export by supplying ``SilaneTopologyConfig`` on the
+attachment definition.
 
 
 Create surface molecules
@@ -195,7 +199,8 @@ The ``store()`` helpers write the generated structure together with the
 companion files needed to keep the silica model reproducible:
 
 * structure files such as ``.gro`` for coordinates and periodic box lengths
-* topology helpers such as ``.top`` and ``grid.itp`` for the silica scaffold
+* slit exports: self-contained ``.top`` / ``.itp`` files for the finalized slit
+* generic pore exports: legacy helper ``.top`` and ``grid.itp`` files
 * YAML or JSON metadata summaries for the generated geometry and surface state
 
 Serialized ``.obj`` backups remain available as an explicit opt-in through

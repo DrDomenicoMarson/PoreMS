@@ -7,6 +7,8 @@ import pytest
 
 import porems as pms
 import porems.slit as slit_mod
+import porems.store as store_mod
+import porems.topology as topo_mod
 from porems._version import __version__ as EXPECTED_VERSION
 
 
@@ -53,6 +55,53 @@ def teps_ligand(repo_root):
     """
     teps_path = Path(repo_root) / "scripts" / "TEPS.pdb"
     return pms.Molecule("TEPS", "TEPS", str(teps_path))
+
+
+def cif_loop_rows(cif_text, first_tag):
+    """Return one simple whitespace-delimited mmCIF loop.
+
+    Parameters
+    ----------
+    cif_text : str
+        Full mmCIF document text.
+    first_tag : str
+        First tag of the loop that should be extracted.
+
+    Returns
+    -------
+    result : tuple[list[str], list[list[str]]]
+        Tuple ``(tags, rows)`` for the requested loop.
+
+    Raises
+    ------
+    AssertionError
+        Raised when the requested loop is not present in ``cif_text``.
+    """
+    lines = [line.rstrip() for line in cif_text.splitlines()]
+    index = 0
+    while index < len(lines):
+        if lines[index] != "loop_":
+            index += 1
+            continue
+
+        index += 1
+        tags = []
+        while index < len(lines) and lines[index].startswith("_"):
+            tags.append(lines[index])
+            index += 1
+
+        rows = []
+        while index < len(lines):
+            line = lines[index]
+            if not line or line == "#" or line == "loop_":
+                break
+            rows.append(line.split())
+            index += 1
+
+        if tags and tags[0] == first_tag:
+            return tags, rows
+
+    raise AssertionError(f"mmCIF loop starting with {first_tag!r} was not found.")
 
 
 def naive_slit_adjacency(kit, site_ids, distance_range):
@@ -662,19 +711,29 @@ class TestAmorphousSlitPreparation:
 
     def test_bare_slit_files_are_written(self):
         expected_files = [
-            "grid.itp",
             "test_bare_amorphous_slit.gro",
+            "test_bare_amorphous_slit.itp",
             "test_bare_amorphous_slit.top",
             "test_bare_amorphous_slit.yml",
             "test_bare_amorphous_slit_report.json",
         ]
         for file_name in expected_files:
             assert os.path.isfile(os.path.join(self.output_dir, file_name))
+        assert not os.path.exists(os.path.join(self.output_dir, "grid.itp"))
 
         assert not (os.path.exists(os.path.join(self.output_dir, "test_bare_amorphous_slit.obj")))
         assert not (os.path.exists(
                 os.path.join(self.output_dir, "test_bare_amorphous_slit_system.obj")
             ))
+        with open(os.path.join(self.output_dir, "test_bare_amorphous_slit.top"), "r") as file_in:
+            top_text = file_in.read()
+        with open(os.path.join(self.output_dir, "test_bare_amorphous_slit.itp"), "r") as file_in:
+            itp_text = file_in.read()
+
+        assert '#include "test_bare_amorphous_slit.itp"' in top_text
+        assert "TEST_BARE_AMORPHOUS_SLIT 1" in top_text
+        assert "[ atomtypes ]" in itp_text
+        assert "[ moleculetype ]" in itp_text
 
         report_path = os.path.join(
             self.output_dir,
@@ -782,9 +841,25 @@ class TestAmorphousSlitPreparation:
         assert hasattr(pms, "GraphAngle")
         assert hasattr(pms, "AttachmentRecord")
         assert hasattr(pms, "AssembledStructureGraph")
+        assert hasattr(pms, "SilaneTopologyConfig")
+        assert hasattr(pms, "SlitJunctionParameters")
 
 
 class TestFunctionalizedAmorphousSlit:
+    def test_bundled_tms_topology_is_a_self_contained_flat_bundle(self):
+        bundle = topo_mod.parse_flat_itp(
+            slit_mod._bundled_tms_topology_path(),
+            moleculetype_name="TMS",
+        )
+
+        assert bundle.moleculetype.name == "TMS"
+        assert bundle.moleculetype.nrexcl == 3
+        assert len(bundle.atomtypes) == 4
+        assert len(bundle.moleculetype.atoms) == 15
+        assert bundle.has_atom_name("Si1")
+        assert bundle.bond_by_names("Si1", "O1") is not None
+        assert bundle.angle_by_names("Si1", "O1", "Si2") is not None
+
     def test_silane_attachment_config_defaults_to_ten_degree_rotation_scan(self):
         ligand = pms.SilaneAttachmentConfig(
             molecule=pms.gen.tms(),
@@ -1160,7 +1235,9 @@ class TestFunctionalizedAmorphousSlit:
         store = pms.Store(result.system._pore)
         graph = store.assembled_graph(use_atom_names=True)
         report = store.validate_connectivity(use_atom_names=True)
-        atom_records, molecule_serials = store._collect_structure_records(use_atom_names=True)
+        cache = store._collect_structure_records(use_atom_names=True)
+        atom_records = cache.atom_records
+        molecule_serials = cache.molecule_serials
         serials_by_molecule = {
             id(molecule): serials
             for molecule, serials in zip(store._mols, molecule_serials)
@@ -1260,20 +1337,113 @@ class TestFunctionalizedAmorphousSlit:
             cif_text = file_in.read()
         with open(output_dir / "functionalized_export_slit.top", "r") as file_in:
             top_text = file_in.read()
+        with open(output_dir / "functionalized_export_slit.itp", "r") as file_in:
+            itp_text = file_in.read()
 
         assert "CONECT" in pdb_text
         assert "_struct_conn.id" in cif_text
         assert " TMS " in pdb_text
-        mol_counts = {
-            short: len(mols)
-            for short, mols in result.system._pore.get_mol_dict().items()
-        }
-        assert f"OM {mol_counts['OM']}" in top_text
-        assert f"SI {mol_counts['SI']}" in top_text
-        assert f"TMS {mol_counts['TMS']}" in top_text
-        assert f"TMSG {mol_counts['TMSG']}" in top_text
+        assert '#include "functionalized_export_slit.itp"' in top_text
+        assert "FUNCTIONALIZED_EXPORT_SLIT 1" in top_text
+        assert "[ atomtypes ]" in itp_text
+        assert "[ dihedrals ]" in itp_text
+        assert "si 14 28.08600" in itp_text
+        assert "OM O1" not in top_text
         assert result.report.timing_summary.finalize_s > 0
         assert result.report.timing_summary.store_export_s > 0
+
+    def test_teps_exports_use_pdb_aliases_and_consistent_mmcif_metadata(self, tmp_path, repo_root):
+        output_dir = tmp_path / "functionalized_amorphous_slit_teps_export"
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_teps_export",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=teps_ligand(repo_root),
+                mount=0,
+                axis=(0, 1),
+                rotate_about_axis=False,
+            ),
+            steric_settings=pms.FunctionalizedSlitStericConfig(clearance_scale=0.60),
+            progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=False),
+        )
+
+        pms.write_functionalized_amorphous_slit(
+            str(output_dir),
+            config,
+            write_pdb=True,
+            write_cif=True,
+        )
+
+        with open(output_dir / "functionalized_teps_export.pdb", "r") as file_in:
+            pdb_text = file_in.read()
+        with open(output_dir / "functionalized_teps_export.cif", "r") as file_in:
+            cif_text = file_in.read()
+
+        alias_map = {}
+        for line in pdb_text.splitlines():
+            if line.startswith("REMARK 250 RESIDUE_ALIAS "):
+                parts = line.split()
+                alias_map[parts[3]] = parts[5]
+
+        assert "CRYST1" in pdb_text
+        assert alias_map["TEPS"] != "TEPS"
+        assert alias_map["TEPSG"] != "TEPSG"
+        assert len(alias_map["TEPS"]) == 3
+        assert len(alias_map["TEPSG"]) == 3
+
+        atom_lines = [
+            line for line in pdb_text.splitlines()
+            if line.startswith("HETATM")
+        ]
+        teps_atom_lines = [
+            line for line in atom_lines
+            if line[17:20].strip() == alias_map["TEPS"]
+        ]
+        tepsg_atom_lines = [
+            line for line in atom_lines
+            if line[17:20].strip() == alias_map["TEPSG"]
+        ]
+
+        assert teps_atom_lines
+        assert tepsg_atom_lines
+        for line in teps_atom_lines[:3] + tepsg_atom_lines[:3]:
+            assert line[21] == "A"
+            assert line[26] == " "
+            assert store_mod._decode_hybrid36(4, line[22:26]) >= 1
+
+        entity_tags, entity_rows = cif_loop_rows(cif_text, "_entity.id")
+        asym_tags, asym_rows = cif_loop_rows(cif_text, "_struct_asym.id")
+        atom_tags, atom_rows = cif_loop_rows(cif_text, "_atom_site.group_PDB")
+        conn_tags, conn_rows = cif_loop_rows(cif_text, "_struct_conn.id")
+
+        entity_id_index = entity_tags.index("_entity.id")
+        asym_id_index = asym_tags.index("_struct_asym.id")
+        atom_entity_index = atom_tags.index("_atom_site.label_entity_id")
+        atom_asym_index = atom_tags.index("_atom_site.label_asym_id")
+        atom_comp_index = atom_tags.index("_atom_site.label_comp_id")
+        conn_asym_1_index = conn_tags.index("_struct_conn.ptnr1_label_asym_id")
+        conn_asym_2_index = conn_tags.index("_struct_conn.ptnr2_label_asym_id")
+
+        entity_ids = {row[entity_id_index] for row in entity_rows}
+        asym_ids = {row[asym_id_index] for row in asym_rows}
+
+        assert any(row[atom_comp_index] == "TEPS" for row in atom_rows)
+        assert any(row[atom_comp_index] == "TEPSG" for row in atom_rows)
+        assert {row[atom_entity_index] for row in atom_rows} <= entity_ids
+        assert {row[atom_asym_index] for row in atom_rows} <= asym_ids
+        assert {row[conn_asym_1_index] for row in conn_rows} <= asym_ids
+        assert {row[conn_asym_2_index] for row in conn_rows} <= asym_ids
 
     def test_small_teps_functionalized_smoke_populates_timing_summary(self, repo_root):
         target = pms.ExperimentalSiliconStateTarget(

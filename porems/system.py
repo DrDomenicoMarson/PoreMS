@@ -1553,6 +1553,7 @@ class PoreKit():
         write_pdb_conect=True,
         write_cif=False,
         write_cif_bonds=True,
+        write_legacy_topology_helpers=True,
         validate_connectivity="warn",
     ):
         """Write the finalized pore system and companion simulation files.
@@ -1580,6 +1581,11 @@ class PoreKit():
             When ``True`` (the default), emit an inspection-oriented
             ``_struct_conn`` loop in the written mmCIF file whenever mmCIF
             output is requested.
+        write_legacy_topology_helpers : bool, optional
+            When ``True`` (the default), also write the legacy helper-style
+            GROMACS ``.top`` and ``grid.itp`` files. Slit full-topology
+            export paths disable these helpers and overwrite ``.top`` with a
+            self-contained full-system topology.
         validate_connectivity : str, optional
             Connectivity validation mode forwarded to structure writers.
             Supported values are ``"off"``, ``"warn"``, and ``"strict"``.
@@ -1609,8 +1615,9 @@ class PoreKit():
                 write_bonds=write_cif_bonds,
                 validate_connectivity=validate_connectivity,
             )
-        store.top()
-        store.grid()
+        if write_legacy_topology_helpers:
+            store.top()
+            store.grid()
         if write_object_files:
             store.obj()
             pms.utils.save(self, link+self._pore.get_name()+"_system.obj")

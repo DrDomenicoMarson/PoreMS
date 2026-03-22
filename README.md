@@ -56,9 +56,11 @@ containing an attach-ready `PoreKit` system and a structured
 stripped silicon counts, removed orphan oxygens, inserted bridge oxygens, and
 the final valid surface/scaffold oxygen counts.
 `write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
-together with a JSON report in the selected output directory. Object backups are
-written only when `write_object_files=True` is requested explicitly. For
-inspection, the same writer can also emit a `.pdb` file, and
+as a self-contained GROMACS export together with a JSON report in the selected
+output directory. The slit writer now emits a full-slab `<name>.itp` plus a
+matching `<name>.top` instead of only helper-style scaffold topology pieces.
+Object backups are written only when `write_object_files=True` is requested
+explicitly. For inspection, the same writer can also emit a `.pdb` file, and
 `write_pdb_conect=True` adds `CONECT` records for the assembled bond graph,
 including silica scaffold bonds, siloxane bridges, ligand-internal bonds, and
 graft junctions. For larger systems, `write_cif=True` writes an mmCIF file,
@@ -74,6 +76,9 @@ with the same `ExperimentalSiliconStateTarget` and a `SilaneAttachmentConfig`.
 Built-in `tqdm` progress bars are available through
 `FunctionalizedSlitProgressConfig`; auto mode shows progress in interactive
 terminal and notebook sessions while staying quiet in typical test contexts.
+Built-in TMS exports use a bundled flat ligand topology automatically. Other
+custom silanes can opt into the same full-slab export by supplying a
+`SilaneTopologyConfig` with a self-contained flat ligand `.itp` bundle.
 
 
 ## Installation

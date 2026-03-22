@@ -21,6 +21,476 @@ from porems.connectivity import (
 )
 from porems.molecule import Molecule
 from porems.pore import Pore
+from porems.topology import (
+    GromacsAngle,
+    GromacsAngleParameters,
+    GromacsAtom,
+    GromacsAtomType,
+    GromacsBond,
+    GromacsBondParameters,
+    GromacsDihedral,
+    GromacsMoleculeType,
+    GromacsPair,
+    parse_flat_itp,
+    render_itp,
+    render_top,
+)
+
+
+_HYBRID36_DIGITS_UPPER = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_HYBRID36_DIGITS_LOWER = "0123456789abcdefghijklmnopqrstuvwxyz"
+_PDB_CHAIN_ID = "A"
+_CIF_LABEL_SEQ_ID = "1"
+_FULL_SLIT_NREXCL = 3
+
+_SILICA_ATOMTYPE_DEFINITIONS = (
+    GromacsAtomType(
+        name="SI",
+        atomic_number=14,
+        mass="28.08600",
+        charge="0.000000",
+        particle_type="A",
+        sigma="0.4550",
+        epsilon="0.1678693",
+    ),
+    GromacsAtomType(
+        name="OM",
+        atomic_number=8,
+        mass="15.99940",
+        charge="0.000000",
+        particle_type="A",
+        sigma="0.3210",
+        epsilon="0.9573535",
+    ),
+    GromacsAtomType(
+        name="OA",
+        atomic_number=8,
+        mass="15.99940",
+        charge="0.000000",
+        particle_type="A",
+        sigma="0.3210",
+        epsilon="0.9573535",
+    ),
+    GromacsAtomType(
+        name="HG",
+        atomic_number=1,
+        mass="2.01600",
+        charge="0.000000",
+        particle_type="A",
+        sigma="0.2750",
+        epsilon="0.1121899",
+    ),
+)
+_SILICA_ATOMTYPE_BY_NAME = {
+    atomtype.name: atomtype
+    for atomtype in _SILICA_ATOMTYPE_DEFINITIONS
+}
+_SILICA_SI_O_BOND = GromacsBondParameters.harmonic(
+    length_nm=0.16300,
+    force_constant=251040.0,
+)
+_SILICA_O_H_BOND = GromacsBondParameters.harmonic(
+    length_nm=0.10000,
+    force_constant=313800.0,
+)
+_SILICA_SI_O_SI_ANGLE = GromacsAngleParameters.harmonic(
+    angle_deg=147.0,
+    force_constant=529.527040,
+)
+_SILICA_O_SI_O_ANGLE = GromacsAngleParameters.harmonic(
+    angle_deg=105.56,
+    force_constant=384.223760,
+)
+_SILICA_SI_O_H_ANGLE = GromacsAngleParameters.harmonic(
+    angle_deg=116.0,
+    force_constant=3970.4800,
+)
+
+
+@dataclass(frozen=True)
+class _PdbResidueAliasRecord:
+    """Mapping from one native residue name to its PDB-safe alias.
+
+    Parameters
+    ----------
+    full_name : str
+        Full residue identifier used internally and in mmCIF.
+    pdb_name : str
+        Three-character residue alias written to the PDB residue-name field.
+    """
+
+    full_name: str
+    pdb_name: str
+
+
+@dataclass(frozen=True)
+class _CifEntityRecord:
+    """One mmCIF entity row used by the structure writer.
+
+    Parameters
+    ----------
+    entity_id : str
+        mmCIF entity identifier referenced from ``_atom_site``.
+    residue_name : str
+        Full residue identifier represented by the entity.
+    entity_type : str, optional
+        mmCIF entity type. Functionalized slit exports use ``"non-polymer"``.
+    """
+
+    entity_id: str
+    residue_name: str
+    entity_type: str = "non-polymer"
+
+
+@dataclass(frozen=True)
+class _CifStructAsymRecord:
+    """One mmCIF structural-asymmetry row used by the writer.
+
+    Parameters
+    ----------
+    asym_id : str
+        Unique label asymmetry identifier for one residue instance.
+    entity_id : str
+        Entity identifier referenced by ``asym_id``.
+    residue_id : int
+        One-based residue identifier in writer order.
+    residue_name : str
+        Full residue identifier represented by the asymmetry row.
+    """
+
+    asym_id: str
+    entity_id: str
+    residue_id: int
+    residue_name: str
+
+
+@dataclass(frozen=True)
+class _ResidueExportIdentifiers:
+    """Format-specific identifiers assigned to one residue instance.
+
+    Parameters
+    ----------
+    residue_id : int
+        One-based residue identifier in writer order.
+    residue_name : str
+        Full residue identifier preserved in mmCIF.
+    pdb_residue_name : str
+        Three-character PDB-safe residue alias.
+    pdb_chain_id : str
+        PDB chain identifier written to column 22.
+    pdb_residue_id_token : str
+        Four-character hybrid-36 residue-sequence token.
+    cif_entity_id : str
+        Entity identifier referenced from ``_atom_site.label_entity_id``.
+    cif_asym_id : str
+        Unique asymmetry identifier for ``_atom_site.label_asym_id``.
+    cif_label_seq_id : str
+        Label sequence token used by the mmCIF writer.
+    """
+
+    residue_id: int
+    residue_name: str
+    pdb_residue_name: str
+    pdb_chain_id: str
+    pdb_residue_id_token: str
+    cif_entity_id: str
+    cif_asym_id: str
+    cif_label_seq_id: str
+
+
+def _encode_pure(digits, value, width):
+    """Encode one non-negative integer in a fixed-width positional alphabet.
+
+    Parameters
+    ----------
+    digits : str
+        Digits used by the positional numeral system.
+    value : int
+        Non-negative integer to encode.
+    width : int
+        Output width in characters.
+
+    Returns
+    -------
+    token : str
+        Encoded value padded to ``width`` characters.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``value`` is negative or does not fit in ``width``
+        characters for the selected alphabet.
+    """
+    if value < 0:
+        raise ValueError("Encoded values must be non-negative.")
+
+    base = len(digits)
+    buffer = ["0"] * width
+    remainder = value
+    for index in range(width - 1, -1, -1):
+        buffer[index] = digits[remainder % base]
+        remainder //= base
+
+    if remainder != 0:
+        raise ValueError(f"Value {value} does not fit in width {width}.")
+
+    return "".join(buffer)
+
+
+def _decode_pure(digits, token):
+    """Decode one positional token produced by :func:`_encode_pure`.
+
+    Parameters
+    ----------
+    digits : str
+        Digits used by the positional numeral system.
+    token : str
+        Fixed-width encoded token.
+
+    Returns
+    -------
+    value : int
+        Decoded integer value.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``token`` contains a character outside ``digits``.
+    """
+    base = len(digits)
+    value = 0
+    for char in token:
+        try:
+            digit = digits.index(char)
+        except ValueError as exc:
+            raise ValueError(f"Invalid digit {char!r} in token {token!r}.") from exc
+        value = value * base + digit
+    return value
+
+
+def _hybrid36_max_value(width):
+    """Return the maximum non-negative integer representable in hybrid-36.
+
+    Parameters
+    ----------
+    width : int
+        Field width in characters.
+
+    Returns
+    -------
+    value : int
+        Largest representable non-negative integer.
+    """
+    return (10 ** width) + (2 * 26 * (36 ** (width - 1))) - 1
+
+
+def _encode_hybrid36(width, value):
+    """Encode one non-negative integer using canonical hybrid-36.
+
+    Parameters
+    ----------
+    width : int
+        Field width in characters. PDB uses ``4`` for residue ids and ``5``
+        for atom serials.
+    value : int
+        Non-negative integer to encode.
+
+    Returns
+    -------
+    token : str
+        Fixed-width hybrid-36 token.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``value`` is negative or exceeds the hybrid-36 range for
+        ``width``.
+    """
+    if value < 0:
+        raise ValueError("Hybrid-36 values must be non-negative.")
+
+    decimal_limit = 10 ** width
+    if value < decimal_limit:
+        return f"{value:>{width}d}"
+
+    base36_block = 26 * (36 ** (width - 1))
+    offset = value - decimal_limit
+    if offset < base36_block:
+        return _encode_pure(
+            _HYBRID36_DIGITS_UPPER,
+            offset + (10 * (36 ** (width - 1))),
+            width,
+        )
+
+    offset -= base36_block
+    if offset < base36_block:
+        return _encode_pure(
+            _HYBRID36_DIGITS_LOWER,
+            offset + (10 * (36 ** (width - 1))),
+            width,
+        )
+
+    raise ValueError(
+        f"Value {value} exceeds the hybrid-36 range for width {width} "
+        f"(max {_hybrid36_max_value(width)})."
+    )
+
+
+def _decode_hybrid36(width, token):
+    """Decode one canonical hybrid-36 token.
+
+    Parameters
+    ----------
+    width : int
+        Field width in characters.
+    token : str
+        Fixed-width hybrid-36 token.
+
+    Returns
+    -------
+    value : int
+        Decoded non-negative integer.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``token`` does not match a supported hybrid-36 pattern.
+    """
+    if len(token) != width:
+        raise ValueError(
+            f"Hybrid-36 token {token!r} does not match width {width}."
+        )
+
+    first = token[0]
+    if first == " " or first.isdigit():
+        return int(token)
+    if first.isupper():
+        return (
+            _decode_pure(_HYBRID36_DIGITS_UPPER, token)
+            - (10 * (36 ** (width - 1)))
+            + (10 ** width)
+        )
+    if first.islower():
+        return (
+            _decode_pure(_HYBRID36_DIGITS_LOWER, token)
+            + (10 ** width)
+            + (16 * (36 ** (width - 1)))
+        )
+
+    raise ValueError(f"Unsupported hybrid-36 token {token!r}.")
+
+
+def _normalize_pdb_identifier(value, fallback):
+    """Return an uppercase alphanumeric identifier for PDB-safe aliases.
+
+    Parameters
+    ----------
+    value : str
+        Identifier to normalize.
+    fallback : str
+        Fallback token used when normalization removes all characters.
+
+    Returns
+    -------
+    token : str
+        Uppercase alphanumeric identifier.
+    """
+    token = "".join(
+        character
+        for character in str(value).upper()
+        if character.isascii() and character.isalnum()
+    )
+    return token or fallback
+
+
+def _cif_token(value):
+    """Return one mmCIF-safe token for a simple loop writer.
+
+    Parameters
+    ----------
+    value : object
+        Value written to the mmCIF file.
+
+    Returns
+    -------
+    token : str
+        Plain token or single-quoted value when quoting is required.
+    """
+    token = str(value)
+    if not token:
+        return "."
+    if any(character.isspace() for character in token) or "'" in token:
+        return "'" + token.replace("'", "''") + "'"
+    return token
+
+
+def _sanitize_pdb_token(value, width, fallback=""):
+    """Return an ASCII token that cannot overflow a fixed-width PDB field.
+
+    Parameters
+    ----------
+    value : str
+        Token to sanitize.
+    width : int
+        Maximum field width.
+    fallback : str, optional
+        Replacement token used when sanitization removes all characters.
+
+    Returns
+    -------
+    token : str
+        Sanitized token truncated to ``width`` characters.
+    """
+    token = "".join(
+        character
+        for character in str(value)
+        if character.isascii() and character.isprintable() and not character.isspace()
+    )
+    token = token or fallback
+    return token[:width]
+
+
+def _format_decimal_token(value, places=6):
+    """Return one fixed-precision decimal token.
+
+    Parameters
+    ----------
+    value : float or str
+        Value to format.
+    places : int, optional
+        Number of decimal places used for float inputs.
+
+    Returns
+    -------
+    token : str
+        String token suitable for topology output.
+    """
+    if isinstance(value, str):
+        return value
+    return f"{value:.{places}f}"
+
+
+def _sanitize_gromacs_identifier(value, fallback="SLIT"):
+    """Return one simple GROMACS-safe identifier token.
+
+    Parameters
+    ----------
+    value : str
+        Candidate identifier.
+    fallback : str, optional
+        Fallback token used when sanitization removes every character.
+
+    Returns
+    -------
+    token : str
+        Uppercase alphanumeric identifier allowing underscores.
+    """
+    token = "".join(
+        character
+        for character in str(value)
+        if character.isascii() and (character.isalnum() or character == "_")
+    ).upper()
+    return token or fallback
 
 
 @dataclass(frozen=True)
@@ -31,14 +501,20 @@ class _StructureAtomRecord:
     ----------
     serial : int
         One-based atom serial number in writer order.
+    pdb_serial_token : str
+        Five-character hybrid-36 atom-serial token for PDB output.
     molecule_index : int
         Zero-based molecule index in the writer output order.
     local_atom_index : int
         Zero-based atom index inside the source molecule.
-    residue_short : str
-        Short residue identifier of the source molecule.
+    residue_name : str
+        Full residue identifier of the source molecule.
+    pdb_residue_name : str
+        Three-character PDB-safe residue alias.
     residue_id : int
         One-based residue identifier in writer order.
+    pdb_residue_id_token : str
+        Four-character hybrid-36 residue-sequence token for PDB output.
     atom_name : str
         Final atom name written by the structure writer.
     atom_type : str
@@ -47,17 +523,32 @@ class _StructureAtomRecord:
         Cartesian position in nanometers.
     source_id : int or None
         Optional source atom identifier from the originating pore block.
+    pdb_chain_id : str
+        Single-character PDB chain identifier.
+    cif_entity_id : str
+        Entity identifier referenced by ``_atom_site.label_entity_id``.
+    cif_asym_id : str
+        Asymmetry identifier referenced by ``_atom_site.label_asym_id``.
+    cif_label_seq_id : str
+        Label sequence identifier referenced by ``_atom_site.label_seq_id``.
     """
 
     serial: int
+    pdb_serial_token: str
     molecule_index: int
     local_atom_index: int
-    residue_short: str
+    residue_name: str
+    pdb_residue_name: str
     residue_id: int
+    pdb_residue_id_token: str
     atom_name: str
     atom_type: str
     position: tuple[float, float, float]
     source_id: int | None
+    pdb_chain_id: str
+    cif_entity_id: str
+    cif_asym_id: str
+    cif_label_seq_id: str
 
 
 @dataclass
@@ -70,6 +561,12 @@ class _StructureExportCache:
         Serialized atom metadata in structure-writer order.
     molecule_serials : list[list[int]]
         Atom serial numbers grouped by written molecule.
+    residue_alias_records : list[_PdbResidueAliasRecord]
+        Full-name to PDB-alias mappings used by the current export.
+    entity_records : list[_CifEntityRecord]
+        Declared mmCIF entity rows referenced by ``atom_records``.
+    struct_asym_records : list[_CifStructAsymRecord]
+        Declared mmCIF structural-asymmetry rows referenced by ``atom_records``.
     graph : AssembledStructureGraph or None, optional
         Cached assembled bond graph matching ``atom_records``.
     validation_report : ConnectivityValidationReport or None, optional
@@ -78,6 +575,9 @@ class _StructureExportCache:
 
     atom_records: list[_StructureAtomRecord]
     molecule_serials: list[list[int]]
+    residue_alias_records: list[_PdbResidueAliasRecord]
+    entity_records: list[_CifEntityRecord]
+    struct_asym_records: list[_CifStructAsymRecord]
     graph: AssembledStructureGraph | None = None
     validation_report: ConnectivityValidationReport | None = None
 
@@ -234,8 +734,169 @@ class Store:
         # Save object
         utils.save(self._inp, link)
 
+    def _residue_names_in_order(self):
+        """Return residue identifiers in first-appearance order.
+
+        Returns
+        -------
+        residue_names : list[str]
+            Unique residue identifiers encountered while iterating over the
+            serialized molecule list in writer order.
+        """
+        residue_names = []
+        seen = set()
+        for mol in self._mols:
+            residue_name = mol.get_short()
+            if residue_name in seen:
+                continue
+            residue_names.append(residue_name)
+            seen.add(residue_name)
+        return residue_names
+
+    def _pdb_residue_alias_records(self, residue_names):
+        """Return deterministic PDB-safe aliases for residue identifiers.
+
+        Parameters
+        ----------
+        residue_names : list[str]
+            Unique residue identifiers in first-appearance order.
+
+        Returns
+        -------
+        alias_records : list[_PdbResidueAliasRecord]
+            Full-name to three-character alias mappings.
+
+        Raises
+        ------
+        ValueError
+            Raised when more than ``36**2`` colliding long-name aliases would
+            be required for the same initial letter.
+        """
+        alias_records = []
+        used_aliases = set()
+
+        for residue_name in residue_names:
+            normalized = _normalize_pdb_identifier(residue_name, fallback="UNK")
+            alias = None
+
+            if len(normalized) <= 3 and normalized not in used_aliases:
+                alias = normalized
+            else:
+                for candidate in (
+                    (normalized[:3] if len(normalized) >= 3 else (normalized + "XXX")[:3]),
+                    (normalized[:2] + normalized[-1]) if len(normalized) >= 3 else None,
+                    (normalized[0] + normalized[-2:]) if len(normalized) >= 3 else None,
+                ):
+                    if candidate is None:
+                        continue
+                    candidate = candidate[:3]
+                    if candidate not in used_aliases:
+                        alias = candidate
+                        break
+
+            if alias is None:
+                prefix = normalized[0]
+                for suffix_value in range(36 ** 2):
+                    candidate = prefix + _encode_pure(
+                        _HYBRID36_DIGITS_UPPER,
+                        suffix_value,
+                        2,
+                    )
+                    if candidate not in used_aliases:
+                        alias = candidate
+                        break
+                if alias is None:
+                    raise ValueError(
+                        "Could not assign a unique 3-character PDB residue "
+                        f"alias for residue {residue_name!r}."
+                    )
+
+            used_aliases.add(alias)
+            alias_records.append(
+                _PdbResidueAliasRecord(
+                    full_name=residue_name,
+                    pdb_name=alias,
+                )
+            )
+
+        return alias_records
+
+    def _pdb_alias_remark_lines(self, residue_alias_records):
+        """Return PDB remark lines describing residue-name aliasing.
+
+        Parameters
+        ----------
+        residue_alias_records : list[_PdbResidueAliasRecord]
+            Full-name to PDB-alias mappings for the current export.
+
+        Returns
+        -------
+        lines : list[str]
+            ``REMARK`` lines describing aliases that differ from the original
+            residue name.
+        """
+        lines = []
+        for record in residue_alias_records:
+            if record.full_name == record.pdb_name:
+                continue
+            lines.append(
+                f"REMARK 250 RESIDUE_ALIAS {record.full_name} -> {record.pdb_name}\n"
+            )
+        return lines
+
+    def _pdb_atom_name_field(self, atom_name, atom_type):
+        """Return one fixed-width PDB atom-name field.
+
+        Parameters
+        ----------
+        atom_name : str
+            Atom name to serialize.
+        atom_type : str
+            Atom type used to infer the element alignment rule.
+
+        Returns
+        -------
+        field : str
+            Exactly four characters suitable for columns 13-16 of a PDB
+            ``ATOM`` or ``HETATM`` record.
+        """
+        sanitized = _sanitize_pdb_token(atom_name, width=4, fallback="X")
+        try:
+            element = db.get_element(atom_type)
+        except ValueError:
+            element = atom_type
+
+        if len(sanitized) == 4:
+            return sanitized
+        if sanitized[0].isdigit() or len(element) == 2:
+            return f"{sanitized:<4s}"
+        return f"{sanitized:>4s}"
+
+    def _pdb_cryst1_record(self):
+        """Return the CRYST1 record for the current periodic box.
+
+        Returns
+        -------
+        line : str
+            PDB ``CRYST1`` record or an empty string when no periodic box is
+            available.
+        """
+        if not any(self._box):
+            return ""
+
+        return (
+            "CRYST1"
+            f"{self._box[0] * 10:9.3f}"
+            f"{self._box[1] * 10:9.3f}"
+            f"{self._box[2] * 10:9.3f}"
+            f"{90.0:7.2f}"
+            f"{90.0:7.2f}"
+            f"{90.0:7.2f}"
+            " P 1           1\n"
+        )
+
     def _collect_structure_records(self, use_atom_names=False):
-        """Collect serialized atom metadata in the current writer order.
+        """Collect structure-writer metadata in the current writer order.
 
         Parameters
         ----------
@@ -245,25 +906,61 @@ class Store:
 
         Returns
         -------
-        atom_records : list[_StructureAtomRecord]
-            Serialized atom metadata in file order.
-        molecule_serials : list[list[int]]
-            Atom serial numbers grouped per written molecule.
+        cache : _StructureExportCache
+            Structure-export metadata, alias tables, and mmCIF support tables
+            in writer order.
         """
+        residue_names = self._residue_names_in_order()
+        residue_alias_records = self._pdb_residue_alias_records(residue_names)
+        pdb_alias_by_name = {
+            record.full_name: record.pdb_name
+            for record in residue_alias_records
+        }
+        entity_records = [
+            _CifEntityRecord(entity_id=str(entity_index), residue_name=residue_name)
+            for entity_index, residue_name in enumerate(residue_names, start=1)
+        ]
+        entity_id_by_name = {
+            record.residue_name: record.entity_id
+            for record in entity_records
+        }
+
         atom_records = []
         molecule_serials = []
+        struct_asym_records = []
         atom_serial = 1
         residue_serial = 1
 
         for molecule_index, mol in enumerate(self._mols):
             atom_types = {}
-            temp_residue = 0
             molecule_serial = []
+            residue_marker = None
+            residue_identifiers = None
 
             for local_atom_index, atom in enumerate(mol.get_atom_list()):
-                if atom.get_residue() != temp_residue:
-                    residue_serial += 1
-                    temp_residue = atom.get_residue()
+                if residue_identifiers is None or atom.get_residue() != residue_marker:
+                    if residue_identifiers is not None:
+                        residue_serial += 1
+                    residue_marker = atom.get_residue()
+                    residue_name = mol.get_short()
+                    residue_identifiers = _ResidueExportIdentifiers(
+                        residue_id=residue_serial,
+                        residue_name=residue_name,
+                        pdb_residue_name=pdb_alias_by_name[residue_name],
+                        pdb_chain_id=_PDB_CHAIN_ID,
+                        pdb_residue_id_token=_encode_hybrid36(4, residue_serial),
+                        cif_entity_id=entity_id_by_name[residue_name],
+                        cif_asym_id=f"A{residue_serial}",
+                        cif_label_seq_id=_CIF_LABEL_SEQ_ID,
+                    )
+                    struct_asym_records.append(
+                        _CifStructAsymRecord(
+                            asym_id=residue_identifiers.cif_asym_id,
+                            entity_id=residue_identifiers.cif_entity_id,
+                            residue_id=residue_identifiers.residue_id,
+                            residue_name=residue_identifiers.residue_name,
+                        )
+                    )
 
                 atom_type = atom.get_atom_type()
                 if atom_type not in atom_types:
@@ -277,14 +974,21 @@ class Store:
                 atom_records.append(
                     _StructureAtomRecord(
                         serial=atom_serial,
+                        pdb_serial_token=_encode_hybrid36(5, atom_serial),
                         molecule_index=molecule_index,
                         local_atom_index=local_atom_index,
-                        residue_short=mol.get_short(),
-                        residue_id=residue_serial,
+                        residue_name=residue_identifiers.residue_name,
+                        pdb_residue_name=residue_identifiers.pdb_residue_name,
+                        residue_id=residue_identifiers.residue_id,
+                        pdb_residue_id_token=residue_identifiers.pdb_residue_id_token,
                         atom_name=atom_name,
                         atom_type=atom_type,
                         position=tuple(atom.get_pos()),
                         source_id=atom.get_source_id(),
+                        pdb_chain_id=residue_identifiers.pdb_chain_id,
+                        cif_entity_id=residue_identifiers.cif_entity_id,
+                        cif_asym_id=residue_identifiers.cif_asym_id,
+                        cif_label_seq_id=residue_identifiers.cif_label_seq_id,
                     )
                 )
                 molecule_serial.append(atom_serial)
@@ -293,9 +997,16 @@ class Store:
                 atom_types[atom_type] = atom_types[atom_type] + 1 if atom_types[atom_type] < 99 else 1
 
             molecule_serials.append(molecule_serial)
-            residue_serial += 1
+            if residue_identifiers is not None:
+                residue_serial += 1
 
-        return atom_records, molecule_serials
+        return _StructureExportCache(
+            atom_records=atom_records,
+            molecule_serials=molecule_serials,
+            residue_alias_records=residue_alias_records,
+            entity_records=entity_records,
+            struct_asym_records=struct_asym_records,
+        )
 
     def _export_cache(self, use_atom_names=False):
         """Return cached structure-export data for one atom-name mode.
@@ -316,8 +1027,7 @@ class Store:
         if cache is not None:
             return cache
 
-        atom_records, molecule_serials = self._collect_structure_records(use_atom_names)
-        cache = _StructureExportCache(atom_records, molecule_serials)
+        cache = self._collect_structure_records(use_atom_names)
         self._structure_export_cache[use_atom_names] = cache
         return cache
 
@@ -367,57 +1077,88 @@ class Store:
             )
         return cache.validation_report
 
-    def _warn_if_pdb_limits_exceeded(self, atom_records):
-        """Warn when serialized PDB identifiers exceed fixed-width fields.
+    def _validate_pdb_hybrid36_limits(self, atom_records):
+        """Validate that PDB identifiers fit inside hybrid-36 fields.
 
         Parameters
         ----------
         atom_records : list[_StructureAtomRecord]
             Serialized atom metadata in file order.
+
+        Raises
+        ------
+        ValueError
+            Raised when any atom serial or residue identifier exceeds the
+            hybrid-36 representable range of the corresponding PDB field.
         """
         if not atom_records:
             return
 
         max_atom_serial = max(record.serial for record in atom_records)
         max_residue_serial = max(record.residue_id for record in atom_records)
-        if max_atom_serial <= 99999 and max_residue_serial <= 9999:
-            return
 
-        warning_parts = []
-        if max_atom_serial > 99999:
-            warning_parts.append(
-                "atom serials exceed the 5-column PDB field and will be written "
-                "as non-standard values"
+        if max_atom_serial > _hybrid36_max_value(5):
+            raise ValueError(
+                "PDB atom serials exceed the hybrid-36 range "
+                f"(max atom serial={max_atom_serial}, max {_hybrid36_max_value(5)})."
             )
-        if max_residue_serial > 9999:
-            warning_parts.append(
-                "residue ids exceed the 4-column PDB field and will be wrapped "
-                "into the standard range for visualization"
+        if max_residue_serial > _hybrid36_max_value(4):
+            raise ValueError(
+                "PDB residue ids exceed the hybrid-36 range "
+                f"(max residue id={max_residue_serial}, max {_hybrid36_max_value(4)})."
             )
 
-        warnings.warn(
-            "PDB fixed-width fields are exceeded by this export "
-            f"(max atom serial={max_atom_serial}, max residue id={max_residue_serial}); "
-            + "; ".join(warning_parts)
-            + ". Prefer mmCIF for large systems.",
-            UserWarning,
-            stacklevel=2,
-        )
-
-    def _pdb_residue_id(self, residue_id):
-        """Return a PDB-safe residue sequence number.
+    def _write_cif_entity_loop(self, file_out, entity_records):
+        """Write the mmCIF entity loop for the current export.
 
         Parameters
         ----------
-        residue_id : int
-            Internal residue identifier assigned during structure export.
-
-        Returns
-        -------
-        residue_id : int
-            Residue identifier wrapped into the standard 4-column PDB range.
+        file_out : TextIO
+            Open output stream.
+        entity_records : list[_CifEntityRecord]
+            Entity rows declared for the current export.
         """
-        return ((residue_id - 1) % 9999) + 1
+        if not entity_records:
+            return
+
+        file_out.write("loop_\n")
+        file_out.write("_entity.id\n")
+        file_out.write("_entity.type\n")
+        file_out.write("_entity.pdbx_description\n")
+        for record in entity_records:
+            file_out.write(
+                " ".join(
+                    (
+                        _cif_token(record.entity_id),
+                        _cif_token(record.entity_type),
+                        _cif_token(record.residue_name),
+                    )
+                )
+                + "\n"
+            )
+        file_out.write("#\n")
+
+    def _write_cif_struct_asym_loop(self, file_out, struct_asym_records):
+        """Write the mmCIF structural-asymmetry loop for the export.
+
+        Parameters
+        ----------
+        file_out : TextIO
+            Open output stream.
+        struct_asym_records : list[_CifStructAsymRecord]
+            Asymmetry rows declared for the current export.
+        """
+        if not struct_asym_records:
+            return
+
+        file_out.write("loop_\n")
+        file_out.write("_struct_asym.id\n")
+        file_out.write("_struct_asym.entity_id\n")
+        for record in struct_asym_records:
+            file_out.write(
+                f"{_cif_token(record.asym_id)} {_cif_token(record.entity_id)}\n"
+            )
+        file_out.write("#\n")
 
     def _assembled_structure_graph(self, atom_records, molecule_serials):
         """Build a bonded graph for the serialized structure.
@@ -541,8 +1282,8 @@ class Store:
                 chunk = bonded[start:start + 4]
                 file_out.write(
                     "CONECT"
-                    + f"{serial:5d}"
-                    + "".join(f"{neighbor:5d}" for neighbor in chunk)
+                    + _encode_hybrid36(5, serial)
+                    + "".join(_encode_hybrid36(5, neighbor) for neighbor in chunk)
                     + "\n"
                 )
 
@@ -579,9 +1320,21 @@ class Store:
             record_a = record_by_serial[bond.atom_a]
             record_b = record_by_serial[bond.atom_b]
             file_out.write(
-                f"conn{conn_index} covale "
-                f"A {record_a.residue_short} {record_a.residue_id} {record_a.atom_name} "
-                f"A {record_b.residue_short} {record_b.residue_id} {record_b.atom_name}\n"
+                " ".join(
+                    (
+                        _cif_token(f"conn{conn_index}"),
+                        "covale",
+                        _cif_token(record_a.cif_asym_id),
+                        _cif_token(record_a.residue_name),
+                        _cif_token(record_a.cif_label_seq_id),
+                        _cif_token(record_a.atom_name),
+                        _cif_token(record_b.cif_asym_id),
+                        _cif_token(record_b.residue_name),
+                        _cif_token(record_b.cif_label_seq_id),
+                        _cif_token(record_b.atom_name),
+                    )
+                )
+                + "\n"
             )
 
     def _connectivity_validation_neighbors(self, graph):
@@ -650,7 +1403,7 @@ class Store:
                 message=message,
                 atom_ids=atom_ids,
                 atom_types=tuple(record_by_serial[atom_id].atom_type for atom_id in atom_ids if atom_id in record_by_serial),
-                residue_shorts=tuple(record_by_serial[atom_id].residue_short for atom_id in atom_ids if atom_id in record_by_serial),
+                residue_shorts=tuple(record_by_serial[atom_id].residue_name for atom_id in atom_ids if atom_id in record_by_serial),
                 degrees=tuple(len(neighbors.get(atom_id, ())) for atom_id in atom_ids),
                 is_error=is_error,
             )
@@ -663,7 +1416,7 @@ class Store:
             is_pre_finalized_scaffold = (
                 isinstance(self._inp, Pore)
                 and not is_finalized_pore
-                and record.residue_short in {"OM", "SI"}
+                and record.residue_name in {"OM", "SI"}
             )
             try:
                 element = db.get_element(record.atom_type)
@@ -710,7 +1463,7 @@ class Store:
             if is_pre_finalized_scaffold:
                 continue
 
-            if record.residue_short == "OM":
+            if record.residue_name == "OM":
                 if degree != 2 or sorted(neighbor_elements) != ["Si", "Si"]:
                     add_finding(
                         "framework_oxygen_environment",
@@ -718,7 +1471,7 @@ class Store:
                         (atom_id, *sorted(neighbors.get(atom_id, ()))),
                     )
 
-            if record.residue_short == "SI":
+            if record.residue_name == "SI":
                 if degree not in {4}:
                     add_finding(
                         "framework_silicon_environment",
@@ -833,6 +1586,10 @@ class Store:
             When ``True`` (the default), also emit an ``_struct_conn`` loop
             for the full assembled bond graph, including silica scaffold,
             siloxane bridges, ligand-internal bonds, and graft junctions.
+            Full residue names are preserved in mmCIF, and the writer emits
+            matching ``_entity`` and ``_struct_asym`` loops so that
+            ``_atom_site.label_entity_id`` and ``_atom_site.label_asym_id``
+            reference declared rows.
         validate_connectivity : str, optional
             Connectivity validation mode: ``"off"``, ``"warn"``, or
             ``"strict"``. The default warns on invalid assembled local
@@ -843,6 +1600,8 @@ class Store:
         link += name if name else self._name + ".cif"
         cache = self._export_cache(use_atom_names)
         atom_records = cache.atom_records
+        entity_records = cache.entity_records
+        struct_asym_records = cache.struct_asym_records
         graph = self._export_graph(use_atom_names)
         data_name = self._name.replace(" ", "_")
 
@@ -858,6 +1617,8 @@ class Store:
             file_out.write("_cell.angle_beta 90.000\n")
             file_out.write("_cell.angle_gamma 90.000\n")
             file_out.write("#\n")
+            self._write_cif_entity_loop(file_out, entity_records)
+            self._write_cif_struct_asym_loop(file_out, struct_asym_records)
             file_out.write("loop_\n")
             file_out.write("_atom_site.group_PDB\n")
             file_out.write("_atom_site.id\n")
@@ -886,25 +1647,25 @@ class Store:
                     " ".join(
                         [
                             "HETATM",
-                            str(record.serial),
-                            db.get_element(record.atom_type),
-                            record.atom_name,
+                            _cif_token(record.serial),
+                            _cif_token(db.get_element(record.atom_type)),
+                            _cif_token(record.atom_name),
                             ".",
-                            record.residue_short,
-                            "A",
-                            "1",
-                            str(record.residue_id),
+                            _cif_token(record.residue_name),
+                            _cif_token(record.cif_asym_id),
+                            _cif_token(record.cif_entity_id),
+                            _cif_token(record.cif_label_seq_id),
                             "?",
-                            f"{record.position[0] * 10:.3f}",
-                            f"{record.position[1] * 10:.3f}",
-                            f"{record.position[2] * 10:.3f}",
+                            _cif_token(f"{record.position[0] * 10:.3f}"),
+                            _cif_token(f"{record.position[1] * 10:.3f}"),
+                            _cif_token(f"{record.position[2] * 10:.3f}"),
                             "1.00",
                             "0.00",
                             "?",
-                            str(record.residue_id),
-                            record.residue_short,
-                            "A",
-                            record.atom_name,
+                            _cif_token(record.residue_id),
+                            _cif_token(record.residue_name),
+                            _cif_token(record.pdb_chain_id),
+                            _cif_token(record.atom_name),
                             "1",
                         ]
                     )
@@ -936,7 +1697,10 @@ class Store:
             When ``True`` (the default), also emit inspection-oriented
             ``CONECT`` records for the full assembled bond graph, including
             silica scaffold, siloxane bridges, ligand-internal bonds, and
-            graft junctions.
+            graft junctions. Residue names longer than three characters are
+            written as deterministic three-character aliases, atom serials and
+            residue ids automatically switch to hybrid-36 on overflow, and a
+            ``CRYST1`` record is emitted when periodic box lengths are known.
         validate_connectivity : str, optional
             Connectivity validation mode: ``"off"``, ``"warn"``, or
             ``"strict"``. The default warns on invalid assembled local
@@ -948,21 +1712,37 @@ class Store:
         link += name if name else self._name+".pdb"
         cache = self._export_cache(use_atom_names)
         atom_records = cache.atom_records
+        residue_alias_records = cache.residue_alias_records
         graph = self._export_graph(use_atom_names)
-        self._warn_if_pdb_limits_exceeded(atom_records)
+        self._validate_pdb_hybrid36_limits(atom_records)
 
         # Open file
         with open(link, "w") as file_out:
+            for line in self._pdb_alias_remark_lines(residue_alias_records):
+                file_out.write(line)
+
+            cryst1_record = self._pdb_cryst1_record()
+            if cryst1_record:
+                file_out.write(cryst1_record)
+
             for record in atom_records:
+                element = _sanitize_pdb_token(
+                    db.get_element(record.atom_type),
+                    width=2,
+                    fallback="X",
+                )
                 out_string = "HETATM"                       #  1- 6 (6)    Record name
-                out_string += f"{record.serial:5d}"        #  7-11 (5)    Atom serial number
+                out_string += record.pdb_serial_token      #  7-11 (5)    Atom serial number
                 out_string += " "                          # 12    (1)    -
-                out_string += f"{record.atom_name:>4s}"    # 13-16 (4)    Atom name
+                out_string += self._pdb_atom_name_field(
+                    record.atom_name,
+                    record.atom_type,
+                )                                          # 13-16 (4)    Atom name
                 out_string += " "                          # 17    (1)    Alternate location indicator
-                out_string += f"{record.residue_short:>3s}"# 18-20 (3)    Residue name
+                out_string += f"{record.pdb_residue_name:>3s}"# 18-20 (3)  Residue name
                 out_string += " "                          # 21    (1)    -
-                out_string += "A"                          # 22    (1)    Chain identifier
-                out_string += f"{self._pdb_residue_id(record.residue_id):4d}" # 23-26 (4) Residue sequence number
+                out_string += record.pdb_chain_id          # 22    (1)    Chain identifier
+                out_string += record.pdb_residue_id_token  # 23-26 (4)    Residue sequence number
                 out_string += " "                          # 27    (1)    Code for insertion of residues
                 out_string += "   "                        # 28-30 (3)    -
                 for coord in record.position:              # 31-54 (3*8)  Coordinates
@@ -970,7 +1750,7 @@ class Store:
                 out_string += f"{1:6.2f}"                  # 55-60 (6)    Occupancy
                 out_string += f"{0:6.2f}"                  # 61-66 (6)    Temperature factor
                 out_string += "          "                 # 67-76 (10)   -
-                out_string += f"{db.get_element(record.atom_type):>2s}" # 77-78 (2) Element symbol
+                out_string += f"{element:>2s}"             # 77-78 (2)    Element symbol
                 out_string += "  "                         # 79-80 (2)    Charge on the atom
 
                 file_out.write(out_string+"\n")
@@ -1215,6 +1995,405 @@ class Store:
             # Number of atoms
             for mol_short in self._short_list:
                 file_out.write(mol_short+" "+str(len(self._inp.get_mol_dict()[mol_short]))+"\n")
+
+    def full_slit_topology(
+        self,
+        name="",
+        base_ligand_short="",
+        silane_topology_config=None,
+    ):
+        """Write one self-contained full-slit GROMACS topology when supported.
+
+        Parameters
+        ----------
+        name : str, optional
+            Output topology filename. Defaults to ``<name>.top``.
+        base_ligand_short : str, optional
+            Base short name of the configured silane ligand, for example
+            ``"TMS"``. Geminal variants are expected to use the same short
+            name with a trailing ``"G"``.
+        silane_topology_config : object or None, optional
+            Optional silane topology configuration carrying ``itp_path``,
+            ``moleculetype_name``, and ``junction_parameters`` attributes.
+
+        Returns
+        -------
+        wrote_full_topology : bool
+            True when a full-slit topology was written. False when the current
+            finalized pore contains unsupported non-silica residues and no
+            matching ligand topology input was available.
+
+        Raises
+        ------
+        TypeError
+            Raised when the wrapped input is not a :class:`porems.pore.Pore`.
+        ValueError
+            Raised when the pore is not finalized or when the available
+            topology information is internally inconsistent.
+        """
+        if not isinstance(self._inp, Pore):
+            raise TypeError("Store: Unsupported input type for full slit topology creation...")
+        if not self._inp.is_finalized():
+            raise ValueError("Store: Full slit topology export requires a finalized pore.")
+
+        bundle = None
+        ligand_shorts = set()
+        bundle_atoms_by_index = {}
+        bundle_atomtypes_by_name = {}
+        if silane_topology_config is not None:
+            bundle = parse_flat_itp(
+                silane_topology_config.itp_path,
+                moleculetype_name=getattr(silane_topology_config, "moleculetype_name", ""),
+            )
+            if bundle.moleculetype.nrexcl != _FULL_SLIT_NREXCL:
+                raise ValueError(
+                    "Full slit topology export currently requires ligand "
+                    f"nrexcl={_FULL_SLIT_NREXCL}. Parsed "
+                    f"{bundle.moleculetype.nrexcl} from "
+                    f"{silane_topology_config.itp_path!r}."
+                )
+            bundle_atoms_by_index = {
+                atom.index: atom
+                for atom in bundle.moleculetype.atoms
+            }
+            bundle_atomtypes_by_name = {
+                atomtype.name: atomtype
+                for atomtype in bundle.atomtypes
+            }
+            if base_ligand_short:
+                ligand_shorts = {base_ligand_short, base_ligand_short + "G"}
+
+        cache = self._collect_structure_records(use_atom_names=True)
+        graph = self._assembled_structure_graph(
+            cache.atom_records,
+            cache.molecule_serials,
+        )
+        record_by_serial = {
+            record.serial: record
+            for record in cache.atom_records
+        }
+
+        unsupported_residues = sorted(
+            {
+                record.residue_name
+                for record in cache.atom_records
+                if record.residue_name not in {"OM", "SI", "SL", "SLG"}
+                and record.residue_name not in ligand_shorts
+            }
+        )
+        if unsupported_residues:
+            return False
+
+        def silica_atom_fields(record):
+            if record.residue_name == "OM":
+                atomtype = _SILICA_ATOMTYPE_BY_NAME["OM"]
+                return atomtype.name, "-0.640000", atomtype.mass
+            if record.residue_name == "SI":
+                atomtype = _SILICA_ATOMTYPE_BY_NAME["SI"]
+                return atomtype.name, "1.280000", atomtype.mass
+            if record.residue_name in {"SL", "SLG"}:
+                if record.atom_type == "Si":
+                    atomtype = _SILICA_ATOMTYPE_BY_NAME["SI"]
+                    return atomtype.name, "1.280000", atomtype.mass
+                if record.atom_type == "O":
+                    atomtype = _SILICA_ATOMTYPE_BY_NAME["OA"]
+                    return atomtype.name, "-0.740000", atomtype.mass
+                if record.atom_type == "H":
+                    atomtype = _SILICA_ATOMTYPE_BY_NAME["HG"]
+                    return atomtype.name, "0.420000", atomtype.mass
+            raise ValueError(
+                "Unsupported silica residue/atom combination for full slit "
+                f"topology export: {(record.residue_name, record.atom_type, record.atom_name)!r}."
+            )
+
+        def ligand_atom_fields(record):
+            if bundle is None or record.residue_name not in ligand_shorts:
+                return None
+
+            if bundle.has_atom_name(record.atom_name):
+                bundle_atom = bundle.atom_by_name(record.atom_name)
+                mass = bundle_atom.mass
+                if mass is None:
+                    atomtype = bundle_atomtypes_by_name.get(bundle_atom.atom_type)
+                    if atomtype is None:
+                        raise ValueError(
+                            "Bundle atom mass is missing and no matching "
+                            f"[ atomtypes ] definition exists for "
+                            f"{bundle_atom.atom_type!r} in {bundle.source_path!r}."
+                        )
+                    mass = atomtype.mass
+                return bundle_atom.atom_type, bundle_atom.charge, mass
+
+            if record.residue_name == base_ligand_short + "G":
+                if record.atom_type == "O":
+                    atomtype = _SILICA_ATOMTYPE_BY_NAME["OA"]
+                    return atomtype.name, "-0.740000", atomtype.mass
+                if record.atom_type == "H":
+                    atomtype = _SILICA_ATOMTYPE_BY_NAME["HG"]
+                    return atomtype.name, "0.420000", atomtype.mass
+
+            raise ValueError(
+                "Finalized ligand residue contains atoms that cannot be mapped "
+                "to the supplied base ligand topology bundle: "
+                f"{(record.residue_name, record.atom_name)!r}."
+            )
+
+        atoms = []
+        atomtype_order = list(_SILICA_ATOMTYPE_DEFINITIONS)
+        atomtype_by_name = {
+            atomtype.name: atomtype
+            for atomtype in atomtype_order
+        }
+        if bundle is not None:
+            for atomtype in bundle.atomtypes:
+                existing = atomtype_by_name.get(atomtype.name)
+                if existing is not None:
+                    if not existing.is_compatible_with(atomtype):
+                        raise ValueError(
+                            "Conflicting duplicate atomtype definition for "
+                            f"{atomtype.name!r} between the internal silica "
+                            "model and the supplied ligand topology bundle."
+                        )
+                    continue
+                atomtype_by_name[atomtype.name] = atomtype
+                atomtype_order.append(atomtype)
+
+        for record in cache.atom_records:
+            atom_fields = ligand_atom_fields(record)
+            if atom_fields is None:
+                atom_fields = silica_atom_fields(record)
+            atom_type_name, charge_token, mass_token = atom_fields
+            atoms.append(
+                GromacsAtom(
+                    index=record.serial,
+                    atom_type=atom_type_name,
+                    residue_number=record.residue_id,
+                    residue_name=record.residue_name,
+                    atom_name=record.atom_name,
+                    charge_group=record.serial,
+                    charge=_format_decimal_token(charge_token),
+                    mass=_format_decimal_token(mass_token, places=4),
+                )
+            )
+
+        bonds = []
+        for bond in graph.bonds:
+            record_a = record_by_serial[bond.atom_a]
+            record_b = record_by_serial[bond.atom_b]
+            bond_parameters = None
+
+            if (
+                bundle is not None
+                and record_a.molecule_index == record_b.molecule_index
+                and record_a.residue_name in ligand_shorts
+                and record_b.residue_name in ligand_shorts
+            ):
+                bundle_bond = bundle.bond_by_names(
+                    record_a.atom_name,
+                    record_b.atom_name,
+                )
+                if bundle_bond is not None:
+                    bond_parameters = bundle_bond.parameters
+
+            if bond_parameters is None:
+                elements = sorted(
+                    (
+                        db.get_element(record_a.atom_type),
+                        db.get_element(record_b.atom_type),
+                    )
+                )
+                if elements == ["H", "O"]:
+                    bond_parameters = _SILICA_O_H_BOND
+                elif elements == ["O", "Si"]:
+                    if bond.provenance == "graft_junction" and silane_topology_config is not None:
+                        bond_parameters = silane_topology_config.junction_parameters.mount_scaffold_bond
+                    else:
+                        bond_parameters = _SILICA_SI_O_BOND
+                else:
+                    raise ValueError(
+                        "Unsupported bond environment for full slit topology "
+                        f"export: {(record_a.residue_name, record_a.atom_name, record_b.residue_name, record_b.atom_name)!r}."
+                    )
+
+            bonds.append(
+                GromacsBond(
+                    atom_a=bond.atom_a,
+                    atom_b=bond.atom_b,
+                    parameters=bond_parameters,
+                )
+            )
+
+        angles = []
+        for angle in graph.angles:
+            record_a = record_by_serial[angle.atom_a]
+            record_b = record_by_serial[angle.atom_b]
+            record_c = record_by_serial[angle.atom_c]
+            angle_parameters = None
+
+            if (
+                bundle is not None
+                and record_a.molecule_index == record_b.molecule_index == record_c.molecule_index
+                and record_a.residue_name in ligand_shorts
+                and record_b.residue_name in ligand_shorts
+                and record_c.residue_name in ligand_shorts
+            ):
+                bundle_angle = bundle.angle_by_names(
+                    record_a.atom_name,
+                    record_b.atom_name,
+                    record_c.atom_name,
+                )
+                if bundle_angle is not None:
+                    angle_parameters = bundle_angle.parameters
+
+            if angle_parameters is None:
+                center_element = db.get_element(record_b.atom_type)
+                outer_elements = sorted(
+                    (
+                        db.get_element(record_a.atom_type),
+                        db.get_element(record_c.atom_type),
+                    )
+                )
+
+                if center_element == "O" and outer_elements == ["H", "Si"]:
+                    angle_parameters = _SILICA_SI_O_H_ANGLE
+                elif center_element == "O" and outer_elements == ["Si", "Si"]:
+                    if (
+                        silane_topology_config is not None
+                        and record_b.residue_name == "OM"
+                        and (
+                            (record_a.residue_name == "SI" and record_c.residue_name in ligand_shorts)
+                            or (record_c.residue_name == "SI" and record_a.residue_name in ligand_shorts)
+                        )
+                    ):
+                        angle_parameters = (
+                            silane_topology_config
+                            .junction_parameters
+                            .scaffold_si_scaffold_o_mount_angle
+                        )
+                    else:
+                        angle_parameters = _SILICA_SI_O_SI_ANGLE
+                elif center_element == "Si" and outer_elements == ["O", "O"]:
+                    if (
+                        silane_topology_config is not None
+                        and record_b.residue_name in ligand_shorts
+                    ):
+                        angle_parameters = (
+                            silane_topology_config
+                            .junction_parameters
+                            .oxygen_mount_oxygen_angle
+                        )
+                    else:
+                        angle_parameters = _SILICA_O_SI_O_ANGLE
+                else:
+                    raise ValueError(
+                        "Unsupported angle environment for full slit topology "
+                        f"export: {(record_a.residue_name, record_a.atom_name, record_b.residue_name, record_b.atom_name, record_c.residue_name, record_c.atom_name)!r}."
+                    )
+
+            angles.append(
+                GromacsAngle(
+                    atom_a=angle.atom_a,
+                    atom_b=angle.atom_b,
+                    atom_c=angle.atom_c,
+                    parameters=angle_parameters,
+                )
+            )
+
+        pairs = []
+        dihedrals = []
+        if bundle is not None:
+            for mol, serials in zip(self._mols, cache.molecule_serials):
+                if mol.get_short() not in ligand_shorts:
+                    continue
+
+                local_name_by_serial = {
+                    serial: record_by_serial[serial].atom_name
+                    for serial in serials
+                }
+                serial_by_bundle_name = {
+                    atom_name: serial
+                    for serial, atom_name in local_name_by_serial.items()
+                    if bundle.has_atom_name(atom_name)
+                }
+                missing_bundle_names = sorted(
+                    name
+                    for name in bundle.atom_index_by_name
+                    if name not in serial_by_bundle_name
+                )
+                if missing_bundle_names:
+                    raise ValueError(
+                        "Finalized ligand molecule is missing atom names "
+                        f"required by the supplied topology bundle: "
+                        f"{missing_bundle_names}."
+                    )
+
+                for pair in bundle.moleculetype.pairs:
+                    atom_name_a = bundle_atoms_by_index[pair.atom_a].atom_name
+                    atom_name_b = bundle_atoms_by_index[pair.atom_b].atom_name
+                    pairs.append(
+                        GromacsPair(
+                            atom_a=serial_by_bundle_name[atom_name_a],
+                            atom_b=serial_by_bundle_name[atom_name_b],
+                            function=pair.function,
+                            parameters=pair.parameters,
+                        )
+                    )
+
+                for dihedral in bundle.moleculetype.dihedrals:
+                    atom_name_a = bundle_atoms_by_index[dihedral.atom_a].atom_name
+                    atom_name_b = bundle_atoms_by_index[dihedral.atom_b].atom_name
+                    atom_name_c = bundle_atoms_by_index[dihedral.atom_c].atom_name
+                    atom_name_d = bundle_atoms_by_index[dihedral.atom_d].atom_name
+                    dihedrals.append(
+                        GromacsDihedral(
+                            atom_a=serial_by_bundle_name[atom_name_a],
+                            atom_b=serial_by_bundle_name[atom_name_b],
+                            atom_c=serial_by_bundle_name[atom_name_c],
+                            atom_d=serial_by_bundle_name[atom_name_d],
+                            function=dihedral.function,
+                            parameters=dihedral.parameters,
+                        )
+                    )
+
+        top_filename = name if name else self._name + ".top"
+        if not top_filename.endswith(".top"):
+            top_filename = top_filename + ".top"
+        itp_filename = os.path.splitext(top_filename)[0] + ".itp"
+        top_link = self._link + top_filename
+        itp_link = self._link + os.path.basename(itp_filename)
+
+        molecule_name = _sanitize_gromacs_identifier(
+            os.path.splitext(os.path.basename(itp_filename))[0],
+            fallback="SLIT",
+        )
+        molecule_type = GromacsMoleculeType(
+            name=molecule_name,
+            nrexcl=_FULL_SLIT_NREXCL,
+            atoms=tuple(atoms),
+            bonds=tuple(sorted(bonds, key=lambda item: (item.atom_a, item.atom_b))),
+            pairs=tuple(sorted(pairs, key=lambda item: (item.atom_a, item.atom_b, item.function))),
+            angles=tuple(sorted(angles, key=lambda item: (item.atom_b, item.atom_a, item.atom_c))),
+            dihedrals=tuple(
+                sorted(
+                    dihedrals,
+                    key=lambda item: (item.atom_b, item.atom_c, item.atom_a, item.atom_d, item.function),
+                )
+            ),
+        )
+
+        with open(itp_link, "w") as file_out:
+            file_out.write(render_itp(atomtype_order, molecule_type))
+
+        with open(top_link, "w") as file_out:
+            file_out.write(
+                render_top(
+                    include_filename=os.path.basename(itp_link),
+                    system_name="Pore-System Generated by the PoreMS Package",
+                    molecule_name=molecule_type.name,
+                )
+            )
+
+        return True
 
     def grid(self, name="", charges=None):
         """Write the ``grid.itp`` topology template for silica grid atoms.

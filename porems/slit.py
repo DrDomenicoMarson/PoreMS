@@ -18,6 +18,8 @@ import numpy as np
 import porems as pms
 from tqdm.auto import tqdm as _tqdm_auto
 
+from porems.topology import GromacsAngleParameters, GromacsBondParameters
+
 
 _BRIDGE_OFFSET_NM = 0.09
 _BRIDGE_STERIC_DISTANCE_CUTOFF_NM = 0.30
@@ -674,6 +676,67 @@ class SlitPreparationResult:
 
 
 @dataclass(frozen=True)
+class SlitJunctionParameters:
+    """Silica-ligand junction parameters for full slit topology export.
+
+    Parameters
+    ----------
+    mount_scaffold_bond : GromacsBondParameters, optional
+        Bond parameters used for each retained scaffold oxygen bound to the
+        ligand mount silicon.
+    scaffold_si_scaffold_o_mount_angle : GromacsAngleParameters, optional
+        Angle parameters used for ``Si(scaffold)-O(scaffold)-Si(mount)``
+        bridge angles.
+    oxygen_mount_oxygen_angle : GromacsAngleParameters, optional
+        Angle parameters used for any ``O-Si(mount)-O`` angle around the
+        ligand mount silicon.
+    """
+
+    mount_scaffold_bond: GromacsBondParameters = field(
+        default_factory=lambda: GromacsBondParameters.harmonic(
+            length_nm=0.16300,
+            force_constant=251040.0,
+        )
+    )
+    scaffold_si_scaffold_o_mount_angle: GromacsAngleParameters = field(
+        default_factory=lambda: GromacsAngleParameters.harmonic(
+            angle_deg=147.0,
+            force_constant=529.527040,
+        )
+    )
+    oxygen_mount_oxygen_angle: GromacsAngleParameters = field(
+        default_factory=lambda: GromacsAngleParameters.harmonic(
+            angle_deg=105.56,
+            force_constant=384.223760,
+        )
+    )
+
+
+@dataclass(frozen=True)
+class SilaneTopologyConfig:
+    """Flat ligand-topology input used by the slit full-topology exporter.
+
+    Parameters
+    ----------
+    itp_path : str
+        Path to one self-contained flat GROMACS ``.itp`` file describing the
+        base silane fragment.
+    moleculetype_name : str, optional
+        Optional explicit molecule-type name expected inside ``itp_path``.
+        When omitted, the parser accepts the file's own name.
+    junction_parameters : SlitJunctionParameters, optional
+        Silica-ligand junction parameters applied when the finalized slit is
+        exported as one full GROMACS molecule.
+    """
+
+    itp_path: str
+    moleculetype_name: str = ""
+    junction_parameters: SlitJunctionParameters = field(
+        default_factory=SlitJunctionParameters
+    )
+
+
+@dataclass(frozen=True)
 class SilaneAttachmentConfig:
     """Attachment settings for one silane family.
 
@@ -691,6 +754,9 @@ class SilaneAttachmentConfig:
         crowded pose before giving up on one site.
     rotate_step_deg : float, optional
         Angular step in degrees used when ``rotate_about_axis`` is enabled.
+    topology : SilaneTopologyConfig or None, optional
+        Optional flat ligand-topology input used to assemble a full
+        self-contained GROMACS slit topology during export.
     """
 
     molecule: pms.Molecule
@@ -698,6 +764,7 @@ class SilaneAttachmentConfig:
     axis: tuple[int, int]
     rotate_about_axis: bool = True
     rotate_step_deg: float = 10.0
+    topology: SilaneTopologyConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -883,6 +950,47 @@ def _amorphous_template_path():
         Absolute path to the amorphous silica template.
     """
     return os.path.join(os.path.dirname(__file__), "templates", "amorph.gro")
+
+
+def _bundled_tms_topology_path():
+    """Return the bundled self-contained TMS topology path.
+
+    Returns
+    -------
+    topology_path : str
+        Absolute path to the bundled flat TMS ``.itp`` file.
+    """
+    return os.path.join(os.path.dirname(__file__), "templates", "tms_slit.itp")
+
+
+def resolve_silane_topology_config(ligand_config):
+    """Return the full-topology input for one silane attachment.
+
+    Parameters
+    ----------
+    ligand_config : SilaneAttachmentConfig or None
+        Functionalized slit ligand configuration.
+
+    Returns
+    -------
+    topology_config : SilaneTopologyConfig or None
+        Explicit topology config when available. Built-in TMS ligands resolve
+        to the bundled template automatically. Unsupported ligands return
+        ``None`` so callers can keep the legacy helper-topology path.
+    """
+    if ligand_config is None:
+        return None
+
+    if ligand_config.topology is not None:
+        return ligand_config.topology
+
+    if ligand_config.molecule.get_short() == "TMS":
+        return SilaneTopologyConfig(
+            itp_path=_bundled_tms_topology_path(),
+            moleculetype_name="TMS",
+        )
+
+    return None
 
 
 def _replicate_along_y(base, repeat_y):
@@ -2727,7 +2835,8 @@ def write_bare_amorphous_slit(
     Returns
     -------
     result : SlitPreparationResult
-        Finalized bare slit system and its preparation report.
+        Finalized bare slit system and its preparation report. The export
+        writes a self-contained full-slab ``.itp`` / ``.top`` pair.
     """
     result = prepare_amorphous_slit_surface(config=config)
     pms.utils.mkdirp(output_dir)
@@ -2740,8 +2849,14 @@ def write_bare_amorphous_slit(
         write_pdb_conect=write_pdb_conect,
         write_cif=write_cif,
         write_cif_bonds=write_cif_bonds,
+        write_legacy_topology_helpers=False,
         validate_connectivity=validate_connectivity,
     )
+    pms.Store(
+        result.system._pore,
+        output_dir,
+        sort_list=result.system._sort_list,
+    ).full_slit_topology()
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
     with open(report_path, "w") as file_out:
@@ -2791,6 +2906,11 @@ def write_functionalized_amorphous_slit(
     -------
     result : FunctionalizedSlitResult
         Finalized functionalized slit system and its preparation report.
+        When built-in or user-supplied flat ligand topology input is
+        available, the export writes a self-contained full-slab ``.itp`` /
+        ``.top`` pair. Unsupported custom ligands fall back to the legacy
+        helper-topology export path until an explicit
+        :class:`SilaneTopologyConfig` is supplied.
     """
     progress_tracker = _FunctionalizedProgressTracker(
         total_stages=6,
@@ -2802,6 +2922,7 @@ def write_functionalized_amorphous_slit(
             progress_tracker=progress_tracker,
         )
         pms.utils.mkdirp(output_dir)
+        topology_config = resolve_silane_topology_config(config.ligand)
 
         progress_tracker.set_stage("Finalize")
         finalize_start = perf_counter()
@@ -2818,8 +2939,18 @@ def write_functionalized_amorphous_slit(
             write_pdb_conect=write_pdb_conect,
             write_cif=write_cif,
             write_cif_bonds=write_cif_bonds,
+            write_legacy_topology_helpers=topology_config is None,
             validate_connectivity=validate_connectivity,
         )
+        if topology_config is not None:
+            pms.Store(
+                result.system._pore,
+                output_dir,
+                sort_list=result.system._sort_list,
+            ).full_slit_topology(
+                base_ligand_short=config.ligand.molecule.get_short(),
+                silane_topology_config=topology_config,
+            )
         store_export_s = perf_counter() - store_start
         progress_tracker.update_stage(1)
         result.report = replace(

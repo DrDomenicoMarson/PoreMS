@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import pytest
 
 import porems as pms
+import porems.store as store_mod
 
 
 pytestmark = pytest.mark.usefixtures("module_workspace")
@@ -327,6 +328,119 @@ class TestUserModel:
     #########
     # Store #
     #########
+    def test_hybrid36_helpers(self):
+        reference_vectors = (
+            (4, 9999, "9999"),
+            (4, 10000, "A000"),
+            (4, 10035, "A00Z"),
+            (4, 10036, "A010"),
+            (4, 10000 + (26 * (36 ** 3)), "a000"),
+            (5, 99999, "99999"),
+            (5, 100000, "A0000"),
+            (5, 100035, "A000Z"),
+            (5, 100036, "A0010"),
+            (5, 100000 + (26 * (36 ** 4)), "a0000"),
+        )
+
+        for width, value, token in reference_vectors:
+            assert store_mod._encode_hybrid36(width, value) == token
+            assert store_mod._decode_hybrid36(width, token) == value
+
+        with pytest.raises(ValueError, match="exceeds the hybrid-36 range"):
+            store_mod._encode_hybrid36(4, store_mod._hybrid36_max_value(4) + 1)
+
+    def test_pdb_writer_uses_hybrid36_for_overflowed_ids(self):
+        mol = pms.Molecule("overflow_writer", "OVF")
+        mol.add("C", [0.0, 0.0, 0.0], name="C1")
+        mol.add("C", [0.1, 0.0, 0.0], name="C2")
+
+        store = pms.Store(mol, "output")
+        atom_records = [
+            store_mod._StructureAtomRecord(
+                serial=99999,
+                pdb_serial_token=store_mod._encode_hybrid36(5, 99999),
+                molecule_index=0,
+                local_atom_index=0,
+                residue_name="TEPS",
+                pdb_residue_name="TEP",
+                residue_id=9999,
+                pdb_residue_id_token=store_mod._encode_hybrid36(4, 9999),
+                atom_name="C1",
+                atom_type="C",
+                position=(0.0, 0.0, 0.0),
+                source_id=None,
+                pdb_chain_id="A",
+                cif_entity_id="1",
+                cif_asym_id="A9999",
+                cif_label_seq_id="1",
+            ),
+            store_mod._StructureAtomRecord(
+                serial=100000,
+                pdb_serial_token=store_mod._encode_hybrid36(5, 100000),
+                molecule_index=0,
+                local_atom_index=1,
+                residue_name="TEPS",
+                pdb_residue_name="TEP",
+                residue_id=10000,
+                pdb_residue_id_token=store_mod._encode_hybrid36(4, 10000),
+                atom_name="C2",
+                atom_type="C",
+                position=(0.1, 0.0, 0.0),
+                source_id=None,
+                pdb_chain_id="A",
+                cif_entity_id="1",
+                cif_asym_id="A10000",
+                cif_label_seq_id="1",
+            ),
+        ]
+        graph = pms.AssembledStructureGraph.from_bonds(
+            (99999, 100000),
+            [pms.GraphBond(99999, 100000, "ligand_explicit")],
+        )
+        store._structure_export_cache[True] = store_mod._StructureExportCache(
+            atom_records=atom_records,
+            molecule_serials=[[99999, 100000]],
+            residue_alias_records=[
+                store_mod._PdbResidueAliasRecord(full_name="TEPS", pdb_name="TEP")
+            ],
+            entity_records=[
+                store_mod._CifEntityRecord(entity_id="1", residue_name="TEPS")
+            ],
+            struct_asym_records=[
+                store_mod._CifStructAsymRecord(
+                    asym_id="A9999",
+                    entity_id="1",
+                    residue_id=9999,
+                    residue_name="TEPS",
+                ),
+                store_mod._CifStructAsymRecord(
+                    asym_id="A10000",
+                    entity_id="1",
+                    residue_id=10000,
+                    residue_name="TEPS",
+                ),
+            ],
+            graph=graph,
+        )
+
+        store.pdb("store_hybrid36_overflow.pdb", use_atom_names=True)
+
+        with open("output/store_hybrid36_overflow.pdb", "r") as file_in:
+            pdb_lines = [
+                line.rstrip("\n")
+                for line in file_in
+                if line.startswith(("HETATM", "CONECT"))
+            ]
+
+        assert pdb_lines[0][6:11] == "99999"
+        assert pdb_lines[1][6:11] == "A0000"
+        assert pdb_lines[0][22:26] == "9999"
+        assert pdb_lines[1][22:26] == "A000"
+        assert store_mod._decode_hybrid36(5, pdb_lines[1][6:11]) == 100000
+        assert store_mod._decode_hybrid36(4, pdb_lines[1][22:26]) == 10000
+        assert pdb_lines[2].startswith("CONECT")
+        assert "A0000" in pdb_lines[2]
+
     def test_store(self):
         mol = pms.Molecule(inp="data/benzene.gro")
 
@@ -404,18 +518,19 @@ class TestUserModel:
             for finding in report.findings
         )
 
-    def test_pdb_warns_when_fixed_width_limits_are_exceeded(self):
+    def test_pdb_uses_hybrid36_when_fixed_width_limits_are_exceeded(self):
         atom = pms.Molecule("single_atom", "SIN")
         atom.add("H", [0.0, 0.0, 0.0], name="H1")
         store = pms.Store(atom, "output")
         store._mols = [atom] * 100000
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            records, _ = store._collect_structure_records(use_atom_names=True)
-            store._warn_if_pdb_limits_exceeded(records)
+        cache = store._collect_structure_records(use_atom_names=True)
+        records = cache.atom_records
+        store._validate_pdb_hybrid36_limits(records)
 
-        assert any("fixed-width fields are exceeded" in str(w.message) for w in caught)
+        assert records[9998].pdb_residue_id_token == "9999"
+        assert records[9999].pdb_residue_id_token == "A000"
+        assert store_mod._decode_hybrid36(4, records[-1].pdb_residue_id_token) == records[-1].residue_id
 
     def test_steric_grid_matches_bruteforce_clearance(self):
         block = pms.Molecule("steric_block", "SBL")
