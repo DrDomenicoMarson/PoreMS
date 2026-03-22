@@ -2,7 +2,7 @@
 
 import porems as pms
 
-LIGAND = "TMS" # can be "TEPS" "TMS" or "bare"
+LIGAND = "TEPS" # can be "TEPS" "TMS" or "bare"
 
 if LIGAND == "TEPS":
     lig = pms.Molecule("TEPS", "TEPS", "TEPS.pdb")

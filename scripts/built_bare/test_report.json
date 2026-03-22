@@ -76,11 +76,11 @@
     "final_framework_oxygen": 11476
   },
   "timing_summary": {
-    "base_slit_build_s": 2.0638367499923334,
-    "q_state_preparation_s": 9.910128000017721,
-    "t2_attachment_s": 1.4159595593810081e-06,
-    "t3_attachment_s": 3.3300602808594704e-07,
-    "finalize_s": 0.07618899998487905,
-    "store_export_s": 0.21582233300432563
+    "base_slit_build_s": 0.9409965410013683,
+    "q_state_preparation_s": 6.617495333019178,
+    "t2_attachment_s": 1.1669471859931946e-06,
+    "t3_attachment_s": 5.410402081906796e-07,
+    "finalize_s": 0.17395204200875014,
+    "store_export_s": 0.2570353749906644
   }
 }

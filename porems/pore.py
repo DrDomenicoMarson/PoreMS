@@ -168,24 +168,125 @@ class _ScaffoldClassificationCache:
     final_scaffold_silicon_ids: tuple[int, ...]
 
 
-@dataclass(frozen=True)
-class _StericAtomRecord:
-    """One atom stored in the local steric-search grid.
+@dataclass
+class _StericAtomBatch:
+    """Array-backed steric coordinates and radii for one atom collection.
 
     Parameters
     ----------
-    position : tuple[float, float, float]
-        Cartesian atom position in nanometers.
-    radius : float
-        Covalent radius used for the steric cutoff estimate.
-    block_atom_id : int or None, optional
-        Source block atom id when the record belongs to the live silica
-        scaffold. ``None`` for previously attached ligand atoms.
+    positions : np.ndarray, optional
+        Cartesian atom positions with shape ``(n, 3)`` in nanometers.
+    radii : np.ndarray, optional
+        Covalent radii with shape ``(n,)`` used for steric cutoffs.
+    block_atom_ids : np.ndarray, optional
+        Source block atom ids with shape ``(n,)``. Attached ligand atoms use
+        ``-1`` because they do not map back to the live scaffold.
     """
 
-    position: tuple[float, float, float]
-    radius: float
-    block_atom_id: int | None = None
+    positions: np.ndarray = field(
+        default_factory=lambda: np.empty((0, 3), dtype=float)
+    )
+    radii: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=float))
+    block_atom_ids: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
+
+    @classmethod
+    def empty(cls):
+        """Return an empty steric batch.
+
+        Returns
+        -------
+        batch : _StericAtomBatch
+            Empty batch with zero rows.
+        """
+        return cls()
+
+    @classmethod
+    def concatenate(cls, batches):
+        """Concatenate several steric batches into one.
+
+        Parameters
+        ----------
+        batches : list[_StericAtomBatch]
+            Batches that should be concatenated in order.
+
+        Returns
+        -------
+        batch : _StericAtomBatch
+            Concatenated steric batch.
+        """
+        batches = [batch for batch in batches if batch is not None and batch.radii.size > 0]
+        if not batches:
+            return cls.empty()
+
+        return cls(
+            positions=np.concatenate([batch.positions for batch in batches], axis=0),
+            radii=np.concatenate([batch.radii for batch in batches]),
+            block_atom_ids=np.concatenate([batch.block_atom_ids for batch in batches]),
+        )
+
+    def append(self, positions, radii, block_atom_ids):
+        """Append one or more atoms to the batch.
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            Cartesian positions with shape ``(n, 3)``.
+        radii : np.ndarray
+            Covalent radii with shape ``(n,)``.
+        block_atom_ids : np.ndarray
+            Source block atom ids with shape ``(n,)``.
+        """
+        positions = np.asarray(positions, dtype=float).reshape(-1, 3)
+        radii = np.asarray(radii, dtype=float).reshape(-1)
+        block_atom_ids = np.asarray(block_atom_ids, dtype=int).reshape(-1)
+        if positions.shape[0] == 0:
+            return
+
+        if self.radii.size == 0:
+            self.positions = positions.copy()
+            self.radii = radii.copy()
+            self.block_atom_ids = block_atom_ids.copy()
+            return
+
+        self.positions = np.concatenate([self.positions, positions], axis=0)
+        self.radii = np.concatenate([self.radii, radii])
+        self.block_atom_ids = np.concatenate([self.block_atom_ids, block_atom_ids])
+
+    def remove_block_atoms(self, atom_ids):
+        """Remove scaffold atoms from the batch by source atom id.
+
+        Parameters
+        ----------
+        atom_ids : list[int] or np.ndarray
+            Source block atom ids that should be removed.
+        """
+        atom_ids = np.asarray(atom_ids, dtype=int).reshape(-1)
+        if self.radii.size == 0 or atom_ids.size == 0:
+            return
+
+        keep_mask = ~np.isin(self.block_atom_ids, atom_ids)
+        self.positions = self.positions[keep_mask]
+        self.radii = self.radii[keep_mask]
+        self.block_atom_ids = self.block_atom_ids[keep_mask]
+
+
+@dataclass(frozen=True)
+class _MoleculeStericBatch:
+    """Array-backed steric subset extracted from one molecule.
+
+    Parameters
+    ----------
+    atom_ids : np.ndarray
+        Local atom ids that participate in steric checks.
+    positions : np.ndarray
+        Cartesian positions of the participating atoms with shape ``(n, 3)``.
+    radii : np.ndarray
+        Covalent radii for the participating atoms with shape ``(n,)``.
+    """
+
+    atom_ids: np.ndarray
+    positions: np.ndarray
+    radii: np.ndarray
 
 
 @dataclass
@@ -202,7 +303,7 @@ class _StericGrid:
 
     box: tuple[float, float, float]
     cell_size_nm: float = _STERIC_GRID_CELL_SIZE_NM
-    cells: dict[tuple[int, int, int], list[_StericAtomRecord]] = field(default_factory=dict)
+    cells: dict[tuple[int, int, int], _StericAtomBatch] = field(default_factory=dict)
     block_cells: dict[int, tuple[int, int, int]] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -265,39 +366,52 @@ class _StericGrid:
             Covalent radius used for steric cutoff estimates.
         """
         key = self._cell_key(position)
-        self.cells.setdefault(key, []).append(
-            _StericAtomRecord(tuple(position), radius, block_atom_id=atom_id)
+        self.cells.setdefault(key, _StericAtomBatch.empty()).append(
+            np.asarray([position], dtype=float),
+            np.asarray([radius], dtype=float),
+            np.asarray([atom_id], dtype=int),
         )
         self.block_cells[atom_id] = key
 
-    def add_attached_atom(self, position, radius):
-        """Add one already attached ligand atom to the steric grid.
+    def add_block_atoms(self, atom_ids, positions, radii):
+        """Add several live scaffold atoms to the steric grid.
 
         Parameters
         ----------
-        position : list[float] or tuple[float, float, float]
-            Cartesian atom position in nanometers.
-        radius : float
-            Covalent radius used for steric cutoff estimates.
+        atom_ids : list[int] or np.ndarray
+            Source block atom ids.
+        positions : np.ndarray
+            Cartesian atom positions with shape ``(n, 3)`` in nanometers.
+        radii : np.ndarray
+            Covalent radii with shape ``(n,)``.
         """
-        key = self._cell_key(position)
-        self.cells.setdefault(key, []).append(_StericAtomRecord(tuple(position), radius))
+        atom_ids = np.asarray(atom_ids, dtype=int).reshape(-1)
+        positions = np.asarray(positions, dtype=float).reshape(-1, 3)
+        radii = np.asarray(radii, dtype=float).reshape(-1)
 
-    def add_molecule(self, mol):
-        """Add every valid atom of one attached molecule to the steric grid.
+        for atom_id, position, radius in zip(atom_ids, positions, radii):
+            self.add_block_atom(int(atom_id), position, float(radius))
+
+    def add_attached_atoms(self, positions, radii):
+        """Add several already attached ligand atoms to the steric grid.
 
         Parameters
         ----------
-        mol : Molecule
-            Attached molecule whose atoms should participate in future clash
-            checks.
+        positions : np.ndarray
+            Cartesian atom positions with shape ``(n, 3)`` in nanometers.
+        radii : np.ndarray
+            Covalent radii with shape ``(n,)``.
         """
-        for atom in mol.get_atom_list():
-            try:
-                radius = db.get_covalent_radius(atom.get_atom_type())
-            except ValueError:
-                continue
-            self.add_attached_atom(atom.get_pos(), radius)
+        positions = np.asarray(positions, dtype=float).reshape(-1, 3)
+        radii = np.asarray(radii, dtype=float).reshape(-1)
+
+        for position, radius in zip(positions, radii):
+            key = self._cell_key(position)
+            self.cells.setdefault(key, _StericAtomBatch.empty()).append(
+                np.asarray([position], dtype=float),
+                np.asarray([radius], dtype=float),
+                np.asarray([-1], dtype=int),
+            )
 
     def remove_block_atoms(self, atom_ids):
         """Remove scaffold atoms from the steric grid by source atom id.
@@ -311,16 +425,12 @@ class _StericGrid:
             key = self.block_cells.pop(atom_id, None)
             if key is None or key not in self.cells:
                 continue
-            self.cells[key] = [
-                record
-                for record in self.cells[key]
-                if record.block_atom_id != atom_id
-            ]
-            if not self.cells[key]:
+            self.cells[key].remove_block_atoms([atom_id])
+            if self.cells[key].radii.size == 0:
                 del self.cells[key]
 
-    def neighbor_records(self, position):
-        """Yield steric-grid records from the local neighboring cells.
+    def neighbor_batch(self, position):
+        """Return steric atoms from the local neighboring cells.
 
         Parameters
         ----------
@@ -329,11 +439,12 @@ class _StericGrid:
 
         Returns
         -------
-        records : iterator[_StericAtomRecord]
-            Steric records from the query cell and its 26 wrapped neighbors.
+        batch : _StericAtomBatch
+            Steric atoms from the query cell and its 26 wrapped neighbors.
         """
         center = self._cell_key(position)
         seen_keys = set()
+        batches = []
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
                 for dz in (-1, 0, 1):
@@ -345,7 +456,11 @@ class _StericGrid:
                     if key in seen_keys:
                         continue
                     seen_keys.add(key)
-                    yield from self.cells.get(key, ())
+                    batch = self.cells.get(key)
+                    if batch is not None and batch.radii.size > 0:
+                        batches.append(batch)
+
+        return _StericAtomBatch.concatenate(batches)
 
 
 class Pore():
@@ -597,6 +712,310 @@ class Pore():
                 vector[dim] += box_length
         return vector
 
+    def _minimum_image_displacements(self, pos_a, positions_b):
+        """Return shortest periodic vectors from one point to many targets.
+
+        Parameters
+        ----------
+        pos_a : list[float] or np.ndarray
+            Reference position.
+        positions_b : np.ndarray
+            Target positions with shape ``(n, 3)``.
+
+        Returns
+        -------
+        vectors : np.ndarray
+            Minimum-image displacement vectors with shape ``(n, 3)``.
+        """
+        positions_b = np.asarray(positions_b, dtype=float).reshape(-1, self._dim)
+        if positions_b.size == 0:
+            return np.empty((0, self._dim), dtype=float)
+
+        vectors = positions_b - np.asarray(pos_a, dtype=float)
+        for dim, box_length in enumerate(self._block.get_box()):
+            if box_length <= 0:
+                continue
+            half_box = box_length / 2
+            while True:
+                positive_mask = vectors[:, dim] > half_box
+                if not np.any(positive_mask):
+                    break
+                vectors[positive_mask, dim] -= box_length
+            while True:
+                negative_mask = vectors[:, dim] < -half_box
+                if not np.any(negative_mask):
+                    break
+                vectors[negative_mask, dim] += box_length
+
+        return vectors
+
+    def _steric_radii(self, atom_types):
+        """Return covalent radii for atom types participating in sterics.
+
+        Parameters
+        ----------
+        atom_types : np.ndarray
+            Atom-type array with shape ``(n,)``.
+
+        Returns
+        -------
+        result : tuple[np.ndarray, np.ndarray]
+            Tuple ``(radii, valid_mask)`` where ``radii`` contains the radii of
+            all valid atom types in input order and ``valid_mask`` marks the
+            entries for which a covalent radius is available.
+        """
+        atom_types = np.asarray(atom_types)
+        valid_mask = np.zeros(atom_types.shape[0], dtype=bool)
+        radii = np.empty(atom_types.shape[0], dtype=float)
+
+        for atom_type in np.unique(atom_types):
+            type_mask = atom_types == atom_type
+            try:
+                radii[type_mask] = db.get_covalent_radius(str(atom_type))
+            except ValueError:
+                continue
+            valid_mask[type_mask] = True
+
+        return radii[valid_mask], valid_mask
+
+    def _molecule_steric_batch(self, mol):
+        """Return the steric subset of one molecule as arrays.
+
+        Parameters
+        ----------
+        mol : Molecule
+            Molecule whose steric atoms should be extracted.
+
+        Returns
+        -------
+        batch : _MoleculeStericBatch
+            Local atom ids, positions, and radii for all atoms with known
+            covalent radii.
+        """
+        atom_types = mol.atom_types_view()
+        radii, valid_mask = self._steric_radii(atom_types)
+        atom_ids = np.flatnonzero(valid_mask).astype(int)
+
+        return _MoleculeStericBatch(
+            atom_ids=atom_ids,
+            positions=np.asarray(mol.positions_view(), dtype=float)[valid_mask].copy(),
+            radii=radii,
+        )
+
+    def _reference_steric_batch(self):
+        """Return array-backed steric references for the current pore state.
+
+        Returns
+        -------
+        batch : _StericAtomBatch
+            Concatenated scaffold and already attached ligand atoms used for
+            global steric scans.
+        """
+        batches = []
+
+        matrix_ids = np.asarray(list(self._matrix.get_matrix().keys()), dtype=int)
+        if matrix_ids.size > 0:
+            radii, valid_mask = self._steric_radii(self._block.atom_types_view()[matrix_ids])
+            valid_ids = matrix_ids[valid_mask]
+            if valid_ids.size > 0:
+                batches.append(
+                    _StericAtomBatch(
+                        positions=np.asarray(self._block.positions_view(), dtype=float)[valid_ids].copy(),
+                        radii=radii,
+                        block_atom_ids=valid_ids.copy(),
+                    )
+                )
+
+        for site_group in ("in", "ex"):
+            for molecules in self._mol_dict[site_group].values():
+                for attached_molecule in molecules:
+                    molecule_batch = self._molecule_steric_batch(attached_molecule)
+                    if molecule_batch.radii.size == 0:
+                        continue
+                    batches.append(
+                        _StericAtomBatch(
+                            positions=molecule_batch.positions,
+                            radii=molecule_batch.radii,
+                            block_atom_ids=np.full(molecule_batch.radii.size, -1, dtype=int),
+                        )
+                    )
+
+        return _StericAtomBatch.concatenate(batches)
+
+    def _point_clearance_against_batch(
+        self,
+        position,
+        radius,
+        reference_batch,
+        ignored_block_atoms,
+        steric_clearance_scale,
+    ):
+        """Return the minimum clearance from one atom to one reference batch.
+
+        Parameters
+        ----------
+        position : list[float] or np.ndarray
+            Cartesian query position.
+        radius : float
+            Covalent radius of the query atom.
+        reference_batch : _StericAtomBatch
+            Reference atoms checked against the query position.
+        ignored_block_atoms : set[int]
+            Scaffold atom ids that should be ignored.
+        steric_clearance_scale : float
+            Multiplicative factor applied to steric cutoffs.
+
+        Returns
+        -------
+        clearance : float
+            Minimum distance minus steric cutoff. ``inf`` when no reference
+            atoms remain after filtering.
+        """
+        if reference_batch.radii.size == 0:
+            return float("inf")
+
+        positions = reference_batch.positions
+        radii = reference_batch.radii
+        block_atom_ids = reference_batch.block_atom_ids
+
+        if ignored_block_atoms:
+            keep_mask = (block_atom_ids < 0) | ~np.isin(
+                block_atom_ids,
+                np.asarray(sorted(ignored_block_atoms), dtype=int),
+            )
+            if not np.any(keep_mask):
+                return float("inf")
+            positions = positions[keep_mask]
+            radii = radii[keep_mask]
+
+        distances = np.linalg.norm(
+            self._minimum_image_displacements(position, positions),
+            axis=1,
+        )
+        clearances = distances - steric_clearance_scale * (radius + radii)
+        return float(clearances.min())
+
+    def _positions_clearance(
+        self,
+        positions,
+        radii,
+        steric_grid,
+        ignored_block_atoms,
+        steric_clearance_scale,
+    ):
+        """Return the minimum steric clearance for array-backed positions.
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            Candidate atom positions with shape ``(n, 3)``.
+        radii : np.ndarray
+            Candidate covalent radii with shape ``(n,)``.
+        steric_grid : _StericGrid or None
+            Spatial index used to restrict local steric checks. When ``None``,
+            the full pore state is scanned.
+        ignored_block_atoms : set[int]
+            Scaffold atom ids that should be ignored.
+        steric_clearance_scale : float
+            Multiplicative factor applied to steric cutoffs.
+
+        Returns
+        -------
+        clearance : float
+            Minimum distance minus steric cutoff across all checked pairs.
+        """
+        positions = np.asarray(positions, dtype=float).reshape(-1, self._dim)
+        radii = np.asarray(radii, dtype=float).reshape(-1)
+        if radii.size == 0:
+            return float("inf")
+
+        min_clearance = float("inf")
+        if steric_grid is None:
+            reference_batch = self._reference_steric_batch()
+            for position, radius in zip(positions, radii):
+                clearance = self._point_clearance_against_batch(
+                    position,
+                    radius,
+                    reference_batch,
+                    ignored_block_atoms,
+                    steric_clearance_scale,
+                )
+                if clearance < min_clearance:
+                    min_clearance = clearance
+            return min_clearance
+
+        neighbor_cache = {}
+        for position, radius in zip(positions, radii):
+            cell_key = steric_grid._cell_key(position)
+            if cell_key not in neighbor_cache:
+                neighbor_cache[cell_key] = steric_grid.neighbor_batch(position)
+            clearance = self._point_clearance_against_batch(
+                position,
+                radius,
+                neighbor_cache[cell_key],
+                ignored_block_atoms,
+                steric_clearance_scale,
+            )
+            if clearance < min_clearance:
+                min_clearance = clearance
+
+        return min_clearance
+
+    def _rotation_matrix(self, axis, angle, is_deg=True):
+        """Build the rotation matrix for an arbitrary three-dimensional axis.
+
+        Parameters
+        ----------
+        axis : list[float] or tuple[float, float, float]
+            Rotation-axis vector.
+        angle : float
+            Rotation angle.
+        is_deg : bool, optional
+            True when ``angle`` is given in degrees.
+
+        Returns
+        -------
+        matrix : np.ndarray
+            Rotation matrix with shape ``(3, 3)``.
+        """
+        angle = np.deg2rad(angle) if is_deg else angle
+        normal = np.asarray(geometry.unit(axis), dtype=float)
+        n1, n2, n3 = normal.tolist()
+        c = np.cos(angle)
+        s = np.sin(angle)
+
+        return np.asarray(
+            [
+                [n1 * n1 * (1.0 - c) + c, n1 * n2 * (1.0 - c) - n3 * s, n1 * n3 * (1.0 - c) + n2 * s],
+                [n2 * n1 * (1.0 - c) + n3 * s, n2 * n2 * (1.0 - c) + c, n2 * n3 * (1.0 - c) - n1 * s],
+                [n3 * n1 * (1.0 - c) - n2 * s, n3 * n2 * (1.0 - c) + n1 * s, n3 * n3 * (1.0 - c) + c],
+            ],
+            dtype=float,
+        )
+
+    def _rotate_positions_around_axis(self, positions, origin, axis, angle):
+        """Return positions rotated around one axis passing through ``origin``.
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            Cartesian coordinates with shape ``(n, 3)``.
+        origin : list[float] or np.ndarray
+            One point on the rotation axis.
+        axis : list[float] or tuple[float, float, float]
+            Rotation-axis vector.
+        angle : float
+            Rotation angle in degrees.
+
+        Returns
+        -------
+        positions : np.ndarray
+            Rotated coordinates with shape ``(n, 3)``.
+        """
+        rotation = self._rotation_matrix(axis, angle, is_deg=True)
+        centered = np.asarray(positions, dtype=float) - np.asarray(origin, dtype=float)
+        return centered @ rotation.T + np.asarray(origin, dtype=float)
+
     def _build_steric_grid(self):
         """Build a local steric-search grid for the current pore state.
 
@@ -607,17 +1026,23 @@ class Pore():
             ligand atoms.
         """
         grid = _StericGrid(tuple(self._block.get_box()))
-        for atom_id in self._matrix.get_matrix():
-            try:
-                radius = db.get_covalent_radius(self._block.get_atom_type(atom_id))
-            except ValueError:
-                continue
-            grid.add_block_atom(atom_id, self._block.pos(atom_id), radius)
+        matrix_ids = np.asarray(list(self._matrix.get_matrix().keys()), dtype=int)
+        if matrix_ids.size > 0:
+            radii, valid_mask = self._steric_radii(self._block.atom_types_view()[matrix_ids])
+            valid_ids = matrix_ids[valid_mask]
+            if valid_ids.size > 0:
+                grid.add_block_atoms(
+                    valid_ids,
+                    np.asarray(self._block.positions_view(), dtype=float)[valid_ids],
+                    radii,
+                )
 
         for site_group in ("in", "ex"):
             for molecules in self._mol_dict[site_group].values():
                 for attached_molecule in molecules:
-                    grid.add_molecule(attached_molecule)
+                    molecule_batch = self._molecule_steric_batch(attached_molecule)
+                    if molecule_batch.radii.size > 0:
+                        grid.add_attached_atoms(molecule_batch.positions, molecule_batch.radii)
 
         return grid
 
@@ -651,62 +1076,14 @@ class Pore():
             Positive values indicate a clash-free pose.
         """
         ignored_block_atoms = set() if ignored_block_atoms is None else set(ignored_block_atoms)
-        min_clearance = float("inf")
-
-        for atom in mol.get_atom_list():
-            try:
-                radius_a = db.get_covalent_radius(atom.get_atom_type())
-            except ValueError:
-                continue
-
-            if steric_grid is None:
-                matrix = self._matrix.get_matrix()
-                attached_molecules = []
-                for site_group in ("in", "ex"):
-                    for molecules in self._mol_dict[site_group].values():
-                        attached_molecules.extend(molecules)
-
-                for atom_id in matrix:
-                    if atom_id in ignored_block_atoms:
-                        continue
-                    try:
-                        radius_b = db.get_covalent_radius(self._block.get_atom_type(atom_id))
-                    except ValueError:
-                        continue
-
-                    distance = geometry.length(
-                        self._minimum_image_vector(atom.get_pos(), self._block.pos(atom_id))
-                    )
-                    clearance = distance - steric_clearance_scale * (radius_a + radius_b)
-                    if clearance < min_clearance:
-                        min_clearance = clearance
-
-                for attached_molecule in attached_molecules:
-                    for attached_atom in attached_molecule.get_atom_list():
-                        try:
-                            radius_b = db.get_covalent_radius(attached_atom.get_atom_type())
-                        except ValueError:
-                            continue
-
-                        distance = geometry.length(
-                            self._minimum_image_vector(atom.get_pos(), attached_atom.get_pos())
-                        )
-                        clearance = distance - steric_clearance_scale * (radius_a + radius_b)
-                        if clearance < min_clearance:
-                            min_clearance = clearance
-                continue
-
-            for record in steric_grid.neighbor_records(atom.get_pos()):
-                if record.block_atom_id in ignored_block_atoms:
-                    continue
-                distance = geometry.length(
-                    self._minimum_image_vector(atom.get_pos(), record.position)
-                )
-                clearance = distance - steric_clearance_scale * (radius_a + record.radius)
-                if clearance < min_clearance:
-                    min_clearance = clearance
-
-        return min_clearance
+        molecule_batch = self._molecule_steric_batch(mol)
+        return self._positions_clearance(
+            molecule_batch.positions,
+            molecule_batch.radii,
+            steric_grid,
+            ignored_block_atoms,
+            steric_clearance_scale,
+        )
 
     def _rotation_angles(self, rotate_step_deg):
         """Return the sampled axis-rotation angles for one pose search.
@@ -778,31 +1155,38 @@ class Pore():
             Best non-clashing pose, or ``None`` when every sampled pose clashes.
         """
         angles = self._rotation_angles(rotate_step_deg) if is_rotate else (0.0,)
-        best_molecule = None
         best_clearance = float("-inf")
-
-        axis_end = [
-            mol.pos(mount)[dim] + surf_axis[dim]
-            for dim in range(self._dim)
-        ]
-        axis = [mol.pos(mount), axis_end]
+        best_positions = None
+        base_positions = np.asarray(mol.positions_view(), dtype=float).copy()
+        molecule_batch = self._molecule_steric_batch(mol)
+        mount_position = base_positions[mount].copy()
 
         for angle in angles:
-            candidate = copy.deepcopy(mol)
-            if angle != 0:
-                candidate.rotate(axis, angle)
-            clearance = self._placement_clearance(
-                candidate,
-                steric_grid=steric_grid,
-                ignored_block_atoms=ignored_block_atoms,
-                steric_clearance_scale=steric_clearance_scale,
+            candidate_positions = (
+                base_positions
+                if angle == 0
+                else self._rotate_positions_around_axis(
+                    base_positions,
+                    mount_position,
+                    surf_axis,
+                    angle,
+                )
+            )
+            clearance = self._positions_clearance(
+                candidate_positions[molecule_batch.atom_ids],
+                molecule_batch.radii,
+                steric_grid,
+                ignored_block_atoms,
+                steric_clearance_scale,
             )
             if clearance > best_clearance:
                 best_clearance = clearance
-                best_molecule = candidate
+                best_positions = candidate_positions.copy()
 
         if best_clearance < 0:
             return None
+        best_molecule = copy.deepcopy(mol)
+        best_molecule.positions_view()[:] = best_positions
         return best_molecule
 
     def _surface_handle_oxygen_ids(self):
@@ -1386,7 +1770,12 @@ class Pore():
                 self._invalidate_finalized_export_state()
                 if steric_grid is not None:
                     steric_grid.remove_block_atoms([si] + self._sites[si].oxygen_ids)
-                    steric_grid.add_molecule(mol_temp)
+                    molecule_batch = self._molecule_steric_batch(mol_temp)
+                    if molecule_batch.radii.size > 0:
+                        steric_grid.add_attached_atoms(
+                            molecule_batch.positions,
+                            molecule_batch.radii,
+                        )
                 self._matrix.remove([si] + self._sites[si].oxygen_ids)
                 self._invalidate_scaffold_cache()
 

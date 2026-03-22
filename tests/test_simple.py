@@ -470,6 +470,53 @@ class TestUserModel:
         assert strict_clearance < 0
         assert relaxed_clearance > 0
 
+    def test_optimize_attachment_pose_matches_bruteforce_rotation_scan(self):
+        block = pms.Molecule("rotation_block", "RBL")
+        block.set_box([1.0, 1.0, 1.0])
+        block.add("O", [0.20, 0.00, 0.00], name="O1")
+        pore = pms.Pore(block, pms.Matrix([[0, []]]))
+
+        candidate = pms.Molecule("rotation_candidate", "RCD")
+        candidate.set_box([1.0, 1.0, 1.0])
+        candidate.add("Si", [0.00, 0.00, 0.00], name="SI1")
+        candidate.add("C", [0.10, 0.00, 0.00], name="C1")
+
+        grid = pore._build_steric_grid()
+        optimized = pore._optimize_attachment_pose(
+            candidate,
+            0,
+            [0.0, 0.0, 1.0],
+            set(),
+            grid,
+            True,
+            90,
+            0.85,
+        )
+
+        brute_force_best = None
+        brute_force_clearance = float("-inf")
+        rotation_axis = [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
+        for angle in pore._rotation_angles(90):
+            brute_force_candidate = copy.deepcopy(candidate)
+            if angle != 0:
+                brute_force_candidate.rotate(rotation_axis, angle)
+            clearance = pore._placement_clearance(
+                brute_force_candidate,
+                steric_grid=grid,
+                steric_clearance_scale=0.85,
+            )
+            if clearance > brute_force_clearance:
+                brute_force_clearance = clearance
+                brute_force_best = brute_force_candidate
+
+        assert optimized is not None
+        assert pore._placement_clearance(
+            optimized,
+            steric_grid=grid,
+            steric_clearance_scale=0.85,
+        ) == pytest.approx(brute_force_clearance, abs=1e-12)
+        assert optimized.pos(1) == pytest.approx(brute_force_best.pos(1), abs=1e-12)
+
 
     ###########
     # Pattern #
