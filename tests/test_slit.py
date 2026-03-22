@@ -900,6 +900,73 @@ class TestFunctionalizedAmorphousSlit:
         assert recorded_scales
         assert 0.55 in recorded_scales
 
+    def test_functionalized_path_batches_attachment_slots(self, monkeypatch):
+        recorded_calls = []
+        original_attach = pms.Pore.attach
+
+        def recording_attach(self, *args, **kwargs):
+            recorded_calls.append(
+                {
+                    "amount": args[4],
+                    "sites_len": len(args[3]),
+                    "is_g": kwargs.get("is_g"),
+                    "progress_callback": kwargs.get("_progress_callback") is not None,
+                }
+            )
+            return original_attach(self, *args, **kwargs)
+
+        monkeypatch.setattr(pms.Pore, "attach", recording_attach)
+
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=63 / 957,
+            q3_fraction=648 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=3 / 957,
+            t3_fraction=4 / 957,
+            alpha_override=1.0,
+        )
+        config = pms.FunctionalizedAmorphousSlitConfig(
+            slit_config=pms.AmorphousSlitConfig(
+                name="functionalized_batched_attachment",
+                repeat_y=1,
+                surface_target=target,
+            ),
+            ligand=pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+                rotate_about_axis=False,
+            ),
+        )
+
+        pms.prepare_functionalized_amorphous_slit_surface(config)
+
+        batched_calls = [
+            call for call in recorded_calls
+            if call["progress_callback"]
+        ]
+        assert any(
+            call["amount"] == 3 and call["sites_len"] >= 3 and call["is_g"]
+            for call in batched_calls
+        )
+        assert any(
+            call["amount"] == 4 and call["sites_len"] >= 4 and not call["is_g"]
+            for call in batched_calls
+        )
+
+    def test_attachment_progress_description_includes_candidate_context(self):
+        context = slit_mod._AttachmentPhaseProgressContext(
+            phase_name="T2 attachment",
+            requested_count=5,
+            candidate_index=2,
+            total_candidates=7,
+        )
+
+        assert (
+            slit_mod._attachment_progress_description(context, attached_count=3)
+            == "T2 attachment 3/5 attached [candidate 2/7]"
+        )
+
     def test_prepare_progress_creates_outer_and_inner_bars(self, monkeypatch):
         created = []
 

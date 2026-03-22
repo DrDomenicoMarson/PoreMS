@@ -18,6 +18,7 @@ import porems.database as db
 import porems.geometry as geometry
 import porems.generic as generic
 
+from porems._numba_kernels import minimum_clearance_against_batch
 from porems.connectivity import AttachmentRecord
 from porems.dice import Dice
 from porems.molecule import Molecule
@@ -840,6 +841,44 @@ class Pore():
 
         return _StericAtomBatch.concatenate(batches)
 
+    def _filtered_steric_batch_arrays(
+        self,
+        reference_batch,
+        ignored_block_atom_ids=None,
+    ):
+        """Return steric-batch arrays filtered for one clearance query.
+
+        Parameters
+        ----------
+        reference_batch : _StericAtomBatch
+            Reference steric atoms used during one clearance evaluation.
+        ignored_block_atom_ids : np.ndarray or None, optional
+            Sorted scaffold atom ids that should be removed from the reference
+            batch before the numeric clearance kernel runs.
+
+        Returns
+        -------
+        arrays : tuple[np.ndarray, np.ndarray, np.ndarray]
+            Tuple ``(positions, radii, block_atom_ids)`` ready for the
+            numba-backed clearance kernel.
+        """
+        positions = np.asarray(reference_batch.positions, dtype=np.float64)
+        radii = np.asarray(reference_batch.radii, dtype=np.float64)
+        block_atom_ids = np.asarray(reference_batch.block_atom_ids, dtype=np.int64)
+
+        if radii.size == 0:
+            return positions.reshape(0, self._dim), radii, block_atom_ids
+
+        if ignored_block_atom_ids is not None and ignored_block_atom_ids.size > 0:
+            keep_mask = np.ones(block_atom_ids.shape[0], dtype=bool)
+            for atom_id in ignored_block_atom_ids:
+                keep_mask &= block_atom_ids != atom_id
+            positions = positions[keep_mask]
+            radii = radii[keep_mask]
+            block_atom_ids = block_atom_ids[keep_mask]
+
+        return positions, radii, block_atom_ids
+
     def _point_clearance_against_batch(
         self,
         position,
@@ -876,34 +915,33 @@ class Pore():
             Minimum distance minus steric cutoff. ``inf`` when no reference
             atoms remain after filtering.
         """
-        if reference_batch.radii.size == 0:
-            return float("inf")
-
-        positions = reference_batch.positions
-        radii = reference_batch.radii
-        block_atom_ids = reference_batch.block_atom_ids
-
         if ignored_block_atom_ids is None:
             ignored_block_atom_ids = (
-                np.asarray(sorted(ignored_block_atoms), dtype=int)
+                np.asarray(sorted(ignored_block_atoms), dtype=np.int64)
                 if ignored_block_atoms
-                else np.empty(0, dtype=int)
+                else np.empty(0, dtype=np.int64)
             )
 
-        if ignored_block_atom_ids.size > 0:
-            ignored_mask = np.zeros(block_atom_ids.shape[0], dtype=bool)
-            for atom_id in ignored_block_atom_ids:
-                ignored_mask |= block_atom_ids == atom_id
-            keep_mask = (block_atom_ids < 0) | ~ignored_mask
-            if not np.any(keep_mask):
-                return float("inf")
-            positions = positions[keep_mask]
-            radii = radii[keep_mask]
+        box = np.asarray(self._block.get_box() if box is None else box, dtype=np.float64)
+        positions, radii, block_atom_ids = self._filtered_steric_batch_arrays(
+            reference_batch,
+            ignored_block_atom_ids=ignored_block_atom_ids,
+        )
+        if radii.size == 0:
+            return float("inf")
 
-        deltas = self._minimum_image_displacements(position, positions, box=box)
-        distances = np.sqrt(np.sum(deltas * deltas, axis=1))
-        clearances = distances - steric_clearance_scale * (radius + radii)
-        return float(clearances.min())
+        return float(
+            minimum_clearance_against_batch(
+                np.asarray(position, dtype=np.float64).reshape(1, self._dim),
+                np.asarray([radius], dtype=np.float64),
+                positions,
+                radii,
+                block_atom_ids,
+                np.empty(0, dtype=np.int64),
+                box,
+                steric_clearance_scale,
+            )
+        )
 
     def _positions_clearance(
         self,
@@ -938,47 +976,70 @@ class Pore():
         clearance : float
             Minimum distance minus steric cutoff across all checked pairs.
         """
-        positions = np.asarray(positions, dtype=float).reshape(-1, self._dim)
-        radii = np.asarray(radii, dtype=float).reshape(-1)
+        positions = np.asarray(positions, dtype=np.float64).reshape(-1, self._dim)
+        radii = np.asarray(radii, dtype=np.float64).reshape(-1)
         if radii.size == 0:
             return float("inf")
-        box = np.asarray(self._block.get_box() if box is None else box, dtype=float)
+        box = np.asarray(self._block.get_box() if box is None else box, dtype=np.float64)
         ignored_block_atom_ids = (
-            np.asarray(sorted(ignored_block_atoms), dtype=int)
+            np.asarray(sorted(ignored_block_atoms), dtype=np.int64)
             if ignored_block_atoms
-            else np.empty(0, dtype=int)
+            else np.empty(0, dtype=np.int64)
         )
+        empty_ignored_block_atom_ids = np.empty(0, dtype=np.int64)
 
-        min_clearance = float("inf")
         if steric_grid is None:
-            reference_batch = self._reference_steric_batch()
-            for position, radius in zip(positions, radii):
-                clearance = self._point_clearance_against_batch(
-                    position,
-                    radius,
-                    reference_batch,
-                    ignored_block_atoms,
-                    steric_clearance_scale,
-                    box=box,
+            reference_positions, reference_radii, reference_block_atom_ids = (
+                self._filtered_steric_batch_arrays(
+                    self._reference_steric_batch(),
                     ignored_block_atom_ids=ignored_block_atom_ids,
                 )
-                if clearance < min_clearance:
-                    min_clearance = clearance
-            return min_clearance
+            )
+            if reference_radii.size == 0:
+                return float("inf")
+            return float(
+                minimum_clearance_against_batch(
+                    positions,
+                    radii,
+                    reference_positions,
+                    reference_radii,
+                    reference_block_atom_ids,
+                    empty_ignored_block_atom_ids,
+                    box,
+                    steric_clearance_scale,
+                )
+            )
 
-        neighbor_cache = {}
-        for position, radius in zip(positions, radii):
+        cell_groups = {}
+        for atom_index, position in enumerate(positions):
             cell_key = steric_grid._cell_key(position)
+            cell_groups.setdefault(cell_key, []).append(atom_index)
+
+        min_clearance = float("inf")
+        neighbor_cache = {}
+        for cell_key, atom_indices in cell_groups.items():
             if cell_key not in neighbor_cache:
-                neighbor_cache[cell_key] = steric_grid.neighbor_batch(position)
-            clearance = self._point_clearance_against_batch(
-                position,
-                radius,
-                neighbor_cache[cell_key],
-                ignored_block_atoms,
-                steric_clearance_scale,
-                box=box,
-                ignored_block_atom_ids=ignored_block_atom_ids,
+                batch = steric_grid.neighbor_batch(positions[atom_indices[0]])
+                neighbor_cache[cell_key] = self._filtered_steric_batch_arrays(
+                    batch,
+                    ignored_block_atom_ids=ignored_block_atom_ids,
+                )
+            reference_positions, reference_radii, reference_block_atom_ids = neighbor_cache[cell_key]
+            if reference_radii.size == 0:
+                continue
+
+            atom_indices = np.asarray(atom_indices, dtype=np.int64)
+            clearance = float(
+                minimum_clearance_against_batch(
+                    positions[atom_indices],
+                    radii[atom_indices],
+                    reference_positions,
+                    reference_radii,
+                    reference_block_atom_ids,
+                    empty_ignored_block_atom_ids,
+                    box,
+                    steric_clearance_scale,
+                )
             )
             if clearance < min_clearance:
                 min_clearance = clearance
@@ -1631,6 +1692,7 @@ class Pore():
         check_sterics=True,
         steric_clearance_scale=_STERIC_CLEARANCE_SCALE,
         _steric_grid=None,
+        _progress_callback=None,
     ):
         """Attach molecules to available pore surface sites.
 
@@ -1677,6 +1739,10 @@ class Pore():
         _steric_grid : _StericGrid or None, optional
             Internal steric-grid cache reused across recursive proximity-fill
             calls. External callers should keep the default ``None``.
+        _progress_callback : callable or None, optional
+            Internal callback invoked once per requested attachment slot with
+            keyword arguments ``requested_count``, ``attached_count``, and
+            ``success``. External callers should keep the default ``None``.
 
         Returns
         -------
@@ -1715,7 +1781,9 @@ class Pore():
 
         # Run through number of binding sites to add
         mol_list = []
+        attached_count = 0
         for i in range(amount):
+            slot_succeeded = False
             if pos_list:
                 pos = pos_list[i]
                 candidate_sites = [
@@ -1842,7 +1910,16 @@ class Pore():
                                 _steric_grid=steric_grid,
                             )
                         )
+                attached_count += 1
+                slot_succeeded = True
                 break
+
+            if _progress_callback is not None:
+                _progress_callback(
+                    requested_count=i + 1,
+                    attached_count=attached_count,
+                    success=slot_succeeded,
+                )
         return mol_list
 
     def siloxane(self, sites, amount, slx_dist=None, trials=1000, site_type="in"):

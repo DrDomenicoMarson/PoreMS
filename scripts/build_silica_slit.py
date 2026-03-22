@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
+from pathlib import Path
+
 import porems as pms
 
+
+SCRIPT_DIR = Path(__file__).resolve().parent
 LIGAND = "TEPS" # can be "TEPS" "TMS" or "bare"
 
 if LIGAND == "TEPS":
-    lig = pms.Molecule("TEPS", "TEPS", "TEPS.pdb")
+    lig = pms.Molecule("TEPS", "TEPS", str(SCRIPT_DIR / "TEPS.pdb"))
 else:
     lig = pms.gen.tms()
 # elif LIGAND == "bare":
@@ -46,7 +50,7 @@ slit_config = pms.FunctionalizedAmorphousSlitConfig(
     ligand=pms.SilaneAttachmentConfig(
         molecule=lig,
         mount=0,
-        rotate_about_axis=False,
+        rotate_about_axis=True,
         rotate_step_deg=30.0,
         axis=(0, 1),
     ),

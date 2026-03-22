@@ -113,6 +113,28 @@ class _FunctionalizedProgressTracker:
 
 
 @dataclass(frozen=True)
+class _AttachmentPhaseProgressContext:
+    """Progress metadata for one batched slit-attachment phase.
+
+    Parameters
+    ----------
+    phase_name : str
+        Human-readable attachment phase label such as ``"T2 attachment"``.
+    requested_count : int
+        Number of attachment slots requested for the current candidate surface.
+    candidate_index : int or None, optional
+        One-based candidate-surface attempt index shown in progress text.
+    total_candidates : int or None, optional
+        Total number of candidate surfaces considered in the current workflow.
+    """
+
+    phase_name: str
+    requested_count: int
+    candidate_index: int | None = None
+    total_candidates: int | None = None
+
+
+@dataclass(frozen=True)
 class _SlitSiteArrayCache:
     """Array-backed site geometry cache used for slit adjacency searches.
 
@@ -231,6 +253,79 @@ def _create_progress_bar(total, desc, progress_config, unit="it"):
         leave=progress_config.leave,
         unit=unit,
         dynamic_ncols=True,
+    )
+
+
+def _candidate_attempt_suffix(candidate_index, total_candidates):
+    """Return a compact candidate-attempt suffix for progress text.
+
+    Parameters
+    ----------
+    candidate_index : int or None
+        One-based candidate-surface attempt index.
+    total_candidates : int or None
+        Total number of candidate surfaces considered.
+
+    Returns
+    -------
+    suffix : str
+        Empty string when no candidate context is available, otherwise a
+        bracketed ``"[candidate i/n]"`` suffix.
+    """
+    if candidate_index is None or total_candidates is None or total_candidates <= 1:
+        return ""
+
+    return f" [candidate {candidate_index}/{total_candidates}]"
+
+
+def _set_candidate_stage(progress_tracker, stage_name, candidate_index=None, total_candidates=None):
+    """Update the outer stage label, optionally including candidate context.
+
+    Parameters
+    ----------
+    progress_tracker : _FunctionalizedProgressTracker or None
+        Outer workflow progress tracker.
+    stage_name : str
+        Human-readable workflow stage label.
+    candidate_index : int or None, optional
+        One-based candidate-surface attempt index shown in progress text.
+    total_candidates : int or None, optional
+        Total number of candidate surfaces considered.
+
+    Returns
+    -------
+    None
+        The tracker is updated in-place when it exists.
+    """
+    if progress_tracker is None:
+        return
+
+    progress_tracker.set_stage(stage_name)
+    suffix = _candidate_attempt_suffix(candidate_index, total_candidates)
+    if suffix:
+        progress_tracker.set_stage(f"{stage_name}{suffix}")
+
+
+def _attachment_progress_description(progress_context, attached_count):
+    """Return the progress-bar description for one attachment batch.
+
+    Parameters
+    ----------
+    progress_context : _AttachmentPhaseProgressContext
+        Metadata describing the current batched attachment phase.
+    attached_count : int
+        Number of successfully attached molecules so far.
+
+    Returns
+    -------
+    desc : str
+        Human-readable description summarizing attached count and, when
+        available, candidate-attempt context.
+    """
+    return (
+        f"{progress_context.phase_name} "
+        f"{attached_count}/{progress_context.requested_count} attached"
+        f"{_candidate_attempt_suffix(progress_context.candidate_index, progress_context.total_candidates)}"
     )
 
 
@@ -2007,12 +2102,14 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
 def _attach_to_specific_sites(
     kit,
     ligand,
-    site_ids,
+    candidate_site_ids,
+    requested_count,
     allow_geminal,
     steric_settings=None,
     progress_bar=None,
+    progress_context=None,
 ):
-    """Attach one silane family to a deterministic list of specific sites.
+    """Attach one silane family to a deterministic batch of candidate sites.
 
     Parameters
     ----------
@@ -2020,8 +2117,10 @@ def _attach_to_specific_sites(
         Slit system under preparation.
     ligand : SilaneAttachmentConfig
         Silane attachment settings.
-    site_ids : list[int]
-        Specific site ids that must be consumed in order.
+    candidate_site_ids : list[int]
+        Ordered site ids considered for batched attachment.
+    requested_count : int
+        Number of attachments requested from ``candidate_site_ids``.
     allow_geminal : bool
         Forwarded geminal-allowance flag for the internal attachment helper.
     steric_settings : FunctionalizedSlitStericConfig or None, optional
@@ -2029,13 +2128,16 @@ def _attach_to_specific_sites(
         relaxed slit steric settings are used.
     progress_bar : object or None, optional
         Progress-bar-like object updated once per requested site.
+    progress_context : _AttachmentPhaseProgressContext or None, optional
+        Optional metadata used to format live progress text for the current
+        attachment batch.
 
     Returns
     -------
     mols : list
         Attached molecules returned by :meth:`porems.pore.Pore.attach`.
     """
-    if not site_ids:
+    if requested_count <= 0 or not candidate_site_ids:
         if progress_bar is not None:
             progress_bar.close()
         return []
@@ -2045,29 +2147,63 @@ def _attach_to_specific_sites(
         if steric_settings is None
         else steric_settings
     )
-    progress_bar = _NullProgressBar(total=len(site_ids)) if progress_bar is None else progress_bar
+    progress_bar = (
+        _NullProgressBar(total=requested_count)
+        if progress_bar is None
+        else progress_bar
+    )
+    progress_context = (
+        _AttachmentPhaseProgressContext(
+            phase_name="Attachment",
+            requested_count=requested_count,
+        )
+        if progress_context is None
+        else progress_context
+    )
 
-    mols = []
     try:
-        for site_id in site_ids:
-            attached = kit._pore.attach(
-                copy.deepcopy(ligand.molecule),
-                ligand.mount,
-                list(ligand.axis),
-                [site_id],
-                1,
-                pos_list=[],
-                site_type="in",
-                is_proxi=False,
-                is_random=False,
-                is_rotate=ligand.rotate_about_axis,
-                rotate_step_deg=ligand.rotate_step_deg,
-                is_g=allow_geminal,
-                check_sterics=steric_settings.enabled,
-                steric_clearance_scale=steric_settings.clearance_scale,
-            )
+        progress_bar.set_description_str(
+            _attachment_progress_description(progress_context, attached_count=0)
+        )
+
+        def _progress_callback(requested_count, attached_count, success):
+            """Update the attachment progress bar after one requested slot.
+
+            Parameters
+            ----------
+            requested_count : int
+                One-based number of attempted attachment slots so far.
+            attached_count : int
+                Number of successfully attached molecules so far.
+            success : bool
+                Whether the latest requested slot produced one attachment.
+            """
+            del success
             progress_bar.update(1)
-            mols.extend(attached)
+            progress_bar.set_description_str(
+                _attachment_progress_description(
+                    progress_context,
+                    attached_count=attached_count,
+                )
+            )
+
+        mols = kit._pore.attach(
+            copy.deepcopy(ligand.molecule),
+            ligand.mount,
+            list(ligand.axis),
+            list(candidate_site_ids),
+            requested_count,
+            pos_list=[],
+            site_type="in",
+            is_proxi=False,
+            is_random=False,
+            is_rotate=ligand.rotate_about_axis,
+            rotate_step_deg=ligand.rotate_step_deg,
+            is_g=allow_geminal,
+            check_sterics=steric_settings.enabled,
+            steric_clearance_scale=steric_settings.clearance_scale,
+            _progress_callback=_progress_callback,
+        )
     finally:
         progress_bar.close()
 
@@ -2163,14 +2299,20 @@ def _realize_surface_target(
         )
     )
 
-    for candidate_surface, used_tolerance in candidate_specs:
+    total_candidates = len(candidate_specs)
+
+    for candidate_index, (candidate_surface, used_tolerance) in enumerate(candidate_specs, start=1):
         prepared_target = _prepared_target_from_final(candidate_surface)
         if not _prepared_target_is_compatible(initial_surface, prepared_target):
             continue
 
         trial_system = copy.deepcopy(base_system)
-        if progress_tracker is not None:
-            progress_tracker.set_stage("Q-state preparation")
+        _set_candidate_stage(
+            progress_tracker,
+            "Q-state preparation",
+            candidate_index=candidate_index,
+            total_candidates=total_candidates,
+        )
         q_state_start = perf_counter()
         try:
             bridge_count = _enforce_surface_target(
@@ -2192,39 +2334,73 @@ def _realize_surface_target(
             if len(geminal_sites) < candidate_surface.t2_sites:
                 continue
             t2_bar = None
-            if progress_tracker is not None:
-                progress_tracker.set_stage("T2 attachment")
+            _set_candidate_stage(
+                progress_tracker,
+                "T2 attachment",
+                candidate_index=candidate_index,
+                total_candidates=total_candidates,
+            )
+            t2_context = _AttachmentPhaseProgressContext(
+                phase_name="T2 attachment",
+                requested_count=candidate_surface.t2_sites,
+                candidate_index=candidate_index,
+                total_candidates=total_candidates,
+            )
             if progress_tracker is not None and candidate_surface.t2_sites:
-                t2_bar = progress_tracker.site_bar("T2 attachment", candidate_surface.t2_sites)
+                t2_bar = progress_tracker.site_bar(
+                    _attachment_progress_description(t2_context, attached_count=0),
+                    candidate_surface.t2_sites,
+                )
             t2_start = perf_counter()
-            _attach_to_specific_sites(
+            attached_t2_molecules = _attach_to_specific_sites(
                 trial_system,
                 ligand,
-                geminal_sites[:candidate_surface.t2_sites],
+                geminal_sites,
+                candidate_surface.t2_sites,
                 allow_geminal=True,
                 steric_settings=steric_settings,
                 progress_bar=t2_bar,
+                progress_context=t2_context,
             )
             t2_attachment_s = perf_counter() - t2_start
+            if len(attached_t2_molecules) < candidate_surface.t2_sites:
+                continue
 
             single_sites = _available_site_ids(trial_system, oxygen_count=1)
             if len(single_sites) < candidate_surface.t3_sites:
                 continue
             t3_bar = None
-            if progress_tracker is not None:
-                progress_tracker.set_stage("T3 attachment")
+            _set_candidate_stage(
+                progress_tracker,
+                "T3 attachment",
+                candidate_index=candidate_index,
+                total_candidates=total_candidates,
+            )
+            t3_context = _AttachmentPhaseProgressContext(
+                phase_name="T3 attachment",
+                requested_count=candidate_surface.t3_sites,
+                candidate_index=candidate_index,
+                total_candidates=total_candidates,
+            )
             if progress_tracker is not None and candidate_surface.t3_sites:
-                t3_bar = progress_tracker.site_bar("T3 attachment", candidate_surface.t3_sites)
+                t3_bar = progress_tracker.site_bar(
+                    _attachment_progress_description(t3_context, attached_count=0),
+                    candidate_surface.t3_sites,
+                )
             t3_start = perf_counter()
-            _attach_to_specific_sites(
+            attached_t3_molecules = _attach_to_specific_sites(
                 trial_system,
                 ligand,
-                single_sites[:candidate_surface.t3_sites],
+                single_sites,
+                candidate_surface.t3_sites,
                 allow_geminal=False,
                 steric_settings=steric_settings,
                 progress_bar=t3_bar,
+                progress_context=t3_context,
             )
             t3_attachment_s = perf_counter() - t3_start
+            if len(attached_t3_molecules) < candidate_surface.t3_sites:
+                continue
 
         attached_t2, attached_t3 = _attached_state_counts(trial_system, ligand)
         final_surface = _surface_composition(
