@@ -13,6 +13,18 @@ from .matrix import Matrix
 from .molecule import Molecule
 from .pattern import BetaCristobalit, AlphaCristobalit
 from .pore import BindingSite, SurfacePreparationDiagnostics, Pore
+from .topology import (
+    SilicaAngleTerm,
+    SilicaAngleTermSet,
+    SilicaAtomAssignment,
+    SilicaAtomAssignmentSet,
+    SilicaAtomTypeModel,
+    SilicaAtomTypeSet,
+    SilicaBondTerm,
+    SilicaBondTermSet,
+    SilicaTopologyModel,
+    default_silica_topology,
+)
 from .system import (
     ShapeAttachmentSummary,
     RoughnessProfile,
@@ -72,6 +84,11 @@ __all__ = [
     "Dice", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
     "BindingSite", "SurfacePreparationDiagnostics", "Pore",
+    "SilicaAtomTypeModel", "SilicaAtomTypeSet",
+    "SilicaAtomAssignment", "SilicaAtomAssignmentSet",
+    "SilicaBondTerm", "SilicaBondTermSet",
+    "SilicaAngleTerm", "SilicaAngleTermSet",
+    "SilicaTopologyModel", "default_silica_topology",
     "ShapeAttachmentSummary", "RoughnessProfile", "SurfaceAreaSummary", "SurfaceAllocationStats", "AllocationSummary",
     "PoreKit", "PoreCylinder", "PoreSlit", "PoreCapsule", "PoreAmorphCylinder",
     "ShapeConfig", "CylinderConfig", "SphereConfig", "CuboidConfig", "ConeConfig",

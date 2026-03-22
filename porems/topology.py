@@ -5,8 +5,11 @@
 ################################################################################
 
 
-from dataclasses import dataclass, field
+from copy import deepcopy
+from dataclasses import asdict, dataclass, field
+import json
 from pathlib import Path
+import yaml
 
 
 @dataclass(frozen=True)
@@ -81,6 +84,555 @@ class GromacsAngleParameters:
             function=1,
             parameters=(f"{angle_deg:.5f}", f"{force_constant:.6f}"),
         )
+
+
+@dataclass
+class SilicaAtomTypeModel:
+    """One editable silica atom-type definition with provenance metadata.
+
+    Parameters
+    ----------
+    name : str
+        GROMACS atom-type identifier.
+    atomic_number : int or None
+        Optional atomic number token.
+    mass : str
+        Mass token written in the atom-type row.
+    charge : str
+        Charge token written in the atom-type row.
+    particle_type : str
+        Particle-type token such as ``"A"``.
+    sigma : str
+        Lennard-Jones sigma token.
+    epsilon : str
+        Lennard-Jones epsilon token.
+    origin : str
+        Human-readable provenance string describing where the default came
+        from.
+    """
+
+    name: str
+    atomic_number: int | None
+    mass: str
+    charge: str
+    particle_type: str
+    sigma: str
+    epsilon: str
+    origin: str
+
+    def to_gromacs_atomtype(self):
+        """Convert the editable model into one GROMACS atom-type record.
+
+        Returns
+        -------
+        atomtype : GromacsAtomType
+            Equivalent immutable atom-type payload used during topology
+            rendering.
+        """
+        return GromacsAtomType(
+            name=self.name,
+            atomic_number=self.atomic_number,
+            mass=self.mass,
+            charge=self.charge,
+            particle_type=self.particle_type,
+            sigma=self.sigma,
+            epsilon=self.epsilon,
+        )
+
+
+@dataclass
+class SilicaAtomTypeSet:
+    """Editable silica atom-type bundle used by slit topology export.
+
+    Parameters
+    ----------
+    framework_silicon : SilicaAtomTypeModel
+        Atom-type definition used for silica scaffold silicon atoms.
+    framework_oxygen : SilicaAtomTypeModel
+        Atom-type definition used for retained framework oxygen atoms.
+    silanol_oxygen : SilicaAtomTypeModel
+        Atom-type definition used for silanol and geminal hydroxyl oxygen
+        atoms.
+    silanol_hydrogen : SilicaAtomTypeModel
+        Atom-type definition used for silanol and geminal hydroxyl hydrogen
+        atoms.
+    """
+
+    framework_silicon: SilicaAtomTypeModel
+    framework_oxygen: SilicaAtomTypeModel
+    silanol_oxygen: SilicaAtomTypeModel
+    silanol_hydrogen: SilicaAtomTypeModel
+
+
+@dataclass
+class SilicaAtomAssignment:
+    """One editable silica atom assignment with provenance metadata.
+
+    Parameters
+    ----------
+    atom_type_name : str
+        Atom-type name written into the exported ``[ atoms ]`` row.
+    charge : str
+        Charge token written into the exported atom row.
+    mass : str
+        Mass token written into the exported atom row.
+    origin : str
+        Human-readable provenance string describing where the default came
+        from.
+    """
+
+    atom_type_name: str
+    charge: str
+    mass: str
+    origin: str
+
+
+@dataclass
+class SilicaAtomAssignmentSet:
+    """Editable silica charge and mass assignments used during slit export.
+
+    Parameters
+    ----------
+    framework_oxygen : SilicaAtomAssignment
+        Assignment used for ``OM`` framework oxygen residues.
+    framework_silicon : SilicaAtomAssignment
+        Assignment used for ``SI`` framework silicon residues.
+    silanol_silicon : SilicaAtomAssignment
+        Assignment used for silicon atoms inside ``SL`` residues.
+    silanol_oxygen : SilicaAtomAssignment
+        Assignment used for oxygen atoms inside ``SL`` residues.
+    silanol_hydrogen : SilicaAtomAssignment
+        Assignment used for hydrogen atoms inside ``SL`` residues.
+    geminal_silicon : SilicaAtomAssignment
+        Assignment used for silicon atoms inside ``SLG`` residues.
+    geminal_oxygen : SilicaAtomAssignment
+        Assignment used for oxygen atoms inside ``SLG`` residues.
+    geminal_hydrogen : SilicaAtomAssignment
+        Assignment used for hydrogen atoms inside ``SLG`` residues.
+    """
+
+    framework_oxygen: SilicaAtomAssignment
+    framework_silicon: SilicaAtomAssignment
+    silanol_silicon: SilicaAtomAssignment
+    silanol_oxygen: SilicaAtomAssignment
+    silanol_hydrogen: SilicaAtomAssignment
+    geminal_silicon: SilicaAtomAssignment
+    geminal_oxygen: SilicaAtomAssignment
+    geminal_hydrogen: SilicaAtomAssignment
+
+
+@dataclass
+class SilicaBondTerm:
+    """One editable harmonic silica bond term with provenance metadata.
+
+    Parameters
+    ----------
+    length_nm : float
+        Equilibrium bond length in nanometers.
+    force_constant : float
+        Harmonic force constant in the GROMACS bond units.
+    origin : str
+        Human-readable provenance string describing where the default came
+        from.
+    """
+
+    length_nm: float
+    force_constant: float
+    origin: str
+
+    @classmethod
+    def from_gromacs_parameters(cls, parameters, origin):
+        """Build one editable bond term from a GROMACS parameter payload.
+
+        Parameters
+        ----------
+        parameters : GromacsBondParameters
+            Source harmonic bond parameters.
+        origin : str
+            Provenance string stored on the returned term.
+
+        Returns
+        -------
+        term : SilicaBondTerm
+            Editable bond term carrying the same numerical values.
+
+        Raises
+        ------
+        ValueError
+            Raised when ``parameters`` is not a two-token harmonic bond term.
+        """
+        if parameters.function != 1 or len(parameters.parameters) != 2:
+            raise ValueError(
+                "SilicaBondTerm only supports harmonic two-parameter GROMACS "
+                f"bond records. Received function={parameters.function} "
+                f"parameters={parameters.parameters!r}."
+            )
+        return cls(
+            length_nm=float(parameters.parameters[0]),
+            force_constant=float(parameters.parameters[1]),
+            origin=origin,
+        )
+
+    def to_gromacs_parameters(self):
+        """Convert the editable bond term into a GROMACS parameter payload.
+
+        Returns
+        -------
+        parameters : GromacsBondParameters
+            Immutable harmonic bond parameters for topology rendering.
+        """
+        return GromacsBondParameters.harmonic(
+            length_nm=self.length_nm,
+            force_constant=self.force_constant,
+        )
+
+
+@dataclass
+class SilicaBondTermSet:
+    """Editable silica bond-term bundle used by slit topology export.
+
+    Parameters
+    ----------
+    framework_si_o : SilicaBondTerm
+        Harmonic bond term used for ordinary silica ``Si-O`` bonds.
+    silanol_o_h : SilicaBondTerm
+        Harmonic bond term used for hydroxyl ``O-H`` bonds.
+    graft_mount_scaffold_si_o : SilicaBondTerm
+        Harmonic bond term used for retained scaffold oxygen atoms bound to
+        the ligand mount silicon during grafting.
+    """
+
+    framework_si_o: SilicaBondTerm
+    silanol_o_h: SilicaBondTerm
+    graft_mount_scaffold_si_o: SilicaBondTerm
+
+
+@dataclass
+class SilicaAngleTerm:
+    """One editable harmonic silica angle term with provenance metadata.
+
+    Parameters
+    ----------
+    angle_deg : float
+        Equilibrium angle in degrees.
+    force_constant : float
+        Harmonic force constant in the GROMACS angle units.
+    origin : str
+        Human-readable provenance string describing where the default came
+        from.
+    """
+
+    angle_deg: float
+    force_constant: float
+    origin: str
+
+    @classmethod
+    def from_gromacs_parameters(cls, parameters, origin):
+        """Build one editable angle term from a GROMACS parameter payload.
+
+        Parameters
+        ----------
+        parameters : GromacsAngleParameters
+            Source harmonic angle parameters.
+        origin : str
+            Provenance string stored on the returned term.
+
+        Returns
+        -------
+        term : SilicaAngleTerm
+            Editable angle term carrying the same numerical values.
+
+        Raises
+        ------
+        ValueError
+            Raised when ``parameters`` is not a two-token harmonic angle term.
+        """
+        if parameters.function != 1 or len(parameters.parameters) != 2:
+            raise ValueError(
+                "SilicaAngleTerm only supports harmonic two-parameter GROMACS "
+                f"angle records. Received function={parameters.function} "
+                f"parameters={parameters.parameters!r}."
+            )
+        return cls(
+            angle_deg=float(parameters.parameters[0]),
+            force_constant=float(parameters.parameters[1]),
+            origin=origin,
+        )
+
+    def to_gromacs_parameters(self):
+        """Convert the editable angle term into a GROMACS parameter payload.
+
+        Returns
+        -------
+        parameters : GromacsAngleParameters
+            Immutable harmonic angle parameters for topology rendering.
+        """
+        return GromacsAngleParameters.harmonic(
+            angle_deg=self.angle_deg,
+            force_constant=self.force_constant,
+        )
+
+
+@dataclass
+class SilicaAngleTermSet:
+    """Editable silica angle-term bundle used by slit topology export.
+
+    Parameters
+    ----------
+    framework_si_o_si : SilicaAngleTerm
+        Harmonic angle term used for ordinary silica ``Si-O-Si`` bridge
+        angles.
+    silanol_o_si_o : SilicaAngleTerm
+        Harmonic angle term used for ``O-Si-O`` angles around silanol or
+        geminal silicon atoms.
+    silanol_si_o_h : SilicaAngleTerm
+        Harmonic angle term used for hydroxyl ``Si-O-H`` angles.
+    graft_scaffold_si_scaffold_o_mount : SilicaAngleTerm
+        Harmonic angle term used for ``Si(scaffold)-O(scaffold)-Si(mount)``
+        graft-junction angles.
+    graft_oxygen_mount_oxygen : SilicaAngleTerm
+        Harmonic angle term used for ``O-Si(mount)-O`` angles around the
+        grafted ligand silicon.
+    """
+
+    framework_si_o_si: SilicaAngleTerm
+    silanol_o_si_o: SilicaAngleTerm
+    silanol_si_o_h: SilicaAngleTerm
+    graft_scaffold_si_scaffold_o_mount: SilicaAngleTerm
+    graft_oxygen_mount_oxygen: SilicaAngleTerm
+
+
+@dataclass
+class SilicaTopologyModel:
+    """Editable silica force-field model used by slit topology export.
+
+    Parameters
+    ----------
+    atomtypes : SilicaAtomTypeSet
+        Silica atom-type definitions emitted ahead of the generated
+        ``[ moleculetype ]`` section.
+    atom_assignments : SilicaAtomAssignmentSet
+        Charge and mass assignments applied to finalized silica atoms during
+        full-slab export.
+    bond_terms : SilicaBondTermSet
+        Harmonic bond terms used for silica scaffold, hydroxyl, and graft
+        junction bonds.
+    angle_terms : SilicaAngleTermSet
+        Harmonic angle terms used for silica scaffold, hydroxyl, and graft
+        junction angles.
+    """
+
+    atomtypes: SilicaAtomTypeSet
+    atom_assignments: SilicaAtomAssignmentSet
+    bond_terms: SilicaBondTermSet
+    angle_terms: SilicaAngleTermSet
+
+    def to_dict(self):
+        """Return the silica model as one plain nested dictionary.
+
+        Returns
+        -------
+        data : dict[str, object]
+            Recursive dictionary/list/scalar representation of the full silica
+            topology model, including provenance strings.
+        """
+        return asdict(self)
+
+    def to_json(self, indent=2):
+        """Return the silica model as formatted JSON text.
+
+        Parameters
+        ----------
+        indent : int, optional
+            JSON indentation level forwarded to :func:`json.dumps`.
+
+        Returns
+        -------
+        text : str
+            Human-readable JSON serialization of the full silica topology
+            model.
+        """
+        return json.dumps(self.to_dict(), indent=indent)
+
+    def to_yaml(self):
+        """Return the silica model as human-readable YAML text.
+
+        Returns
+        -------
+        text : str
+            YAML serialization of the full silica topology model.
+        """
+        return yaml.safe_dump(self.to_dict(), sort_keys=False)
+
+
+def _build_default_silica_topology():
+    """Build the package-default editable silica topology model.
+
+    Returns
+    -------
+    model : SilicaTopologyModel
+        Fresh default silica topology model populated from the package's
+        legacy slit-topology defaults.
+    """
+    return SilicaTopologyModel(
+        atomtypes=SilicaAtomTypeSet(
+            framework_silicon=SilicaAtomTypeModel(
+                name="SI",
+                atomic_number=14,
+                mass="28.08600",
+                charge="0.000000",
+                particle_type="A",
+                sigma="0.4550",
+                epsilon="0.1678693",
+                origin="porems/templates/topol.top [ atomtypes ] SI",
+            ),
+            framework_oxygen=SilicaAtomTypeModel(
+                name="OM",
+                atomic_number=8,
+                mass="15.99940",
+                charge="0.000000",
+                particle_type="A",
+                sigma="0.3210",
+                epsilon="0.9573535",
+                origin="porems/templates/topol.top [ atomtypes ] OM",
+            ),
+            silanol_oxygen=SilicaAtomTypeModel(
+                name="OA",
+                atomic_number=8,
+                mass="15.99940",
+                charge="0.000000",
+                particle_type="A",
+                sigma="0.3210",
+                epsilon="0.9573535",
+                origin="porems/templates/topol.top [ atomtypes ] OA",
+            ),
+            silanol_hydrogen=SilicaAtomTypeModel(
+                name="HG",
+                atomic_number=1,
+                mass="2.01600",
+                charge="0.000000",
+                particle_type="A",
+                sigma="0.2750",
+                epsilon="0.1121899",
+                origin="porems/templates/topol.top [ atomtypes ] HG",
+            ),
+        ),
+        atom_assignments=SilicaAtomAssignmentSet(
+            framework_oxygen=SilicaAtomAssignment(
+                atom_type_name="OM",
+                charge="-0.640000",
+                mass="15.99940",
+                origin="porems/templates/grid.itp OM [ atoms ]",
+            ),
+            framework_silicon=SilicaAtomAssignment(
+                atom_type_name="SI",
+                charge="1.280000",
+                mass="28.08600",
+                origin="porems/templates/grid.itp SI [ atoms ]",
+            ),
+            silanol_silicon=SilicaAtomAssignment(
+                atom_type_name="SI",
+                charge="1.280000",
+                mass="28.08600",
+                origin="porems/templates/grid.itp SL [ atoms ] Si1",
+            ),
+            silanol_oxygen=SilicaAtomAssignment(
+                atom_type_name="OA",
+                charge="-0.740000",
+                mass="15.99940",
+                origin="porems/templates/grid.itp SL [ atoms ] O1",
+            ),
+            silanol_hydrogen=SilicaAtomAssignment(
+                atom_type_name="HG",
+                charge="0.420000",
+                mass="2.01600",
+                origin="porems/templates/grid.itp SL [ atoms ] H1",
+            ),
+            geminal_silicon=SilicaAtomAssignment(
+                atom_type_name="SI",
+                charge="1.280000",
+                mass="28.08600",
+                origin="porems/templates/grid.itp SLG [ atoms ] Si1",
+            ),
+            geminal_oxygen=SilicaAtomAssignment(
+                atom_type_name="OA",
+                charge="-0.740000",
+                mass="15.99940",
+                origin="porems/templates/grid.itp SLG [ atoms ] O1/O2",
+            ),
+            geminal_hydrogen=SilicaAtomAssignment(
+                atom_type_name="HG",
+                charge="0.420000",
+                mass="2.01600",
+                origin="porems/templates/grid.itp SLG [ atoms ] H1/H2",
+            ),
+        ),
+        bond_terms=SilicaBondTermSet(
+            framework_si_o=SilicaBondTerm(
+                length_nm=0.16300,
+                force_constant=251040.0,
+                origin="porems/templates/grid.itp SL/SLG [ bonds ] Si-O",
+            ),
+            silanol_o_h=SilicaBondTerm(
+                length_nm=0.10000,
+                force_constant=313800.0,
+                origin="porems/templates/grid.itp SL/SLG [ bonds ] O-H",
+            ),
+            graft_mount_scaffold_si_o=SilicaBondTerm(
+                length_nm=0.16300,
+                force_constant=251040.0,
+                origin=(
+                    "porems/templates/grid.itp SL/SLG [ bonds ] Si-O reused "
+                    "for graft junction"
+                ),
+            ),
+        ),
+        angle_terms=SilicaAngleTermSet(
+            framework_si_o_si=SilicaAngleTerm(
+                angle_deg=147.0,
+                force_constant=529.527040,
+                origin="scripts/_top/tms.itp [ angles ] Si1-O1-Si2",
+            ),
+            silanol_o_si_o=SilicaAngleTerm(
+                angle_deg=105.56,
+                force_constant=384.223760,
+                origin="scripts/_top/tmsg.itp [ angles ] O1-Si1-O2",
+            ),
+            silanol_si_o_h=SilicaAngleTerm(
+                angle_deg=116.0,
+                force_constant=3970.4800,
+                origin="porems/templates/grid.itp SL/SLG [ angles ] Si-O-H",
+            ),
+            graft_scaffold_si_scaffold_o_mount=SilicaAngleTerm(
+                angle_deg=147.0,
+                force_constant=529.527040,
+                origin=(
+                    "scripts/_top/tms.itp [ angles ] Si1-O1-Si2 reused for "
+                    "graft junction"
+                ),
+            ),
+            graft_oxygen_mount_oxygen=SilicaAngleTerm(
+                angle_deg=105.56,
+                force_constant=384.223760,
+                origin="scripts/_top/tmsg.itp [ angles ] O1-Si1-O2",
+            ),
+        ),
+    )
+
+
+_DEFAULT_SILICA_TOPOLOGY_MODEL = _build_default_silica_topology()
+
+
+def default_silica_topology():
+    """Return a fresh editable copy of the package-default silica model.
+
+    Returns
+    -------
+    model : SilicaTopologyModel
+        Deep-copied editable silica topology model populated from the
+        package's current slit-topology defaults.
+    """
+    return deepcopy(_DEFAULT_SILICA_TOPOLOGY_MODEL)
 
 
 @dataclass(frozen=True)

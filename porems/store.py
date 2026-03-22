@@ -23,14 +23,14 @@ from porems.molecule import Molecule
 from porems.pore import Pore
 from porems.topology import (
     GromacsAngle,
-    GromacsAngleParameters,
     GromacsAtom,
     GromacsAtomType,
     GromacsBond,
-    GromacsBondParameters,
     GromacsDihedral,
     GromacsMoleculeType,
     GromacsPair,
+    SilicaTopologyModel,
+    default_silica_topology,
     parse_flat_itp,
     render_itp,
     render_top,
@@ -42,69 +42,6 @@ _HYBRID36_DIGITS_LOWER = "0123456789abcdefghijklmnopqrstuvwxyz"
 _PDB_CHAIN_ID = "A"
 _CIF_LABEL_SEQ_ID = "1"
 _FULL_SLIT_NREXCL = 3
-
-_SILICA_ATOMTYPE_DEFINITIONS = (
-    GromacsAtomType(
-        name="SI",
-        atomic_number=14,
-        mass="28.08600",
-        charge="0.000000",
-        particle_type="A",
-        sigma="0.4550",
-        epsilon="0.1678693",
-    ),
-    GromacsAtomType(
-        name="OM",
-        atomic_number=8,
-        mass="15.99940",
-        charge="0.000000",
-        particle_type="A",
-        sigma="0.3210",
-        epsilon="0.9573535",
-    ),
-    GromacsAtomType(
-        name="OA",
-        atomic_number=8,
-        mass="15.99940",
-        charge="0.000000",
-        particle_type="A",
-        sigma="0.3210",
-        epsilon="0.9573535",
-    ),
-    GromacsAtomType(
-        name="HG",
-        atomic_number=1,
-        mass="2.01600",
-        charge="0.000000",
-        particle_type="A",
-        sigma="0.2750",
-        epsilon="0.1121899",
-    ),
-)
-_SILICA_ATOMTYPE_BY_NAME = {
-    atomtype.name: atomtype
-    for atomtype in _SILICA_ATOMTYPE_DEFINITIONS
-}
-_SILICA_SI_O_BOND = GromacsBondParameters.harmonic(
-    length_nm=0.16300,
-    force_constant=251040.0,
-)
-_SILICA_O_H_BOND = GromacsBondParameters.harmonic(
-    length_nm=0.10000,
-    force_constant=313800.0,
-)
-_SILICA_SI_O_SI_ANGLE = GromacsAngleParameters.harmonic(
-    angle_deg=147.0,
-    force_constant=529.527040,
-)
-_SILICA_O_SI_O_ANGLE = GromacsAngleParameters.harmonic(
-    angle_deg=105.56,
-    force_constant=384.223760,
-)
-_SILICA_SI_O_H_ANGLE = GromacsAngleParameters.harmonic(
-    angle_deg=116.0,
-    force_constant=3970.4800,
-)
 
 
 @dataclass(frozen=True)
@@ -491,6 +428,56 @@ def _sanitize_gromacs_identifier(value, fallback="SLIT"):
         if character.isascii() and (character.isalnum() or character == "_")
     ).upper()
     return token or fallback
+
+
+def _silica_atomtypes_in_order(silica_topology):
+    """Return silica atom types in the exported deterministic order.
+
+    Parameters
+    ----------
+    silica_topology : SilicaTopologyModel
+        Resolved silica topology model.
+
+    Returns
+    -------
+    atomtypes : tuple[GromacsAtomType, ...]
+        Silica atom types converted into immutable GROMACS records.
+    """
+    return (
+        silica_topology.atomtypes.framework_silicon.to_gromacs_atomtype(),
+        silica_topology.atomtypes.framework_oxygen.to_gromacs_atomtype(),
+        silica_topology.atomtypes.silanol_oxygen.to_gromacs_atomtype(),
+        silica_topology.atomtypes.silanol_hydrogen.to_gromacs_atomtype(),
+    )
+
+
+def _silica_atomtype_lookup(silica_topology):
+    """Return silica atom types keyed by their exported atom-type names.
+
+    Parameters
+    ----------
+    silica_topology : SilicaTopologyModel
+        Resolved silica topology model.
+
+    Returns
+    -------
+    atomtypes_by_name : dict[str, GromacsAtomType]
+        Mapping from atom-type name to immutable GROMACS atom-type record.
+
+    Raises
+    ------
+    ValueError
+        Raised when the silica model contains duplicate atom-type names.
+    """
+    atomtypes_by_name = {}
+    for atomtype in _silica_atomtypes_in_order(silica_topology):
+        if atomtype.name in atomtypes_by_name:
+            raise ValueError(
+                "Silica topology model defines duplicate atomtype name "
+                f"{atomtype.name!r}."
+            )
+        atomtypes_by_name[atomtype.name] = atomtype
+    return atomtypes_by_name
 
 
 @dataclass(frozen=True)
@@ -2001,6 +1988,7 @@ class Store:
         name="",
         base_ligand_short="",
         silane_topology_config=None,
+        silica_topology=None,
     ):
         """Write one self-contained full-slit GROMACS topology when supported.
 
@@ -2015,6 +2003,9 @@ class Store:
         silane_topology_config : object or None, optional
             Optional silane topology configuration carrying ``itp_path``,
             ``moleculetype_name``, and ``junction_parameters`` attributes.
+        silica_topology : SilicaTopologyModel or None, optional
+            Resolved editable silica topology model used for scaffold and
+            graft-junction terms. When omitted, the package defaults are used.
 
         Returns
         -------
@@ -2035,6 +2026,13 @@ class Store:
             raise TypeError("Store: Unsupported input type for full slit topology creation...")
         if not self._inp.is_finalized():
             raise ValueError("Store: Full slit topology export requires a finalized pore.")
+        if silica_topology is None:
+            silica_topology = default_silica_topology()
+        elif not isinstance(silica_topology, SilicaTopologyModel):
+            raise TypeError(
+                "Store: silica_topology must be a SilicaTopologyModel instance "
+                "or None."
+            )
 
         bundle = None
         ligand_shorts = set()
@@ -2084,23 +2082,37 @@ class Store:
         if unsupported_residues:
             return False
 
+        silica_atomtypes = _silica_atomtypes_in_order(silica_topology)
+        silica_atomtype_by_name = _silica_atomtype_lookup(silica_topology)
+
+        def assignment_fields(assignment):
+            atomtype = silica_atomtype_by_name.get(assignment.atom_type_name)
+            if atomtype is None:
+                raise ValueError(
+                    "Silica topology assignment references unknown atomtype "
+                    f"{assignment.atom_type_name!r}."
+                )
+            return assignment.atom_type_name, assignment.charge, assignment.mass
+
         def silica_atom_fields(record):
             if record.residue_name == "OM":
-                atomtype = _SILICA_ATOMTYPE_BY_NAME["OM"]
-                return atomtype.name, "-0.640000", atomtype.mass
+                return assignment_fields(silica_topology.atom_assignments.framework_oxygen)
             if record.residue_name == "SI":
-                atomtype = _SILICA_ATOMTYPE_BY_NAME["SI"]
-                return atomtype.name, "1.280000", atomtype.mass
-            if record.residue_name in {"SL", "SLG"}:
+                return assignment_fields(silica_topology.atom_assignments.framework_silicon)
+            if record.residue_name == "SL":
                 if record.atom_type == "Si":
-                    atomtype = _SILICA_ATOMTYPE_BY_NAME["SI"]
-                    return atomtype.name, "1.280000", atomtype.mass
+                    return assignment_fields(silica_topology.atom_assignments.silanol_silicon)
                 if record.atom_type == "O":
-                    atomtype = _SILICA_ATOMTYPE_BY_NAME["OA"]
-                    return atomtype.name, "-0.740000", atomtype.mass
+                    return assignment_fields(silica_topology.atom_assignments.silanol_oxygen)
                 if record.atom_type == "H":
-                    atomtype = _SILICA_ATOMTYPE_BY_NAME["HG"]
-                    return atomtype.name, "0.420000", atomtype.mass
+                    return assignment_fields(silica_topology.atom_assignments.silanol_hydrogen)
+            if record.residue_name == "SLG":
+                if record.atom_type == "Si":
+                    return assignment_fields(silica_topology.atom_assignments.geminal_silicon)
+                if record.atom_type == "O":
+                    return assignment_fields(silica_topology.atom_assignments.geminal_oxygen)
+                if record.atom_type == "H":
+                    return assignment_fields(silica_topology.atom_assignments.geminal_hydrogen)
             raise ValueError(
                 "Unsupported silica residue/atom combination for full slit "
                 f"topology export: {(record.residue_name, record.atom_type, record.atom_name)!r}."
@@ -2126,11 +2138,9 @@ class Store:
 
             if record.residue_name == base_ligand_short + "G":
                 if record.atom_type == "O":
-                    atomtype = _SILICA_ATOMTYPE_BY_NAME["OA"]
-                    return atomtype.name, "-0.740000", atomtype.mass
+                    return assignment_fields(silica_topology.atom_assignments.geminal_oxygen)
                 if record.atom_type == "H":
-                    atomtype = _SILICA_ATOMTYPE_BY_NAME["HG"]
-                    return atomtype.name, "0.420000", atomtype.mass
+                    return assignment_fields(silica_topology.atom_assignments.geminal_hydrogen)
 
             raise ValueError(
                 "Finalized ligand residue contains atoms that cannot be mapped "
@@ -2139,7 +2149,7 @@ class Store:
             )
 
         atoms = []
-        atomtype_order = list(_SILICA_ATOMTYPE_DEFINITIONS)
+        atomtype_order = list(silica_atomtypes)
         atomtype_by_name = {
             atomtype.name: atomtype
             for atomtype in atomtype_order
@@ -2203,12 +2213,27 @@ class Store:
                     )
                 )
                 if elements == ["H", "O"]:
-                    bond_parameters = _SILICA_O_H_BOND
+                    bond_parameters = (
+                        silica_topology
+                        .bond_terms
+                        .silanol_o_h
+                        .to_gromacs_parameters()
+                    )
                 elif elements == ["O", "Si"]:
-                    if bond.provenance == "graft_junction" and silane_topology_config is not None:
-                        bond_parameters = silane_topology_config.junction_parameters.mount_scaffold_bond
+                    if bond.provenance == "graft_junction":
+                        bond_parameters = (
+                            silica_topology
+                            .bond_terms
+                            .graft_mount_scaffold_si_o
+                            .to_gromacs_parameters()
+                        )
                     else:
-                        bond_parameters = _SILICA_SI_O_BOND
+                        bond_parameters = (
+                            silica_topology
+                            .bond_terms
+                            .framework_si_o
+                            .to_gromacs_parameters()
+                        )
                 else:
                     raise ValueError(
                         "Unsupported bond environment for full slit topology "
@@ -2255,35 +2280,48 @@ class Store:
                 )
 
                 if center_element == "O" and outer_elements == ["H", "Si"]:
-                    angle_parameters = _SILICA_SI_O_H_ANGLE
+                    angle_parameters = (
+                        silica_topology
+                        .angle_terms
+                        .silanol_si_o_h
+                        .to_gromacs_parameters()
+                    )
                 elif center_element == "O" and outer_elements == ["Si", "Si"]:
                     if (
-                        silane_topology_config is not None
-                        and record_b.residue_name == "OM"
+                        record_b.residue_name == "OM"
                         and (
                             (record_a.residue_name == "SI" and record_c.residue_name in ligand_shorts)
                             or (record_c.residue_name == "SI" and record_a.residue_name in ligand_shorts)
                         )
                     ):
                         angle_parameters = (
-                            silane_topology_config
-                            .junction_parameters
-                            .scaffold_si_scaffold_o_mount_angle
+                            silica_topology
+                            .angle_terms
+                            .graft_scaffold_si_scaffold_o_mount
+                            .to_gromacs_parameters()
                         )
                     else:
-                        angle_parameters = _SILICA_SI_O_SI_ANGLE
-                elif center_element == "Si" and outer_elements == ["O", "O"]:
-                    if (
-                        silane_topology_config is not None
-                        and record_b.residue_name in ligand_shorts
-                    ):
                         angle_parameters = (
-                            silane_topology_config
-                            .junction_parameters
-                            .oxygen_mount_oxygen_angle
+                            silica_topology
+                            .angle_terms
+                            .framework_si_o_si
+                            .to_gromacs_parameters()
+                        )
+                elif center_element == "Si" and outer_elements == ["O", "O"]:
+                    if record_b.residue_name in ligand_shorts:
+                        angle_parameters = (
+                            silica_topology
+                            .angle_terms
+                            .graft_oxygen_mount_oxygen
+                            .to_gromacs_parameters()
                         )
                     else:
-                        angle_parameters = _SILICA_O_SI_O_ANGLE
+                        angle_parameters = (
+                            silica_topology
+                            .angle_terms
+                            .silanol_o_si_o
+                            .to_gromacs_parameters()
+                        )
                 else:
                     raise ValueError(
                         "Unsupported angle environment for full slit topology "

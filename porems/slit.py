@@ -18,7 +18,14 @@ import numpy as np
 import porems as pms
 from tqdm.auto import tqdm as _tqdm_auto
 
-from porems.topology import GromacsAngleParameters, GromacsBondParameters
+from porems.topology import (
+    GromacsAngleParameters,
+    GromacsBondParameters,
+    SilicaAngleTerm,
+    SilicaBondTerm,
+    SilicaTopologyModel,
+    default_silica_topology,
+)
 
 
 _BRIDGE_OFFSET_NM = 0.09
@@ -461,6 +468,11 @@ class AmorphousSlitConfig:
     template_split_pairs : tuple, optional
         Template-specific bond pairs that must be disconnected after
         reconstructing the amorphous connectivity matrix.
+    silica_topology : SilicaTopologyModel or None, optional
+        Optional editable silica force-field model used by slit full-topology
+        export. When omitted, the package defaults are used. Explicit models
+        override any legacy junction-parameter values supplied through
+        :class:`SilaneTopologyConfig`.
     """
 
     name: str = "bare_amorphous_silica_slit"
@@ -478,6 +490,7 @@ class AmorphousSlitConfig:
     siloxane_distance_range_nm: tuple[float, float] = (0.40, 0.65)
     surface_fraction_tolerance: float = 0.005
     template_split_pairs: tuple[tuple[int, int], ...] = ((57790, 2524),)
+    silica_topology: SilicaTopologyModel | None = None
 
     def __post_init__(self):
         """Validate the slit configuration.
@@ -669,10 +682,14 @@ class SlitPreparationResult:
         Bare slit system associated with the preparation report.
     report : SlitPreparationReport
         Summary of the generated slit geometry and surface composition.
+    silica_topology : SilicaTopologyModel
+        Resolved silica topology model actually associated with this slit
+        result.
     """
 
     system: pms.PoreKit
     report: SlitPreparationReport
+    silica_topology: SilicaTopologyModel
 
 
 @dataclass(frozen=True)
@@ -689,7 +706,9 @@ class SlitJunctionParameters:
         bridge angles.
     oxygen_mount_oxygen_angle : GromacsAngleParameters, optional
         Angle parameters used for any ``O-Si(mount)-O`` angle around the
-        ligand mount silicon.
+        ligand mount silicon. These legacy values are only consulted when no
+        explicit :class:`SilicaTopologyModel` is supplied through
+        :class:`AmorphousSlitConfig`.
     """
 
     mount_scaffold_bond: GromacsBondParameters = field(
@@ -725,8 +744,9 @@ class SilaneTopologyConfig:
         Optional explicit molecule-type name expected inside ``itp_path``.
         When omitted, the parser accepts the file's own name.
     junction_parameters : SlitJunctionParameters, optional
-        Silica-ligand junction parameters applied when the finalized slit is
-        exported as one full GROMACS molecule.
+        Legacy silica-ligand junction parameters translated onto the resolved
+        silica topology model when no explicit
+        :class:`AmorphousSlitConfig.silica_topology` is supplied.
     """
 
     itp_path: str
@@ -864,10 +884,14 @@ class FunctionalizedSlitResult:
         Functionalized slit system associated with the preparation report.
     report : SlitPreparationReport
         Summary of the generated slit geometry and surface composition.
+    silica_topology : SilicaTopologyModel
+        Resolved silica topology model actually associated with this slit
+        result.
     """
 
     system: pms.PoreKit
     report: SlitPreparationReport
+    silica_topology: SilicaTopologyModel
 
 
 @dataclass(frozen=True)
@@ -976,7 +1000,10 @@ def resolve_silane_topology_config(ligand_config):
     topology_config : SilaneTopologyConfig or None
         Explicit topology config when available. Built-in TMS ligands resolve
         to the bundled template automatically. Unsupported ligands return
-        ``None`` so callers can keep the legacy helper-topology path.
+        ``None`` so callers can keep the legacy helper-topology path. The
+        returned object is used for ligand-bundle parsing only; explicit
+        user-supplied ``junction_parameters`` are resolved separately onto the
+        silica topology model.
     """
     if ligand_config is None:
         return None
@@ -991,6 +1018,85 @@ def resolve_silane_topology_config(ligand_config):
         )
 
     return None
+
+
+def _apply_legacy_junction_parameter_overrides(silica_topology, junction_parameters):
+    """Apply legacy silane junction overrides onto one silica topology model.
+
+    Parameters
+    ----------
+    silica_topology : SilicaTopologyModel
+        Editable silica topology model to mutate in place.
+    junction_parameters : SlitJunctionParameters
+        Legacy junction-parameter payload carried by
+        :class:`SilaneTopologyConfig`.
+
+    Returns
+    -------
+    silica_topology : SilicaTopologyModel
+        The same model instance after the graft-junction terms have been
+        overwritten from ``junction_parameters``.
+    """
+    silica_topology.bond_terms.graft_mount_scaffold_si_o = (
+        SilicaBondTerm.from_gromacs_parameters(
+            junction_parameters.mount_scaffold_bond,
+            origin=(
+                "legacy SilaneTopologyConfig.junction_parameters."
+                "mount_scaffold_bond"
+            ),
+        )
+    )
+    silica_topology.angle_terms.graft_scaffold_si_scaffold_o_mount = (
+        SilicaAngleTerm.from_gromacs_parameters(
+            junction_parameters.scaffold_si_scaffold_o_mount_angle,
+            origin=(
+                "legacy SilaneTopologyConfig.junction_parameters."
+                "scaffold_si_scaffold_o_mount_angle"
+            ),
+        )
+    )
+    silica_topology.angle_terms.graft_oxygen_mount_oxygen = (
+        SilicaAngleTerm.from_gromacs_parameters(
+            junction_parameters.oxygen_mount_oxygen_angle,
+            origin=(
+                "legacy SilaneTopologyConfig.junction_parameters."
+                "oxygen_mount_oxygen_angle"
+            ),
+        )
+    )
+    return silica_topology
+
+
+def resolve_silica_topology(config, explicit_silane_topology_config=None):
+    """Return the resolved silica topology model for one slit workflow.
+
+    Parameters
+    ----------
+    config : AmorphousSlitConfig
+        Base slit configuration carrying the optional explicit silica model.
+    explicit_silane_topology_config : SilaneTopologyConfig or None, optional
+        Explicit legacy silane topology input from
+        :class:`SilaneAttachmentConfig.topology`. Auto-resolved bundled ligand
+        templates are intentionally excluded so only user-supplied legacy
+        junction overrides affect the resolved silica model.
+
+    Returns
+    -------
+    silica_topology : SilicaTopologyModel
+        Deep-copied silica topology model resolved with the documented
+        precedence: package defaults, then explicit legacy junction overrides,
+        then an explicit ``config.silica_topology`` when provided.
+    """
+    if config.silica_topology is not None:
+        return copy.deepcopy(config.silica_topology)
+
+    silica_topology = default_silica_topology()
+    if explicit_silane_topology_config is not None:
+        _apply_legacy_junction_parameter_overrides(
+            silica_topology,
+            explicit_silane_topology_config.junction_parameters,
+        )
+    return silica_topology
 
 
 def _replicate_along_y(base, repeat_y):
@@ -2664,7 +2770,9 @@ def prepare_amorphous_slit_surface(config=None):
     Returns
     -------
     result : SlitPreparationResult
-        Attach-ready bare slit system and its preparation report.
+        Attach-ready bare slit system, its preparation report, and the
+        resolved silica topology model that would be used for full-slab slit
+        topology export.
 
     Raises
     ------
@@ -2673,6 +2781,7 @@ def prepare_amorphous_slit_surface(config=None):
         or when the slit cannot realize the requested bare surface.
     """
     config = config if config is not None else AmorphousSlitConfig()
+    silica_topology = resolve_silica_topology(config)
     if config.surface_target.t2_fraction or config.surface_target.t3_fraction:
         raise ValueError("Bare slit preparation requires t2_fraction == 0 and t3_fraction == 0.")
 
@@ -2706,7 +2815,11 @@ def prepare_amorphous_slit_surface(config=None):
         build.initial_surface,
         timing_summary=SlitTimingSummary(),
     )
-    return SlitPreparationResult(system=target_attempt.system, report=report)
+    return SlitPreparationResult(
+        system=target_attempt.system,
+        report=report,
+        silica_topology=silica_topology,
+    )
 
 
 def prepare_functionalized_amorphous_slit_surface(config):
@@ -2720,7 +2833,9 @@ def prepare_functionalized_amorphous_slit_surface(config):
     Returns
     -------
     result : FunctionalizedSlitResult
-        Attach-ready functionalized slit system and its preparation report.
+        Attach-ready functionalized slit system, its preparation report, and
+        the resolved silica topology model that would be used for full-slab
+        slit topology export.
     """
     progress_tracker = _FunctionalizedProgressTracker(
         total_stages=4,
@@ -2748,9 +2863,14 @@ def _prepare_functionalized_amorphous_slit_surface(config, progress_tracker):
     Returns
     -------
     result : FunctionalizedSlitResult
-        Attach-ready functionalized slit system and its preparation report.
+        Attach-ready functionalized slit system, its preparation report, and
+        the resolved silica topology model used for slit topology export.
     """
     slit_config = config.slit_config
+    silica_topology = resolve_silica_topology(
+        slit_config,
+        explicit_silane_topology_config=config.ligand.topology,
+    )
     progress_tracker.set_stage("Base slit build")
     build_start = perf_counter()
     build = _build_base_slit_system(slit_config)
@@ -2792,7 +2912,11 @@ def _prepare_functionalized_amorphous_slit_surface(config, progress_tracker):
         build.initial_surface,
         timing_summary=timing_summary,
     )
-    return FunctionalizedSlitResult(system=target_attempt.system, report=report)
+    return FunctionalizedSlitResult(
+        system=target_attempt.system,
+        report=report,
+        silica_topology=silica_topology,
+    )
 
 
 def write_bare_amorphous_slit(
@@ -2836,7 +2960,8 @@ def write_bare_amorphous_slit(
     -------
     result : SlitPreparationResult
         Finalized bare slit system and its preparation report. The export
-        writes a self-contained full-slab ``.itp`` / ``.top`` pair.
+        writes a self-contained full-slab ``.itp`` / ``.top`` pair and
+        exposes the resolved silica topology model on ``result``.
     """
     result = prepare_amorphous_slit_surface(config=config)
     pms.utils.mkdirp(output_dir)
@@ -2856,7 +2981,9 @@ def write_bare_amorphous_slit(
         result.system._pore,
         output_dir,
         sort_list=result.system._sort_list,
-    ).full_slit_topology()
+    ).full_slit_topology(
+        silica_topology=result.silica_topology,
+    )
 
     report_path = os.path.join(output_dir, f"{result.report.name}_report.json")
     with open(report_path, "w") as file_out:
@@ -2908,7 +3035,8 @@ def write_functionalized_amorphous_slit(
         Finalized functionalized slit system and its preparation report.
         When built-in or user-supplied flat ligand topology input is
         available, the export writes a self-contained full-slab ``.itp`` /
-        ``.top`` pair. Unsupported custom ligands fall back to the legacy
+        ``.top`` pair and exposes the resolved silica topology model on
+        ``result``. Unsupported custom ligands fall back to the legacy
         helper-topology export path until an explicit
         :class:`SilaneTopologyConfig` is supplied.
     """
@@ -2950,6 +3078,7 @@ def write_functionalized_amorphous_slit(
             ).full_slit_topology(
                 base_ligand_short=config.ligand.molecule.get_short(),
                 silane_topology_config=topology_config,
+                silica_topology=result.silica_topology,
             )
         store_export_s = perf_counter() - store_start
         progress_tracker.update_stage(1)

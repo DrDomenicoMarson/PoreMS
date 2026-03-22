@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import numpy as np
 import pytest
+import yaml
 
 import porems as pms
 import porems.slit as slit_mod
@@ -325,6 +326,41 @@ class TestAmorphousSlitPreparation:
         assert self.prepared_report.wall_thickness_nm == pytest.approx(6.105, abs=10 ** (-(3)))
         assert self.prepared_report.siloxane_distance_range_nm == (0.4, 0.65)
         assert sorted(self.prepared_result.system._pore.sites_sl_shape) == [0]
+
+    def test_default_silica_topology_returns_independent_copies_with_provenance(self):
+        model_a = pms.default_silica_topology()
+        model_b = pms.default_silica_topology()
+
+        assert isinstance(model_a, pms.SilicaTopologyModel)
+        assert isinstance(model_b, pms.SilicaTopologyModel)
+        assert model_a is not model_b
+        assert model_a.bond_terms.framework_si_o is not model_b.bond_terms.framework_si_o
+
+        model_a.bond_terms.framework_si_o.force_constant = 123456.0
+
+        assert model_b.bond_terms.framework_si_o.force_constant == pytest.approx(251040.0)
+        assert model_b.atomtypes.framework_silicon.origin == (
+            "porems/templates/topol.top [ atomtypes ] SI"
+        )
+        assert "scripts/_top/tmsg.itp" in model_b.angle_terms.graft_oxygen_mount_oxygen.origin
+
+    def test_silica_topology_serialization_helpers_return_readable_structures(self):
+        model = pms.default_silica_topology()
+
+        dict_data = model.to_dict()
+        json_data = json.loads(model.to_json())
+        yaml_data = yaml.safe_load(model.to_yaml())
+
+        assert dict_data["atomtypes"]["framework_silicon"]["name"] == "SI"
+        assert dict_data["bond_terms"]["framework_si_o"]["force_constant"] == pytest.approx(251040.0)
+        assert "origin" in dict_data["angle_terms"]["graft_oxygen_mount_oxygen"]
+        assert json_data == dict_data
+        assert yaml_data == dict_data
+
+    def test_bare_results_expose_resolved_silica_topology(self):
+        assert isinstance(self.prepared_result.silica_topology, pms.SilicaTopologyModel)
+        assert isinstance(self.stored_result.silica_topology, pms.SilicaTopologyModel)
+        assert self.prepared_result.silica_topology.bond_terms.framework_si_o.force_constant == pytest.approx(251040.0)
 
     def test_prepared_surface_composition_matches_target(self):
         expected_alpha_auto = (
@@ -817,12 +853,36 @@ class TestAmorphousSlitPreparation:
         assert "_atom_site.Cartn_x" in cif_text
         assert "_struct_conn.id" in cif_text
 
+    def test_explicit_silica_topology_override_changes_bare_itp_terms(self, tmp_path):
+        output_dir = tmp_path / "bare_amorphous_slit_custom_silica"
+        silica_topology = pms.default_silica_topology()
+        silica_topology.bond_terms.framework_si_o.force_constant = 123456.0
+
+        result = pms.write_bare_amorphous_slit(
+            str(output_dir),
+            config=pms.AmorphousSlitConfig(
+                name="bare_custom_silica",
+                surface_target=self.surface_target,
+                silica_topology=silica_topology,
+            ),
+            write_pdb=False,
+            write_cif=False,
+        )
+
+        with open(output_dir / "bare_custom_silica.itp", "r") as file_in:
+            itp_text = file_in.read()
+
+        assert result.silica_topology is not silica_topology
+        assert result.silica_topology.bond_terms.framework_si_o.force_constant == pytest.approx(123456.0)
+        assert "0.16300 123456.000000" in itp_text
+
     def test_top_level_exports_and_version(self):
         assert pms.__version__ == EXPECTED_VERSION
         assert callable(pms.prepare_amorphous_slit_surface)
         assert callable(pms.write_bare_amorphous_slit)
         assert callable(pms.prepare_functionalized_amorphous_slit_surface)
         assert callable(pms.write_functionalized_amorphous_slit)
+        assert callable(pms.default_silica_topology)
         assert isinstance(self.config, pms.AmorphousSlitConfig)
         assert isinstance(self.surface_target, pms.ExperimentalSiliconStateTarget)
         assert isinstance(self.prepared_result, pms.SlitPreparationResult)
@@ -841,6 +901,15 @@ class TestAmorphousSlitPreparation:
         assert hasattr(pms, "GraphAngle")
         assert hasattr(pms, "AttachmentRecord")
         assert hasattr(pms, "AssembledStructureGraph")
+        assert hasattr(pms, "SilicaAtomTypeModel")
+        assert hasattr(pms, "SilicaAtomTypeSet")
+        assert hasattr(pms, "SilicaAtomAssignment")
+        assert hasattr(pms, "SilicaAtomAssignmentSet")
+        assert hasattr(pms, "SilicaBondTerm")
+        assert hasattr(pms, "SilicaBondTermSet")
+        assert hasattr(pms, "SilicaAngleTerm")
+        assert hasattr(pms, "SilicaAngleTermSet")
+        assert hasattr(pms, "SilicaTopologyModel")
         assert hasattr(pms, "SilaneTopologyConfig")
         assert hasattr(pms, "SlitJunctionParameters")
 
@@ -1164,6 +1233,7 @@ class TestFunctionalizedAmorphousSlit:
 
         result = pms.prepare_functionalized_amorphous_slit_surface(config)
 
+        assert isinstance(result.silica_topology, pms.SilicaTopologyModel)
         assert not (result.report.used_surface_tolerance)
         assert result.report.prepared_surface == pms.SiliconStateComposition(957, 66, 652, 239)
         assert result.report.final_surface == pms.SiliconStateComposition(957, 63, 648, 239, 3, 4)
@@ -1351,6 +1421,109 @@ class TestFunctionalizedAmorphousSlit:
         assert "OM O1" not in top_text
         assert result.report.timing_summary.finalize_s > 0
         assert result.report.timing_summary.store_export_s > 0
+
+    def test_explicit_silica_topology_override_changes_functionalized_junction_angles(self, tmp_path):
+        output_dir = tmp_path / "functionalized_amorphous_slit_custom_silica"
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+        silica_topology = pms.default_silica_topology()
+        silica_topology.angle_terms.graft_oxygen_mount_oxygen.angle_deg = 111.11111
+        silica_topology.angle_terms.graft_oxygen_mount_oxygen.force_constant = 222.222222
+
+        result = pms.write_functionalized_amorphous_slit(
+            str(output_dir),
+            pms.FunctionalizedAmorphousSlitConfig(
+                slit_config=pms.AmorphousSlitConfig(
+                    name="functionalized_custom_silica",
+                    repeat_y=1,
+                    surface_target=target,
+                    silica_topology=silica_topology,
+                ),
+                ligand=pms.SilaneAttachmentConfig(
+                    molecule=pms.gen.tms(),
+                    mount=0,
+                    axis=(0, 1),
+                ),
+                progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=False),
+            ),
+            write_pdb=False,
+            write_cif=False,
+        )
+
+        with open(output_dir / "functionalized_custom_silica.itp", "r") as file_in:
+            itp_text = file_in.read()
+
+        assert result.silica_topology is not silica_topology
+        assert result.silica_topology.angle_terms.graft_oxygen_mount_oxygen.angle_deg == pytest.approx(111.11111)
+        assert "111.11111 222.222222" in itp_text
+
+    def test_legacy_junction_parameters_still_override_defaults_when_no_silica_model_is_supplied(self, tmp_path):
+        output_dir = tmp_path / "functionalized_amorphous_slit_legacy_junction_override"
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+        legacy_junctions = pms.SlitJunctionParameters(
+            mount_scaffold_bond=topo_mod.GromacsBondParameters.harmonic(
+                length_nm=0.16666,
+                force_constant=123456.789,
+            ),
+            scaffold_si_scaffold_o_mount_angle=topo_mod.GromacsAngleParameters.harmonic(
+                angle_deg=149.12345,
+                force_constant=654.321,
+            ),
+            oxygen_mount_oxygen_angle=topo_mod.GromacsAngleParameters.harmonic(
+                angle_deg=112.22222,
+                force_constant=333.444,
+            ),
+        )
+
+        result = pms.write_functionalized_amorphous_slit(
+            str(output_dir),
+            pms.FunctionalizedAmorphousSlitConfig(
+                slit_config=pms.AmorphousSlitConfig(
+                    name="functionalized_legacy_junction_override",
+                    repeat_y=1,
+                    surface_target=target,
+                ),
+                ligand=pms.SilaneAttachmentConfig(
+                    molecule=pms.gen.tms(),
+                    mount=0,
+                    axis=(0, 1),
+                    topology=pms.SilaneTopologyConfig(
+                        itp_path=slit_mod._bundled_tms_topology_path(),
+                        moleculetype_name="TMS",
+                        junction_parameters=legacy_junctions,
+                    ),
+                ),
+                progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=False),
+            ),
+            write_pdb=False,
+            write_cif=False,
+        )
+
+        with open(output_dir / "functionalized_legacy_junction_override.itp", "r") as file_in:
+            itp_text = file_in.read()
+
+        assert result.silica_topology.bond_terms.graft_mount_scaffold_si_o.length_nm == pytest.approx(0.16666)
+        assert result.silica_topology.angle_terms.graft_scaffold_si_scaffold_o_mount.angle_deg == pytest.approx(149.12345)
+        assert result.silica_topology.angle_terms.graft_oxygen_mount_oxygen.angle_deg == pytest.approx(112.22222)
+        assert result.silica_topology.bond_terms.graft_mount_scaffold_si_o.origin == (
+            "legacy SilaneTopologyConfig.junction_parameters.mount_scaffold_bond"
+        )
+        assert "0.16666 123456.789000" in itp_text
+        assert "149.12345 654.321000" in itp_text
+        assert "112.22222 333.444000" in itp_text
 
     def test_teps_exports_use_pdb_aliases_and_consistent_mmcif_metadata(self, tmp_path, repo_root):
         output_dir = tmp_path / "functionalized_amorphous_slit_teps_export"
