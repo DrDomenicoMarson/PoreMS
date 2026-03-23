@@ -518,7 +518,43 @@ class TestUserModel:
             for finding in report.findings
         )
 
-    def test_connectivity_validation_reports_invalid_siloxane_bridge_environment(self):
+    def test_structure_writers_normalize_slx_to_exported_om(self):
+        mol = pms.Molecule("siloxane_bridge_probe", "SLX")
+        mol.set_box([1.0, 1.0, 1.0])
+        mol.add("O", [0.0, 0.0, 0.0], name="OM1")
+
+        store = pms.Store(mol, "output")
+        store.gro(
+            "siloxane_bridge_probe.gro",
+            use_atom_names=True,
+            validate_connectivity="off",
+        )
+        store.pdb(
+            "siloxane_bridge_probe.pdb",
+            use_atom_names=True,
+            validate_connectivity="off",
+        )
+        store.cif(
+            "siloxane_bridge_probe.cif",
+            use_atom_names=True,
+            validate_connectivity="off",
+        )
+
+        with open("output/siloxane_bridge_probe.gro", "r") as file_in:
+            gro_text = file_in.read()
+        with open("output/siloxane_bridge_probe.pdb", "r") as file_in:
+            pdb_text = file_in.read()
+        with open("output/siloxane_bridge_probe.cif", "r") as file_in:
+            cif_text = file_in.read()
+
+        assert "SLX" not in gro_text
+        assert "SLX" not in pdb_text
+        assert "SLX" not in cif_text
+        assert "OM" in gro_text
+        assert " OM " in pdb_text
+        assert " OM " in cif_text
+
+    def test_connectivity_validation_normalizes_siloxane_bridges_to_framework_oxygen_rules(self):
         mol = pms.Molecule("invalid_siloxane_bridge", "SLX")
         mol.add("O", [0.0, 0.0, 0.0], name="OM1")
         mol.add("Si", [0.16, 0.0, 0.0], name="SI1")
@@ -530,7 +566,7 @@ class TestUserModel:
 
         assert not report.is_valid
         assert any(
-            finding.code == "siloxane_bridge_environment"
+            finding.code == "framework_oxygen_environment"
             for finding in report.findings
         )
 
@@ -1116,6 +1152,7 @@ class TestUserModel:
 
         ## Siloxane
         mols_siloxane = pore.siloxane(site_in, 100)
+        assert "SLX" in pore.get_mol_dict()
         site_in = [site_key for site_key, site_val in site_list.items() if site_val.site_type == "in"]
 
         ## Normal
@@ -1147,14 +1184,53 @@ class TestUserModel:
 
         pore.set_name("pore_cylinder_full_sort")
         sort_list = ["OM", "SI", "SLX", "SL", "SLG", "TMS", "TMSG"]
-        pms.Store(pore, "output", sort_list=sort_list).gro(use_atom_names=True)
-        pms.Store(pore, "output", sort_list=sort_list).pdb(use_atom_names=True)
+        store = pms.Store(pore, "output", sort_list=sort_list)
+        store.gro(use_atom_names=True)
+        store.pdb(use_atom_names=True)
+        store.cif(use_atom_names=True)
+        store.top()
+        store.grid("pore_cylinder_full_sort_grid.itp")
+
+        with open("output/pore_cylinder_full_sort.gro", "r") as file_in:
+            gro_text = file_in.read()
+        with open("output/pore_cylinder_full_sort.pdb", "r") as file_in:
+            pdb_text = file_in.read()
+        with open("output/pore_cylinder_full_sort.cif", "r") as file_in:
+            cif_text = file_in.read()
+        with open("output/pore_cylinder_full_sort.top", "r") as file_in:
+            top_text = file_in.read()
+        with open("output/pore_cylinder_full_sort_grid.itp", "r") as file_in:
+            grid_text = file_in.read()
+
+        molecules_lines = [
+            line.split()
+            for line in top_text.splitlines()
+            if line and not line.startswith("[") and not line.startswith("#") and " " in line
+        ]
+        molecules = {
+            tokens[0]: int(tokens[1])
+            for tokens in molecules_lines
+            if len(tokens) == 2 and tokens[0].isalpha() and tokens[1].isdigit()
+        }
+        expected_om_count = (
+            len(pore.get_mol_dict().get("OM", []))
+            + len(pore.get_mol_dict().get("SLX", []))
+        )
+
+        assert "SLX" not in gro_text
+        assert "SLX" not in pdb_text
+        assert "SLX" not in cif_text
+        assert "SLX" not in grid_text
+        assert "OM" in gro_text
+        assert " OM " in pdb_text
+        assert " OM " in cif_text
+        assert "SLX " not in top_text
+        assert molecules["OM"] == expected_om_count
 
         # Store test
         print()
         with pytest.raises(ValueError, match="Sorting list does not contain all keys"):
             pms.Store(pore, "output", sort_list=sort_list[:-1])
-        pms.Store(pore, "output", sort_list=sort_list).top()
 
         # Error test
         with pytest.raises(ValueError, match="site_type"):

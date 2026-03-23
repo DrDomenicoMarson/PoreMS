@@ -49,15 +49,6 @@
 
 [ moleculetype ]
 ; name nrexcl
-  SLX       1
-
-[ atoms ]
-; nr  type  resnr  resid  atom  cgnr  charge
-   1    OM      1    SLX   OM1     1  CHARGEO   ; original -0.64
-
-
-[ moleculetype ]
-; name nrexcl
   OM        1
 
 [ atoms ]

@@ -104,6 +104,22 @@ class _CifStructAsymRecord:
 
 
 @dataclass(frozen=True)
+class _ExportMoleculeCount:
+    """One exported residue count written to helper topologies.
+
+    Parameters
+    ----------
+    residue_name : str
+        Residue identifier written to the exported topology.
+    count : int
+        Number of exported residue instances.
+    """
+
+    residue_name: str
+    count: int
+
+
+@dataclass(frozen=True)
 class _ResidueExportIdentifiers:
     """Format-specific identifiers assigned to one residue instance.
 
@@ -768,19 +784,72 @@ class Store:
         # Save object
         utils.save(self._inp, link)
 
+    def _export_residue_name(self, residue_name):
+        """Return the normalized residue name written by export writers.
+
+        Parameters
+        ----------
+        residue_name : str
+            Internal residue identifier stored on molecules or pore molecule
+            dictionaries.
+
+        Returns
+        -------
+        export_name : str
+            Residue identifier written to structure and helper topology
+            outputs. Internal siloxane bridge oxygens normalize to ``"OM"``
+            while every other residue keeps its native name.
+        """
+        return "OM" if residue_name == "SLX" else residue_name
+
+    def _export_molecule_counts(self):
+        """Return pore helper-topology counts in exported residue space.
+
+        Returns
+        -------
+        exported_counts : list[_ExportMoleculeCount]
+            Exported residue counts in first-appearance order after applying
+            residue-name normalization.
+
+        Raises
+        ------
+        TypeError
+            Raised when helper-topology counting is requested for a non-pore
+            input.
+        """
+        if not isinstance(self._inp, Pore):
+            raise TypeError(
+                "Store: Helper-topology residue counts require a pore input."
+            )
+
+        counts_by_name = {}
+        ordered_names = []
+        for residue_name in self._short_list:
+            export_name = self._export_residue_name(residue_name)
+            if export_name not in counts_by_name:
+                counts_by_name[export_name] = 0
+                ordered_names.append(export_name)
+            counts_by_name[export_name] += len(self._inp.get_mol_dict()[residue_name])
+
+        return [
+            _ExportMoleculeCount(residue_name=name, count=counts_by_name[name])
+            for name in ordered_names
+        ]
+
     def _residue_names_in_order(self):
-        """Return residue identifiers in first-appearance order.
+        """Return exported residue identifiers in first-appearance order.
 
         Returns
         -------
         residue_names : list[str]
             Unique residue identifiers encountered while iterating over the
-            serialized molecule list in writer order.
+            serialized molecule list in writer order after applying export
+            normalization such as ``SLX -> OM``.
         """
         residue_names = []
         seen = set()
         for mol in self._mols:
-            residue_name = mol.get_short()
+            residue_name = self._export_residue_name(mol.get_short())
             if residue_name in seen:
                 continue
             residue_names.append(residue_name)
@@ -942,7 +1011,9 @@ class Store:
         -------
         cache : _StructureExportCache
             Structure-export metadata, alias tables, and mmCIF support tables
-            in writer order.
+            in writer order. Residue names are normalized to the exported
+            chemistry view, so internal siloxane bridge ``SLX`` residues are
+            serialized as ``OM``.
         """
         residue_names = self._residue_names_in_order()
         residue_alias_records = self._pdb_residue_alias_records(residue_names)
@@ -976,7 +1047,7 @@ class Store:
                     if residue_identifiers is not None:
                         residue_serial += 1
                     residue_marker = atom.get_residue()
-                    residue_name = mol.get_short()
+                    residue_name = self._export_residue_name(mol.get_short())
                     residue_identifiers = _ResidueExportIdentifiers(
                         residue_id=residue_serial,
                         residue_name=residue_name,
@@ -1407,7 +1478,10 @@ class Store:
         findings : tuple[ConnectivityValidationFinding, ...]
             Sorted validation findings for the assembled structure. Generic
             element-degree checks are applied first, followed by stricter
-            residue-aware silica checks on assembled pore exports.
+            residue-aware silica checks on assembled pore exports. The
+            validation runs on exported residue identities, so internal
+            siloxane bridge ``SLX`` residues are treated as exported
+            bridging ``OM`` oxygens.
         """
         record_by_serial = {record.serial: record for record in atom_records}
         neighbors = self._connectivity_validation_neighbors(graph)
@@ -1604,22 +1678,14 @@ class Store:
                             (atom_id, *neighbor_ids),
                         )
 
-            if record.residue_name == "SLX" and element == "O":
-                if silica_oxygen_environment(atom_id) != "bridge":
-                    add_finding(
-                        "siloxane_bridge_environment",
-                        f"Siloxane bridge oxygen atom {atom_id} must be bonded to exactly two silicon atoms.",
-                        (atom_id, *neighbor_ids),
-                    )
-
             if is_pre_finalized_scaffold:
                 continue
 
-            if record.residue_name == "OM":
+            if record.residue_name in {"OM", "SLX"}:
                 if silica_oxygen_environment(atom_id) != "bridge":
                     add_finding(
                         "framework_oxygen_environment",
-                        f"Framework oxygen atom {atom_id} must be bonded to exactly two silicon atoms.",
+                        f"Bridging silica oxygen atom {atom_id} must be bonded to exactly two silicon atoms after export.",
                         (atom_id, *neighbor_ids),
                     )
 
@@ -1673,7 +1739,9 @@ class Store:
             Structured validation report for the current assembled structure.
             Generic element-degree checks are always applied, and silica
             residues are additionally checked against stricter residue-aware
-            local-environment rules. Full scaffold ``OM/SI`` checks are
+            local-environment rules on the exported chemistry view. Internal
+            siloxane bridge ``SLX`` residues therefore validate as exported
+            bridging ``OM`` oxygens. Full scaffold ``OM/SI`` checks are
             applied only to finalized pore states.
         """
         return self._validation_report(use_atom_names)
@@ -1755,7 +1823,8 @@ class Store:
         validate_connectivity : str, optional
             Connectivity validation mode: ``"off"``, ``"warn"``, or
             ``"strict"``. The default warns on invalid assembled local
-            chemistry before writing the file.
+            chemistry before writing the file. Internal siloxane bridge
+            residues are serialized as exported ``OM`` bridging oxygens.
         """
         self._handle_connectivity_validation(use_atom_names, validate_connectivity)
         link = self._link
@@ -1866,7 +1935,8 @@ class Store:
         validate_connectivity : str, optional
             Connectivity validation mode: ``"off"``, ``"warn"``, or
             ``"strict"``. The default warns on invalid assembled local
-            chemistry before writing the file.
+            chemistry before writing the file. Internal siloxane bridge
+            residues are serialized as exported ``OM`` bridging oxygens.
         """
         self._handle_connectivity_validation(use_atom_names, validate_connectivity)
         # Initialize
@@ -1939,7 +2009,8 @@ class Store:
         validate_connectivity : str, optional
             Connectivity validation mode: ``"off"``, ``"warn"``, or
             ``"strict"``. The default warns on invalid assembled local
-            chemistry before writing the file.
+            chemistry before writing the file. Internal siloxane bridge
+            residues are serialized as exported ``OM`` bridging oxygens.
         """
         self._handle_connectivity_validation(use_atom_names, validate_connectivity)
         # Initialize
@@ -1962,6 +2033,7 @@ class Store:
             for mol in self._mols:
                 atom_types = {}
                 temp_res_id = 0
+                residue_name = self._export_residue_name(mol.get_short())
                 # Run through atoms
                 for atom in mol.get_atom_list():
                     # Process residue index
@@ -1984,7 +2056,7 @@ class Store:
 
                     # Write file
                     out_string = "%5i" % num_m              #  1- 5 (5)    Residue number
-                    out_string += "%-5s" % mol.get_short()  #  6-10 (5)    Residue short name
+                    out_string += "%-5s" % residue_name     #  6-10 (5)    Residue short name
                     out_string += "%5s" % atom_name         # 11-15 (5)    Atom name
                     out_string += "%5i" % num_a             # 16-20 (5)    Atom number
                     for i in range(self._dim):                    # 21-44 (3*8)  Coordinates
@@ -2117,7 +2189,9 @@ class Store:
         """Write the main GROMACS topology for a pore object.
 
         The generated ``.top`` file includes molecule ``.itp`` files and the
-        final molecule counts stored in the wrapped pore.
+        final molecule counts stored in the wrapped pore. Exported helper
+        topologies normalize internal siloxane bridge ``SLX`` residues into
+        the shared bridging-oxygen ``OM`` chemistry.
 
         Parameters
         ----------
@@ -2155,8 +2229,13 @@ class Store:
             file_out.write("[ molecules ]\n")
 
             # Number of atoms
-            for mol_short in self._short_list:
-                file_out.write(mol_short+" "+str(len(self._inp.get_mol_dict()[mol_short]))+"\n")
+            for export_count in self._export_molecule_counts():
+                file_out.write(
+                    export_count.residue_name
+                    + " "
+                    + str(export_count.count)
+                    + "\n"
+                )
 
     def _bare_silica_charge_diagnostics_from_cache(self, cache, silica_topology):
         """Build bare-silica charge diagnostics from cached export records.
@@ -2769,7 +2848,8 @@ class Store:
             Output filename. Defaults to ``grid.itp``.
         charges : dict, optional
             Charge mapping containing ``"si"`` and ``"om"`` entries for the
-            silicon and oxygen grid atoms.
+            silicon and bridging-oxygen grid atoms. The helper template uses
+            ``OM`` as the only exported identity for bridging silica oxygens.
         """
         charges = {"si": 1.28, "om": -0.64} if charges is None else charges
 
