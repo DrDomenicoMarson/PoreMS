@@ -1405,7 +1405,9 @@ class Store:
         Returns
         -------
         findings : tuple[ConnectivityValidationFinding, ...]
-            Sorted validation findings for the assembled structure.
+            Sorted validation findings for the assembled structure. Generic
+            element-degree checks are applied first, followed by stricter
+            residue-aware silica checks on assembled pore exports.
         """
         record_by_serial = {record.serial: record for record in atom_records}
         neighbors = self._connectivity_validation_neighbors(graph)
@@ -1442,6 +1444,57 @@ class Store:
                 is_error=is_error,
             )
 
+        resolved_elements = {}
+        for atom_id, record in record_by_serial.items():
+            try:
+                resolved_elements[atom_id] = db.get_element(record.atom_type)
+            except ValueError:
+                resolved_elements[atom_id] = None
+
+        def neighbor_ids_for(atom_id):
+            return tuple(sorted(neighbors.get(atom_id, ())))
+
+        def element_token_for(atom_id):
+            element = resolved_elements.get(atom_id)
+            if element is not None:
+                return element
+            if atom_id in record_by_serial:
+                return record_by_serial[atom_id].atom_type
+            return "?"
+
+        def neighbor_elements_for(atom_id):
+            return [element_token_for(neighbor_id) for neighbor_id in neighbor_ids_for(atom_id)]
+
+        def silica_oxygen_environment(atom_id):
+            if resolved_elements.get(atom_id) != "O":
+                return "other"
+            neighbor_elements = sorted(neighbor_elements_for(atom_id))
+            if len(neighbor_elements) != 2:
+                return "other"
+            if neighbor_elements == ["H", "Si"]:
+                return "hydroxyl"
+            if neighbor_elements == ["Si", "Si"]:
+                return "bridge"
+            return "other"
+
+        def silica_silicon_neighbor_summary(atom_id):
+            oxygen_neighbor_ids = [
+                neighbor_id
+                for neighbor_id in neighbor_ids_for(atom_id)
+                if resolved_elements.get(neighbor_id) == "O"
+            ]
+            hydroxyl_oxygen_ids = [
+                neighbor_id
+                for neighbor_id in oxygen_neighbor_ids
+                if silica_oxygen_environment(neighbor_id) == "hydroxyl"
+            ]
+            bridge_oxygen_ids = [
+                neighbor_id
+                for neighbor_id in oxygen_neighbor_ids
+                if silica_oxygen_environment(neighbor_id) == "bridge"
+            ]
+            return oxygen_neighbor_ids, hydroxyl_oxygen_ids, bridge_oxygen_ids
+
         for atom_id in graph.atom_ids:
             if atom_id not in record_by_serial:
                 continue
@@ -1452,9 +1505,8 @@ class Store:
                 and not is_finalized_pore
                 and record.residue_name in {"OM", "SI"}
             )
-            try:
-                element = db.get_element(record.atom_type)
-            except ValueError:
+            element = resolved_elements.get(atom_id)
+            if element is None:
                 add_finding(
                     "unknown_element",
                     f"Atom {atom_id} has unsupported atom type '{record.atom_type}' for connectivity validation.",
@@ -1473,12 +1525,8 @@ class Store:
                     (atom_id,),
                 )
 
-            neighbor_elements = []
-            for neighbor_id in sorted(neighbors.get(atom_id, ())):
-                try:
-                    neighbor_elements.append(db.get_element(record_by_serial[neighbor_id].atom_type))
-                except (KeyError, ValueError):
-                    neighbor_elements.append(record_by_serial[neighbor_id].atom_type)
+            neighbor_ids = neighbor_ids_for(atom_id)
+            neighbor_elements = neighbor_elements_for(atom_id)
 
             if element == "H":
                 if degree != 1:
@@ -1494,23 +1542,101 @@ class Store:
                         (atom_id, next(iter(sorted(neighbors[atom_id])))),
                     )
 
+            if record.residue_name == "SL":
+                if element == "Si":
+                    oxygen_neighbor_ids, hydroxyl_oxygen_ids, bridge_oxygen_ids = (
+                        silica_silicon_neighbor_summary(atom_id)
+                    )
+                    if (
+                        degree != 4
+                        or len(oxygen_neighbor_ids) != 4
+                        or len(hydroxyl_oxygen_ids) != 1
+                        or len(bridge_oxygen_ids) != 3
+                    ):
+                        add_finding(
+                            "silanol_silicon_environment",
+                            f"Silanol silicon atom {atom_id} must be bonded to exactly one hydroxyl oxygen and three bridging oxygen atoms.",
+                            (atom_id, *neighbor_ids),
+                        )
+                elif element == "O":
+                    if silica_oxygen_environment(atom_id) != "hydroxyl":
+                        add_finding(
+                            "silanol_oxygen_environment",
+                            f"Silanol oxygen atom {atom_id} must be bonded to exactly one silicon atom and one hydrogen atom.",
+                            (atom_id, *neighbor_ids),
+                        )
+                elif element == "H":
+                    if degree != 1 or neighbor_elements != ["O"]:
+                        add_finding(
+                            "silanol_hydrogen_environment",
+                            f"Silanol hydrogen atom {atom_id} must be bonded to exactly one oxygen atom.",
+                            (atom_id, *neighbor_ids),
+                        )
+
+            if record.residue_name == "SLG":
+                if element == "Si":
+                    oxygen_neighbor_ids, hydroxyl_oxygen_ids, bridge_oxygen_ids = (
+                        silica_silicon_neighbor_summary(atom_id)
+                    )
+                    if (
+                        degree != 4
+                        or len(oxygen_neighbor_ids) != 4
+                        or len(hydroxyl_oxygen_ids) != 2
+                        or len(bridge_oxygen_ids) != 2
+                    ):
+                        add_finding(
+                            "geminal_silicon_environment",
+                            f"Geminal silanol silicon atom {atom_id} must be bonded to exactly two hydroxyl oxygen and two bridging oxygen atoms.",
+                            (atom_id, *neighbor_ids),
+                        )
+                elif element == "O":
+                    if silica_oxygen_environment(atom_id) != "hydroxyl":
+                        add_finding(
+                            "geminal_oxygen_environment",
+                            f"Geminal silanol oxygen atom {atom_id} must be bonded to exactly one silicon atom and one hydrogen atom.",
+                            (atom_id, *neighbor_ids),
+                        )
+                elif element == "H":
+                    if degree != 1 or neighbor_elements != ["O"]:
+                        add_finding(
+                            "geminal_hydrogen_environment",
+                            f"Geminal silanol hydrogen atom {atom_id} must be bonded to exactly one oxygen atom.",
+                            (atom_id, *neighbor_ids),
+                        )
+
+            if record.residue_name == "SLX" and element == "O":
+                if silica_oxygen_environment(atom_id) != "bridge":
+                    add_finding(
+                        "siloxane_bridge_environment",
+                        f"Siloxane bridge oxygen atom {atom_id} must be bonded to exactly two silicon atoms.",
+                        (atom_id, *neighbor_ids),
+                    )
+
             if is_pre_finalized_scaffold:
                 continue
 
             if record.residue_name == "OM":
-                if degree != 2 or sorted(neighbor_elements) != ["Si", "Si"]:
+                if silica_oxygen_environment(atom_id) != "bridge":
                     add_finding(
                         "framework_oxygen_environment",
                         f"Framework oxygen atom {atom_id} must be bonded to exactly two silicon atoms.",
-                        (atom_id, *sorted(neighbors.get(atom_id, ()))),
+                        (atom_id, *neighbor_ids),
                     )
 
             if record.residue_name == "SI":
-                if degree not in {4}:
+                oxygen_neighbor_ids, hydroxyl_oxygen_ids, bridge_oxygen_ids = (
+                    silica_silicon_neighbor_summary(atom_id)
+                )
+                if (
+                    degree != 4
+                    or len(oxygen_neighbor_ids) != 4
+                    or len(hydroxyl_oxygen_ids) != 0
+                    or len(bridge_oxygen_ids) != 4
+                ):
                     add_finding(
                         "framework_silicon_environment",
-                        f"Framework silicon atom {atom_id} must have degree 4 after export.",
-                        (atom_id,),
+                        f"Framework silicon atom {atom_id} must be bonded to exactly four bridging oxygen atoms after export.",
+                        (atom_id, *neighbor_ids),
                     )
 
         for bond in graph.bonds:
@@ -1533,7 +1659,7 @@ class Store:
         return tuple(sorted(findings.values(), key=lambda finding: (finding.code, finding.atom_ids)))
 
     def validate_connectivity(self, use_atom_names=False):
-        """Validate the assembled bond graph against simple chemistry rules.
+        """Validate the assembled bond graph against chemistry rules.
 
         Parameters
         ----------
@@ -1545,8 +1671,10 @@ class Store:
         -------
         report : ConnectivityValidationReport
             Structured validation report for the current assembled structure.
-            Full framework-oxygen checks are applied only to finalized pore
-            states.
+            Generic element-degree checks are always applied, and silica
+            residues are additionally checked against stricter residue-aware
+            local-environment rules. Full scaffold ``OM/SI`` checks are
+            applied only to finalized pore states.
         """
         return self._validation_report(use_atom_names)
 

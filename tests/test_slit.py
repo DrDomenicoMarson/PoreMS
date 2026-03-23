@@ -71,6 +71,32 @@ def itp_atom_rows(itp_path):
     return rows
 
 
+def graph_without_bond(graph, atom_a, atom_b):
+    """Return a copy of ``graph`` with one bond removed.
+
+    Parameters
+    ----------
+    graph : AssembledStructureGraph
+        Source graph whose bond list should be filtered.
+    atom_a : int
+        First atom id of the bond to remove.
+    atom_b : int
+        Second atom id of the bond to remove.
+
+    Returns
+    -------
+    graph : AssembledStructureGraph
+        New graph with every matching bond removed.
+    """
+    bond_key = tuple(sorted((atom_a, atom_b)))
+    filtered_bonds = [
+        bond
+        for bond in graph.bonds
+        if (bond.atom_a, bond.atom_b) != bond_key
+    ]
+    return pms.AssembledStructureGraph.from_bonds(graph.atom_ids, filtered_bonds)
+
+
 def teps_ligand(repo_root):
     """Return the local explicit-bond TEPS ligand used for slit smoke tests.
 
@@ -893,6 +919,102 @@ class TestAmorphousSlitPreparation:
         )
 
         assert report.is_valid
+
+    def test_validation_flags_broken_silanol_silicon_environment(self):
+        store = pms.Store(
+            self.stored_result.system._pore,
+            sort_list=self.stored_result.system._sort_list,
+        )
+        cache = store._collect_structure_records(use_atom_names=True)
+        graph = store.assembled_graph(use_atom_names=True)
+        neighbors = store._connectivity_validation_neighbors(graph)
+        record_by_serial = {record.serial: record for record in cache.atom_records}
+
+        silanol_si_serial = next(
+            record.serial
+            for record in cache.atom_records
+            if record.residue_name == "SL" and record.atom_type == "Si"
+        )
+        broken_neighbor = next(
+            neighbor_id
+            for neighbor_id in sorted(neighbors[silanol_si_serial])
+            if record_by_serial[neighbor_id].atom_type == "O"
+            and record_by_serial[neighbor_id].residue_name == "OM"
+        )
+        broken_graph = graph_without_bond(graph, silanol_si_serial, broken_neighbor)
+        findings = store._connectivity_validation_findings(
+            cache.atom_records,
+            broken_graph,
+        )
+
+        assert any(
+            finding.code == "silanol_silicon_environment"
+            for finding in findings
+        )
+
+    def test_validation_flags_broken_geminal_silicon_environment(self):
+        store = pms.Store(
+            self.stored_result.system._pore,
+            sort_list=self.stored_result.system._sort_list,
+        )
+        cache = store._collect_structure_records(use_atom_names=True)
+        graph = store.assembled_graph(use_atom_names=True)
+        neighbors = store._connectivity_validation_neighbors(graph)
+        record_by_serial = {record.serial: record for record in cache.atom_records}
+
+        geminal_si_serial = next(
+            record.serial
+            for record in cache.atom_records
+            if record.residue_name == "SLG" and record.atom_type == "Si"
+        )
+        broken_neighbor = next(
+            neighbor_id
+            for neighbor_id in sorted(neighbors[geminal_si_serial])
+            if record_by_serial[neighbor_id].atom_type == "O"
+            and record_by_serial[neighbor_id].residue_name == "OM"
+        )
+        broken_graph = graph_without_bond(graph, geminal_si_serial, broken_neighbor)
+        findings = store._connectivity_validation_findings(
+            cache.atom_records,
+            broken_graph,
+        )
+
+        assert any(
+            finding.code == "geminal_silicon_environment"
+            for finding in findings
+        )
+
+    def test_validation_flags_broken_silanol_hydroxyl_environment(self):
+        store = pms.Store(
+            self.stored_result.system._pore,
+            sort_list=self.stored_result.system._sort_list,
+        )
+        cache = store._collect_structure_records(use_atom_names=True)
+        graph = store.assembled_graph(use_atom_names=True)
+
+        silanol_oxygen_serial = next(
+            record.serial
+            for record in cache.atom_records
+            if record.residue_name == "SL" and record.atom_type == "O"
+        )
+        silanol_hydrogen_serial = next(
+            record.serial
+            for record in cache.atom_records
+            if record.residue_name == "SL" and record.atom_type == "H"
+        )
+        broken_graph = graph_without_bond(
+            graph,
+            silanol_oxygen_serial,
+            silanol_hydrogen_serial,
+        )
+        findings = store._connectivity_validation_findings(
+            cache.atom_records,
+            broken_graph,
+        )
+
+        finding_codes = {finding.code for finding in findings}
+        assert "silanol_oxygen_environment" in finding_codes
+        assert "silanol_hydrogen_environment" in finding_codes
 
     def test_bare_slit_object_files_are_opt_in(self, tmp_path):
         output_dir = tmp_path / "bare_amorphous_slit_preparation_with_objects"

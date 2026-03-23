@@ -518,6 +518,22 @@ class TestUserModel:
             for finding in report.findings
         )
 
+    def test_connectivity_validation_reports_invalid_siloxane_bridge_environment(self):
+        mol = pms.Molecule("invalid_siloxane_bridge", "SLX")
+        mol.add("O", [0.0, 0.0, 0.0], name="OM1")
+        mol.add("Si", [0.16, 0.0, 0.0], name="SI1")
+        mol.add("H", [-0.10, 0.0, 0.0], name="H1")
+        mol.add_bond(0, 1)
+        mol.add_bond(0, 2)
+
+        report = pms.Store(mol, "output").validate_connectivity(use_atom_names=True)
+
+        assert not report.is_valid
+        assert any(
+            finding.code == "siloxane_bridge_environment"
+            for finding in report.findings
+        )
+
     def test_pdb_uses_hybrid36_when_fixed_width_limits_are_exceeded(self):
         atom = pms.Molecule("single_atom", "SIN")
         atom.add("H", [0.0, 0.0, 0.0], name="H1")
