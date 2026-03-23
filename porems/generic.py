@@ -232,6 +232,15 @@ def tms(name="tms", short="TMS", separation=30, is_si=True, is_hydro=True):
     -------
     mol : Molecule
         Generated molecule object.
+
+    Notes
+    -----
+    This helper returns only the molecular coordinates used during slit
+    attachment. It does not provide a ready functionalized-slit topology
+    bundle. Full functionalized slit topology export additionally requires an
+    explicit :class:`porems.slit.SilaneTopologyConfig` whose flat ITP uses the
+    same atom names as the returned molecule and already satisfies the active
+    silica-model charge target for the base ``T3`` fragment.
     """
     # Initialize molecule
     mol = Molecule(name, short)

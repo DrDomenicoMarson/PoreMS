@@ -788,6 +788,13 @@ def default_silica_topology():
     model : SilicaTopologyModel
         Deep-copied editable silica topology model populated from the
         package's current slit-topology defaults.
+
+    Examples
+    --------
+    >>> import porems as pms
+    >>> model = pms.default_silica_topology()
+    >>> _ = model.to_yaml()
+    >>> model.atom_assignments.silanol_oxygen.charge = "-0.750000"
     """
     return deepcopy(_DEFAULT_SILICA_TOPOLOGY_MODEL)
 

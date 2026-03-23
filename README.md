@@ -23,12 +23,15 @@ PoreMS targets Python 3.14.
 
 Installation requires [numpy](https://numpy.org/), [pandas](https://pandas.pydata.org/), [matplotlib](https://matplotlib.org/), [seaborn](https://seaborn.pydata.org/), [PyYAML](https://pyyaml.org/) and [tqdm](https://tqdm.github.io/).
 
-## Bare Amorphous Slit Preparation
+## Bare and Grafted Amorphous Slit Workflows
 
-PoreMS exposes a high-level slit-preparation API for building periodic bare
-and functionalized amorphous silica slits from alpha-aware experimental silicon
-state ratios. The input target always represents `Q2/Q3/Q4/T2/T3` fractions
-over all Si atoms in the sample; `T2` and `T3` default to zero for bare slits.
+PoreMS provides a dedicated high-level workflow for periodic amorphous silica
+slits. The target is always given as `Q2/Q3/Q4/T2/T3` fractions over all Si
+atoms in the sample. Bare slits therefore use `t2_fraction=0.0` and
+`t3_fraction=0.0`, while functionalized slits can target both residual `Q`
+states and grafted `T` states in one configuration.
+
+### Bare slit preparation and export
 
 ```python
 import porems as pms
@@ -46,46 +49,155 @@ config = pms.AmorphousSlitConfig(
 
 result = pms.prepare_amorphous_slit_surface(config)
 print(result.report.final_surface)
+print(result.silica_topology.to_yaml())
 
-pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
+result = pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
+print(result.bare_charge_diagnostics.is_neutral)
 ```
 
-`prepare_amorphous_slit_surface(...)` returns a `SlitPreparationResult`
-containing an attach-ready `PoreKit` system and a structured
-`SlitPreparationReport`, including surface-preparation diagnostics such as
-stripped silicon counts, removed orphan oxygens, inserted bridge oxygens, and
-the final valid surface/scaffold oxygen counts.
-`write_bare_amorphous_slit(...)` finalizes and stores the generated bare slit
-as a self-contained GROMACS export together with a JSON report in the selected
-output directory. The slit writer now emits a full-slab `<name>.itp` plus a
-matching `<name>.top` instead of only helper-style scaffold topology pieces.
-Object backups are written only when `write_object_files=True` is requested
-explicitly. For inspection, the same writer can also emit a `.pdb` file, and
-`write_pdb_conect=True` adds `CONECT` records for the assembled bond graph,
-including silica scaffold bonds, siloxane bridges, ligand-internal bonds, and
-graft junctions. For larger systems, `write_cif=True` writes an mmCIF file,
-and `write_cif_bonds=True` adds the same inspection-oriented connectivity via
-an `_struct_conn` bond loop.
+`prepare_amorphous_slit_surface(...)` returns a `SlitPreparationResult` with an
+attach-ready `PoreKit`, a structured `SlitPreparationReport`, and the resolved
+editable silica topology model used by slit topology export. The finalized bare
+writer produces a self-contained `<name>.itp` + `<name>.top` pair together with
+`<name>.gro`, optional inspection-oriented `.pdb` / `.cif` files, `<name>.yml`,
+and `<name>_report.json`.
 
-In the slit exact-target path, custom siloxane bridge oxygens are folded back
-into the silica scaffold representation and exported as regular scaffold oxygen
-atoms rather than as standalone `SLX` residues.
+### Inspecting or overriding the silica topology model
 
-For exact functionalized targets, use `prepare_functionalized_amorphous_slit_surface(...)`
-with the same `ExperimentalSiliconStateTarget` and a `SilaneAttachmentConfig`.
-Built-in `tqdm` progress bars are available through
-`FunctionalizedSlitProgressConfig`; auto mode shows progress in interactive
-terminal and notebook sessions while staying quiet in typical test contexts.
-Functionalized coordinate export works with just the ligand coordinates, but
-self-contained functionalized `.top` / `.itp` output now requires an explicit
-`SilaneTopologyConfig` with a self-contained flat ligand `.itp` bundle, even
-for TMS. That bundle is interpreted as one base post-condensation `T3`
-fragment that already contains the replacement surface Si; under the current
-default silica charge model its total charge must therefore be `+0.96`. When
-the target includes `T2` sites, the exporter derives them internally from the
-same base fragment by adding one silica `OH`, so the topology config must
-also provide explicit `SilaneGeminalCrossTerms` for the generated
-`O(geminal)-Si(mount)-ligand` cross terms.
+```python
+import porems as pms
+
+silica_model = pms.default_silica_topology()
+print(silica_model.to_yaml())
+
+silica_model.atom_assignments.silanol_oxygen.charge = "-0.750000"
+
+config = pms.AmorphousSlitConfig(
+    name="bare_with_custom_silica_model",
+    silica_topology=silica_model,
+)
+```
+
+`default_silica_topology()` returns a fresh editable copy each time. The same
+model can be passed through `AmorphousSlitConfig.silica_topology` for both bare
+and functionalized slit workflows.
+
+### Functionalized (grafted) slit: coordinates only
+
+```python
+import porems as pms
+
+slit_config = pms.AmorphousSlitConfig(
+    name="functionalized_amorphous_silica_slit",
+    slit_width_nm=7.0,
+    repeat_y=1,
+    surface_target=pms.ExperimentalSiliconStateTarget(
+        q2_fraction=63 / 20000,
+        q3_fraction=648 / 20000,
+        q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
+        t2_fraction=3 / 20000,
+        t3_fraction=4 / 20000,
+    ),
+)
+
+config = pms.FunctionalizedAmorphousSlitConfig(
+    slit_config=slit_config,
+    ligand=pms.SilaneAttachmentConfig(
+        molecule=pms.gen.tms(),
+        mount=0,
+        axis=(0, 1),
+    ),
+    progress_settings=pms.FunctionalizedSlitProgressConfig(),
+)
+
+result = pms.prepare_functionalized_amorphous_slit_surface(config)
+print(result.report.final_surface)
+
+result = pms.write_functionalized_amorphous_slit(
+    "output/functionalized_coordinates",
+    config,
+)
+print(result.charge_diagnostics)
+```
+
+This coordinate-only path requires only the graft fragment coordinates. The
+writer stores the finalized coordinates, YAML, and JSON report, but it does not
+write functionalized slit `.top` / `.itp` files unless `SilaneTopologyConfig`
+is supplied.
+
+### Functionalized slit full-topology export
+
+```python
+from pathlib import Path
+import porems as pms
+
+slit_config = pms.AmorphousSlitConfig(
+    name="functionalized_amorphous_silica_slit",
+    slit_width_nm=7.0,
+    repeat_y=1,
+    surface_target=pms.ExperimentalSiliconStateTarget(
+        q2_fraction=63 / 20000,
+        q3_fraction=648 / 20000,
+        q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
+        t2_fraction=3 / 20000,
+        t3_fraction=4 / 20000,
+    ),
+)
+
+topology = pms.SilaneTopologyConfig(
+    itp_path=str(Path("path/to/tms_base_t3.itp")),
+    moleculetype_name="TMS",
+    geminal_cross_terms=pms.SilaneGeminalCrossTerms(
+        first_ligand_atom_name="O1",
+        geminal_oxygen_mount_ligand_angle=pms.GromacsAngleParameters.harmonic(
+            angle_deg=105.56,
+            force_constant=384.223760,
+        ),
+        geminal_dihedrals=(
+            pms.GeminalMountDihedralSpec(
+                fourth_atom_name="Si2",
+                function=1,
+                parameters=("0.00000", "1.60387", "3"),
+            ),
+        ),
+    ),
+)
+
+config = pms.FunctionalizedAmorphousSlitConfig(
+    slit_config=slit_config,
+    ligand=pms.SilaneAttachmentConfig(
+        molecule=pms.gen.tms(),
+        mount=0,
+        axis=(0, 1),
+        topology=topology,
+    ),
+)
+
+result = pms.write_functionalized_amorphous_slit(
+    "output/functionalized_full_topology",
+    config,
+)
+print(result.charge_diagnostics.is_valid)
+```
+
+Required inputs for functionalized full-topology export:
+
+- one self-contained flat GROMACS `.itp` file describing a base post-condensation `T3` fragment
+- atom names in that `.itp` matching the atom names in the configured `Molecule`
+- a base-fragment total charge matching the active silica model
+- explicit `SilaneGeminalCrossTerms` whenever the target includes `T2` sites
+
+Under the current default silica model, the expected base `T3` fragment charge
+is `+0.96`. If you pass a custom `silica_topology`, that charge target can
+change and should be checked against `default_silica_topology()` or your
+modified model before export.
+
+The current reference files `scripts/_top/tms.itp` and `scripts/_top/tmsg.itp`
+are useful examples of the required bonded-term layout, but they should be
+treated as parameter sources, not as automatically valid turnkey inputs for the
+strict functionalized slit exporter. The file you pass through
+`SilaneTopologyConfig.itp_path` must already satisfy the current naming and
+charge contract for your chosen `Molecule` and silica model.
 
 
 ## Installation

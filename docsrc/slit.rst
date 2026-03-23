@@ -19,10 +19,10 @@ generation and surface chemistry.
 Bare Amorphous Slit Preparation
 -------------------------------
 
-PoreMS exposes a high-level API for preparing periodic bare and functionalized
-amorphous silica slits together with a structured surface report. The slit
-target is specified through experimental ``Q2/Q3/Q4/T2/T3`` fractions over all
-Si atoms in the sample. For bare slits, ``T2`` and ``T3`` remain zero.
+PoreMS exposes a dedicated high-level API for periodic amorphous silica slit
+workflows. The input target is always specified through experimental
+``Q2/Q3/Q4/T2/T3`` fractions over all Si atoms in the sample. For bare slits,
+``T2`` and ``T3`` remain zero.
 
 .. code-block:: python
 
@@ -41,20 +41,25 @@ Si atoms in the sample. For bare slits, ``T2`` and ``T3`` remain zero.
 
   result = pms.prepare_amorphous_slit_surface(config)
   print(result.report.final_surface)
+  print(result.silica_topology.to_yaml())
 
-  pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
+  result = pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
+  print(result.bare_charge_diagnostics.is_neutral)
 
 ``prepare_amorphous_slit_surface(...)`` returns a
 ``SlitPreparationResult`` containing an attach-ready ``PoreKit`` system and a
 ``SlitPreparationReport`` with the converted alpha-aware target, the prepared
 bare surface, the final surface composition, and surface-preparation
 diagnostics such as stripped silicon counts, removed orphan oxygens, inserted
-bridge oxygens, and the final valid surface/scaffold oxygen counts.
+bridge oxygens, and the final valid surface/scaffold oxygen counts. The same
+result also exposes the resolved editable silica topology model used by slit
+topology export.
+
 ``write_bare_amorphous_slit(...)`` finalizes the prepared slit and stores the
 main structure files together with a self-contained full-slab ``.itp`` /
-``.top`` pair and a JSON report. Object backups are written only when
-``write_object_files=True`` is requested explicitly. For inspection, the same
-writer can also emit a ``.pdb`` file, and ``write_pdb_conect=True``
+``.top`` pair, YAML metadata, and a JSON report. Object backups are written
+only when ``write_object_files=True`` is requested explicitly. For inspection,
+the same writer can also emit a ``.pdb`` file, and ``write_pdb_conect=True``
 adds ``CONECT`` records for the assembled bond graph, including silica
 scaffold bonds, siloxane bridges, ligand-internal bonds, and graft junctions.
 For larger systems, ``write_cif=True`` writes an mmCIF file, and
@@ -70,8 +75,35 @@ The slit-preparation API is designed for the periodic bare-silica slit builder:
   ``write_bare_amorphous_slit(...)``
 
 
-Functionalized Amorphous Slit Preparation
------------------------------------------
+Inspecting or Overriding the Active Silica Topology
+---------------------------------------------------
+
+The slit export path uses one resolved editable silica topology model for atom
+types, partial charges, and bonded terms. The package defaults can be inspected
+and overridden directly.
+
+.. code-block:: python
+
+  import porems as pms
+
+  silica_model = pms.default_silica_topology()
+  print(silica_model.to_yaml())
+
+  silica_model.atom_assignments.silanol_oxygen.charge = "-0.750000"
+
+  config = pms.AmorphousSlitConfig(
+      name="bare_with_custom_silica_model",
+      silica_topology=silica_model,
+  )
+
+``default_silica_topology()`` always returns a fresh editable copy, so local
+changes never mutate the package defaults. The same model can be passed through
+``AmorphousSlitConfig.silica_topology`` for both bare and functionalized slit
+workflows.
+
+
+Functionalized (Grafted) Amorphous Slit Preparation
+---------------------------------------------------
 
 Exact functionalized targets use the same experimental target object together
 with a silane attachment definition. ``T2`` states are created from geminal
@@ -110,96 +142,115 @@ residues.
   result = pms.prepare_functionalized_amorphous_slit_surface(functionalized)
   print(result.report.final_surface)
 
+  result = pms.write_functionalized_amorphous_slit(
+      "output/functionalized_coordinates",
+      functionalized,
+  )
+  print(result.charge_diagnostics)
+
 ``FunctionalizedSlitProgressConfig`` enables built-in ``tqdm`` progress bars
 for the exact functionalized slit workflow. Auto mode shows progress in
 interactive terminals and notebooks while staying quiet in typical non-
 interactive test and batch contexts. Functionalized coordinate export works
-with just the ligand coordinates, but self-contained functionalized full-slab
-topology export requires ``SilaneTopologyConfig`` on the attachment
-definition, including for TMS. The supplied flat ITP is interpreted as one
-base post-condensation ``T3`` fragment that already contains the replacement
-surface Si, so under the current default silica charge model its total charge
-must be ``+0.96``. When the requested surface contains ``T2`` sites, the slit
-exporter generates them internally from that same base fragment by adding one
-silica ``OH`` and therefore also requires explicit
-``SilaneGeminalCrossTerms`` for the generated geminal cross terms.
+with just the ligand coordinates. In that case the writer stores coordinates,
+YAML metadata, and the JSON report, but it skips functionalized slit
+``.top`` / ``.itp`` files because no explicit flat topology bundle was given.
 
 
-Create surface molecules
-------------------------
+Required Inputs for Functionalized Full Topology Export
+-------------------------------------------------------
 
-Trimethylsilyl or for short TMS is a simple surface group that can be imported
-from the PoreMS package. Assuming a new surface group structure is to be created,
-following code block can be used as a base.
+Self-contained functionalized slit topology export requires
+``SilaneTopologyConfig`` on the attachment definition, including for TMS.
+
+The supplied flat ITP is interpreted as one base post-condensation ``T3``
+fragment. In practical PoreMS terms, the exporter expects:
+
+* one self-contained flat GROMACS ``.itp`` file for the base ``T3`` fragment
+* atom names in that file matching the atom names in the configured
+  ``Molecule``
+* a base-fragment total charge matching the active silica topology model
+* explicit ``SilaneGeminalCrossTerms`` whenever the requested surface includes
+  ``T2`` sites
+
+Under the current default silica model, the expected base ``T3`` fragment
+charge is ``+0.96``. If you override ``AmorphousSlitConfig.silica_topology``,
+the expected charge target may change and should be checked against the active
+model before export.
+
+The current reference files ``scripts/_top/tms.itp`` and
+``scripts/_top/tmsg.itp`` are useful examples of the required bonded-term
+layout, but they should be treated as parameter sources, not as automatically
+valid turnkey inputs for the strict functionalized slit exporter. The actual
+``SilaneTopologyConfig.itp_path`` file must already satisfy the naming and
+charge contract for the chosen ``Molecule`` and silica model.
+
+
+Functionalized Full-Topology Export Example
+-------------------------------------------
+
+The following example shows the extra inputs required when the functionalized
+slit should also write one self-contained ``.top`` / ``.itp`` pair.
 
 .. code-block:: python
 
+  from pathlib import Path
   import porems as pms
 
-  tms = pms.Molecule("tms", "TMS")
-  tms.set_charge(0.96)
-  compress = 30
+  slit_config = pms.AmorphousSlitConfig(
+      name="functionalized_amorphous_silica_slit",
+      slit_width_nm=7.0,
+      repeat_y=1,
+      surface_target=pms.ExperimentalSiliconStateTarget(
+          q2_fraction=63 / 20000,
+          q3_fraction=648 / 20000,
+          q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
+          t2_fraction=3 / 20000,
+          t3_fraction=4 / 20000,
+      ),
+  )
 
-  b = {"sio": 0.155, "sic": 0.186, "ch": 0.109}
-  a = {"ccc": 30.00, "cch": 109.47}
+  topology = pms.SilaneTopologyConfig(
+      itp_path=str(Path("path/to/tms_base_t3.itp")),
+      moleculetype_name="TMS",
+      geminal_cross_terms=pms.SilaneGeminalCrossTerms(
+          first_ligand_atom_name="O1",
+          geminal_oxygen_mount_ligand_angle=pms.GromacsAngleParameters.harmonic(
+              angle_deg=105.56,
+              force_constant=384.223760,
+          ),
+          geminal_dihedrals=(
+              pms.GeminalMountDihedralSpec(
+                  fourth_atom_name="Si2",
+                  function=1,
+                  parameters=("0.00000", "1.60387", "3"),
+              ),
+          ),
+      ),
+  )
 
-  # Create tail
-  tms.add("Si", [0, 0, 0])
-  tms.add("O", 0, r=b["sio"])
-  tms.add("Si", 1, bond=[1, 0], r=b["sio"], theta=180)
+  functionalized = pms.FunctionalizedAmorphousSlitConfig(
+      slit_config=slit_config,
+      ligand=pms.SilaneAttachmentConfig(
+          molecule=pms.gen.tms(),
+          mount=0,
+          axis=(0, 1),
+          topology=topology,
+      ),
+      progress_settings=pms.FunctionalizedSlitProgressConfig(),
+  )
 
-  # Add carbons
-  for i in range(3):
-      tms.add("C", 2, bond=[2, 1], r=b["sic"], theta=a["cch"]+compress, phi=60+120*i)
+  result = pms.write_functionalized_amorphous_slit(
+      "output/functionalized_full_topology",
+      functionalized,
+  )
+  print(result.charge_diagnostics.is_valid)
 
-  # Add hydrogens
-  for i in range(3, 5+1):
-      for j in range(3):
-          tms.add("H", i, bond=[i, 2], r=b["ch"], theta=a["cch"]+compress, phi=60+120*j)
-
-.. figure::  /pics/flow/tms.png
- :align: center
- :width: 30%
- :name: fig1
-
-.. note::
-
-  Parametrization must be carried out by the user. Topology generation should
-  provide one base post-condensation ``T3`` fragment topology. Geminal
-  ``T2`` sites are generated internally by the slit exporter, so users should
-  provide the associated geminal cross terms rather than a separate ``T2``
-  topology.
-
-Create pore system
-------------------
-
-Next step is to create a pore structure functionalized with the created TMS
-surface group.
-
-.. code-block:: python
-
-  import porems as pms
-
-  pore = pms.PoreCylinder([10, 10, 10], 6, 5.5)
-
-  pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in")
-  pore.attach(pms.gen.tms(), 0, [0, 1], 100, "ex")
-
-  pore.finalize()
-
-.. figure::  /pics/flow/pore.png
- :align: center
- :width: 50%
- :name: fig2
-
-Once the generation is done, store the structure. If you also want Python-side
-backup objects for later inspection, request them explicitly. The same helper
-also writes a master topology with the number of residues and a topology
-containing grid molecule parameters.
-
-.. code-block:: python
-
-    pore.store()
+The numerical geminal angle and dihedral terms above are example values derived
+from the current repository-side TMS/TMSG reference data. If your grafted
+fragment uses different atom names or different bonded terms, update
+``SilaneGeminalCrossTerms`` accordingly. The exporter will not infer those
+cross terms from the coordinate fragment.
 
 Stored outputs
 --------------

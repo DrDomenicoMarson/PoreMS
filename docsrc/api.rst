@@ -108,6 +108,10 @@ Slit Preparation
     slit.SlitPreparationReport
     slit.SlitPreparationResult
     slit.SlitTimingSummary
+    slit.SlitJunctionParameters
+    slit.GeminalMountDihedralSpec
+    slit.SilaneGeminalCrossTerms
+    slit.SilaneTopologyConfig
     slit.SilaneAttachmentConfig
     slit.FunctionalizedSlitProgressConfig
     slit.FunctionalizedSlitStericConfig
@@ -117,6 +121,10 @@ Slit Preparation
     slit.write_bare_amorphous_slit
     slit.prepare_functionalized_amorphous_slit_surface
     slit.write_functionalized_amorphous_slit
+    topology.SilicaTopologyModel
+    topology.BareSilicaChargeDiagnostics
+    topology.FunctionalizedSlitChargeDiagnostics
+    topology.default_silica_topology
 
 
 .. _utils_api:

@@ -457,9 +457,10 @@ class AmorphousSlitConfig:
         Target simulation temperature in Kelvin.
     surface_target : ExperimentalSiliconStateTarget, optional
         Experimental silicon-state ratios used to derive the modeled slit
-        surface target. The default target is expressed over all Si atoms for
-        the default slit geometry and therefore relies on the automatically
-        derived ``alpha`` value.
+        surface target. These fractions are always interpreted over all Si
+        atoms in the sample, not only over surface sites. The default target
+        is expressed over all Si atoms for the default slit geometry and
+        therefore relies on the automatically derived ``alpha`` value.
     amorph_bond_range_nm : tuple, optional
         Accepted ``Si-O`` bond-length range for the amorphous template.
     siloxane_distance_range_nm : tuple, optional
@@ -474,7 +475,9 @@ class AmorphousSlitConfig:
         Optional editable silica force-field model used by slit full-topology
         export. When omitted, the package defaults are used. Explicit models
         override any legacy junction-parameter values supplied through
-        :class:`SilaneTopologyConfig`.
+        :class:`SilaneTopologyConfig`. Use
+        :func:`porems.topology.default_silica_topology` to inspect the active
+        defaults and create one editable copy for local overrides.
     """
 
     name: str = "bare_amorphous_silica_slit"
@@ -690,7 +693,8 @@ class SlitPreparationResult:
     bare_charge_diagnostics : BareSilicaChargeDiagnostics or None, optional
         Bare-slit charge-neutrality diagnostics computed for finalized bare
         exports. Prepared but not yet finalized results leave this as
-        ``None``.
+        ``None``. :func:`write_bare_amorphous_slit` populates this field on
+        the returned result.
     """
 
     system: pms.PoreKit
@@ -746,19 +750,28 @@ class SilaneTopologyConfig:
     ----------
     itp_path : str
         Path to one self-contained flat GROMACS ``.itp`` file describing the
-        base silane fragment.
+        base post-condensation ``T3`` silane fragment, including the
+        replacement surface silicon atom.
     moleculetype_name : str, optional
         Optional explicit molecule-type name expected inside ``itp_path``.
         When omitted, the parser accepts the file's own name.
     geminal_cross_terms : SilaneGeminalCrossTerms or None, optional
         Optional explicit bonded terms used only when the exporter internally
         augments the base ``T3`` fragment into a geminal ``T2`` site by
-        adding one silica ``OH`` group. When no geminal sites are exported,
-        this can remain ``None``.
+        adding one silica ``OH`` group. When the requested target includes
+        geminal ``T2`` sites, these terms are required. When no geminal sites
+        are exported, this can remain ``None``.
     junction_parameters : SlitJunctionParameters, optional
         Legacy silica-ligand junction parameters translated onto the resolved
         silica topology model when no explicit
         :class:`AmorphousSlitConfig.silica_topology` is supplied.
+
+    Notes
+    -----
+    The supplied flat ITP must be self-contained, must use atom names that
+    exactly match the configured :class:`SilaneAttachmentConfig.molecule`, and
+    must already satisfy the total-charge target derived from the active
+    silica model.
     """
 
     itp_path: str
@@ -819,7 +832,8 @@ class SilaneAttachmentConfig:
     ----------
     molecule : Molecule
         Base post-condensation ligand fragment used for both single and
-        geminal attachment.
+        geminal attachment. When ``topology`` is supplied, the molecule's atom
+        names must match the atom names used in that flat ITP bundle.
     mount : int
         Atom id placed onto the selected silicon surface site.
     axis : tuple[int, int]
@@ -831,7 +845,9 @@ class SilaneAttachmentConfig:
         Angular step in degrees used when ``rotate_about_axis`` is enabled.
     topology : SilaneTopologyConfig or None, optional
         Optional flat ligand-topology input used to assemble a full
-        self-contained GROMACS slit topology during export.
+        self-contained GROMACS slit topology during export. When omitted,
+        functionalized slit preparation and coordinate export still work, but
+        no functionalized slit ``.top`` / ``.itp`` pair is written.
     """
 
     molecule: pms.Molecule
@@ -911,6 +927,9 @@ class FunctionalizedAmorphousSlitConfig:
         Base slit configuration, including the unified experimental target.
     ligand : SilaneAttachmentConfig
         Silane attachment definition used to realize ``T2`` and ``T3``.
+        Coordinate-only exports require only the molecular fragment, while
+        full-topology exports additionally require
+        :class:`SilaneTopologyConfig`.
     steric_settings : FunctionalizedSlitStericConfig, optional
         Slit-only steric acceptance settings forwarded to the exact
         deterministic ``T2/T3`` attachment workflow.
@@ -946,6 +965,9 @@ class FunctionalizedSlitResult:
         Functionalized full-topology charge diagnostics when an explicit
         silane topology bundle was used during export. Preparation-only
         results and coordinate-only exports leave this as ``None``.
+        :func:`write_functionalized_amorphous_slit` populates this field only
+        when a functionalized full-topology export was requested and
+        completed.
     """
 
     system: pms.PoreKit
@@ -2821,6 +2843,23 @@ def prepare_amorphous_slit_surface(config=None):
     ValueError
         Raised when the provided target contains non-zero ``T2/T3`` fractions
         or when the slit cannot realize the requested bare surface.
+
+    Examples
+    --------
+    >>> import porems as pms
+    >>> config = pms.AmorphousSlitConfig(
+    ...     name="bare_slit",
+    ...     slit_width_nm=7.0,
+    ...     repeat_y=2,
+    ...     surface_target=pms.ExperimentalSiliconStateTarget(
+    ...         q2_fraction=66 / 40000,
+    ...         q3_fraction=650 / 40000,
+    ...         q4_fraction=1.0 - ((66 + 650) / 40000),
+    ...     ),
+    ... )
+    >>> result = pms.prepare_amorphous_slit_surface(config)
+    >>> _ = result.report.final_surface
+    >>> _ = result.silica_topology.to_yaml()
     """
     config = config if config is not None else AmorphousSlitConfig()
     silica_topology = resolve_silica_topology(config)
@@ -2878,6 +2917,31 @@ def prepare_functionalized_amorphous_slit_surface(config):
         Attach-ready functionalized slit system, its preparation report, and
         the resolved silica topology model that would be used for full-slab
         slit topology export.
+
+    Examples
+    --------
+    >>> import porems as pms
+    >>> config = pms.FunctionalizedAmorphousSlitConfig(
+    ...     slit_config=pms.AmorphousSlitConfig(
+    ...         name="functionalized_slit",
+    ...         slit_width_nm=7.0,
+    ...         repeat_y=1,
+    ...         surface_target=pms.ExperimentalSiliconStateTarget(
+    ...             q2_fraction=63 / 20000,
+    ...             q3_fraction=648 / 20000,
+    ...             q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
+    ...             t2_fraction=3 / 20000,
+    ...             t3_fraction=4 / 20000,
+    ...         ),
+    ...     ),
+    ...     ligand=pms.SilaneAttachmentConfig(
+    ...         molecule=pms.gen.tms(),
+    ...         mount=0,
+    ...         axis=(0, 1),
+    ...     ),
+    ... )
+    >>> result = pms.prepare_functionalized_amorphous_slit_surface(config)
+    >>> _ = result.report.final_surface
     """
     progress_tracker = _FunctionalizedProgressTracker(
         total_stages=4,
@@ -3005,6 +3069,15 @@ def write_bare_amorphous_slit(
         writes a self-contained full-slab ``.itp`` / ``.top`` pair and
         exposes the resolved silica topology model plus finalized bare-slit
         charge-neutrality diagnostics on ``result``.
+
+    Examples
+    --------
+    >>> import porems as pms
+    >>> result = pms.write_bare_amorphous_slit(
+    ...     "output/bare_amorphous_slit",
+    ...     pms.AmorphousSlitConfig(),
+    ... )
+    >>> _ = result.bare_charge_diagnostics.is_neutral
     """
     result = prepare_amorphous_slit_surface(config=config)
     pms.utils.mkdirp(output_dir)
@@ -3087,6 +3160,86 @@ def write_functionalized_amorphous_slit(
         :class:`SilaneTopologyConfig` is supplied, the writer still stores the
         finalized coordinates and reports but skips functionalized topology
         files.
+
+    Notes
+    -----
+    Functionalized full-topology export interprets the supplied flat ITP as
+    one self-contained base ``T3`` silane fragment. The atom names in that
+    bundle must match ``config.ligand.molecule``, the bundle charge must
+    satisfy the active silica-model target, and geminal ``T2`` targets also
+    require explicit :class:`SilaneGeminalCrossTerms`.
+
+    Examples
+    --------
+    Coordinate-only export without a flat ligand topology bundle:
+
+    >>> import porems as pms
+    >>> config = pms.FunctionalizedAmorphousSlitConfig(
+    ...     slit_config=pms.AmorphousSlitConfig(
+    ...         surface_target=pms.ExperimentalSiliconStateTarget(
+    ...             q2_fraction=63 / 20000,
+    ...             q3_fraction=648 / 20000,
+    ...             q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
+    ...             t2_fraction=3 / 20000,
+    ...             t3_fraction=4 / 20000,
+    ...         ),
+    ...     ),
+    ...     ligand=pms.SilaneAttachmentConfig(
+    ...         molecule=pms.gen.tms(),
+    ...         mount=0,
+    ...         axis=(0, 1),
+    ...     ),
+    ... )
+    >>> result = pms.write_functionalized_amorphous_slit(
+    ...     "output/functionalized_coordinates",
+    ...     config,
+    ... )
+    >>> _ = (result.charge_diagnostics is None)
+
+    Full-topology export with an explicit base ``T3`` ITP and geminal cross
+    terms:
+
+    >>> import porems as pms
+    >>> topology = pms.SilaneTopologyConfig(
+    ...     itp_path="path/to/tms_base_t3.itp",
+    ...     moleculetype_name="TMS",
+    ...     geminal_cross_terms=pms.SilaneGeminalCrossTerms(
+    ...         first_ligand_atom_name="O1",
+    ...         geminal_oxygen_mount_ligand_angle=pms.GromacsAngleParameters.harmonic(
+    ...             angle_deg=105.56,
+    ...             force_constant=384.223760,
+    ...         ),
+    ...         geminal_dihedrals=(
+    ...             pms.GeminalMountDihedralSpec(
+    ...                 fourth_atom_name="Si2",
+    ...                 function=1,
+    ...                 parameters=("0.00000", "1.60387", "3"),
+    ...             ),
+    ...         ),
+    ...     ),
+    ... )
+    >>> config = pms.FunctionalizedAmorphousSlitConfig(
+    ...     slit_config=pms.AmorphousSlitConfig(
+    ...         surface_target=pms.ExperimentalSiliconStateTarget(
+    ...             q2_fraction=63 / 20000,
+    ...             q3_fraction=648 / 20000,
+    ...             q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
+    ...             t2_fraction=3 / 20000,
+    ...             t3_fraction=4 / 20000,
+    ...         ),
+    ...     ),
+    ...     ligand=pms.SilaneAttachmentConfig(
+    ...         molecule=pms.gen.tms(),
+    ...         mount=0,
+    ...         axis=(0, 1),
+    ...         topology=topology,
+    ...     ),
+    ... )
+    >>> result = pms.write_functionalized_amorphous_slit(
+    ...     "output/functionalized_full_topology",
+    ...     config,
+    ... )
+    >>> _ = result.charge_diagnostics.is_valid
     """
     progress_tracker = _FunctionalizedProgressTracker(
         total_stages=6,
