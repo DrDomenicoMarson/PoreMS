@@ -24,6 +24,7 @@ from porems.pore import Pore
 from porems.topology import (
     BareSilicaChargeContribution,
     BareSilicaChargeDiagnostics,
+    FunctionalizedSlitChargeDiagnostics,
     GromacsAngle,
     GromacsAtom,
     GromacsAtomType,
@@ -44,6 +45,7 @@ _HYBRID36_DIGITS_LOWER = "0123456789abcdefghijklmnopqrstuvwxyz"
 _PDB_CHAIN_ID = "A"
 _CIF_LABEL_SEQ_ID = "1"
 _FULL_SLIT_NREXCL = 3
+_FUNCTIONALIZED_CHARGE_TOLERANCE = 1e-6
 
 
 @dataclass(frozen=True)
@@ -2413,17 +2415,20 @@ class Store:
             name with a trailing ``"G"``.
         silane_topology_config : object or None, optional
             Optional silane topology configuration carrying ``itp_path``,
-            ``moleculetype_name``, and ``junction_parameters`` attributes.
+            ``moleculetype_name``, optional ``geminal_cross_terms``, and
+            legacy ``junction_parameters`` attributes. The supplied flat ITP
+            is interpreted as one base post-condensation ``T3`` fragment
+            whose total charge must already match the target derived from the
+            resolved silica model.
         silica_topology : SilicaTopologyModel or None, optional
             Resolved editable silica topology model used for scaffold and
             graft-junction terms. When omitted, the package defaults are used.
 
         Returns
         -------
-        wrote_full_topology : bool
-            True when a full-slit topology was written. False when the current
-            finalized pore contains unsupported non-silica residues and no
-            matching ligand topology input was available.
+        charge_diagnostics : FunctionalizedSlitChargeDiagnostics or None
+            Functionalized-slit charge diagnostics when a user-supplied silane
+            topology bundle was assembled. Bare slit exports return ``None``.
 
         Raises
         ------
@@ -2434,6 +2439,9 @@ class Store:
             topology information is internally inconsistent. Bare slit export
             also raises when the finalized silica bookkeeping no longer
             preserves zero total charge under the active silica assignments.
+            Functionalized export additionally raises when the supplied base
+            ``T3`` fragment charge or the final assembled topology charge
+            violate the enforced neutrality invariants.
         """
         if not isinstance(self._inp, Pore):
             raise TypeError("Store: Unsupported input type for full slit topology creation...")
@@ -2451,6 +2459,7 @@ class Store:
         ligand_shorts = set()
         bundle_atoms_by_index = {}
         bundle_atomtypes_by_name = {}
+        geminal_cross_terms = None
         if silane_topology_config is not None:
             bundle = parse_flat_itp(
                 silane_topology_config.itp_path,
@@ -2471,6 +2480,11 @@ class Store:
                 atomtype.name: atomtype
                 for atomtype in bundle.atomtypes
             }
+            geminal_cross_terms = getattr(
+                silane_topology_config,
+                "geminal_cross_terms",
+                None,
+            )
             if base_ligand_short:
                 ligand_shorts = {base_ligand_short, base_ligand_short + "G"}
 
@@ -2479,6 +2493,10 @@ class Store:
         record_by_serial = {
             record.serial: record
             for record in cache.atom_records
+        }
+        attachment_record_by_molecule_id = {
+            id(record.molecule): record
+            for record in self._inp.get_attachment_records()
         }
 
         unsupported_residues = sorted(
@@ -2490,7 +2508,102 @@ class Store:
             }
         )
         if unsupported_residues:
-            return False
+            raise ValueError(
+                "Full slit topology export found unsupported finalized "
+                f"residues: {unsupported_residues!r}."
+            )
+
+        functionalized_charge_diagnostics = None
+        mount_atom_name = None
+        expected_t3_fragment_charge = None
+        observed_t3_fragment_charge = None
+        t3_fragment_charge_delta = None
+        geminal_added_oh_charge = None
+        derived_t2_fragment_charge = None
+        t2_site_count = 0
+        t3_site_count = 0
+
+        if bundle is not None:
+            expected_t3_fragment_charge = (
+                float(silica_topology.atom_assignments.silanol_silicon.charge)
+                + float(silica_topology.atom_assignments.silanol_oxygen.charge)
+                + float(silica_topology.atom_assignments.silanol_hydrogen.charge)
+            )
+            geminal_added_oh_charge = (
+                float(silica_topology.atom_assignments.geminal_oxygen.charge)
+                + float(silica_topology.atom_assignments.geminal_hydrogen.charge)
+            )
+            derived_t2_fragment_charge = (
+                expected_t3_fragment_charge + geminal_added_oh_charge
+            )
+            observed_t3_fragment_charge = bundle.total_charge()
+            t3_fragment_charge_delta = (
+                observed_t3_fragment_charge - expected_t3_fragment_charge
+            )
+
+            if (
+                abs(t3_fragment_charge_delta)
+                > _FUNCTIONALIZED_CHARGE_TOLERANCE
+            ):
+                raise ValueError(
+                    "The supplied silane base T3 fragment topology does not "
+                    "match the expected charge target derived from the "
+                    "resolved silica topology. Expected "
+                    f"{expected_t3_fragment_charge:.6f}, observed "
+                    f"{observed_t3_fragment_charge:.6f}, delta "
+                    f"{t3_fragment_charge_delta:.6f}."
+                )
+
+            residue_ids_by_name = {}
+            for record in cache.atom_records:
+                residue_ids_by_name.setdefault(record.residue_name, set()).add(
+                    record.residue_id
+                )
+            t2_site_count = len(
+                residue_ids_by_name.get(base_ligand_short + "G", set())
+            )
+            t3_site_count = len(residue_ids_by_name.get(base_ligand_short, set()))
+
+            if self._inp.get_attachment_records():
+                first_attachment = self._inp.get_attachment_records()[0]
+                first_attachment_serials = cache.molecule_serials[
+                    next(
+                        molecule_index
+                        for molecule_index, molecule in enumerate(self._mols)
+                        if id(molecule) == id(first_attachment.molecule)
+                    )
+                ]
+                mount_atom_name = record_by_serial[
+                    first_attachment_serials[first_attachment.mount_atom_local_id]
+                ].atom_name
+
+            if t2_site_count > 0:
+                if geminal_cross_terms is None:
+                    raise ValueError(
+                        "Geminal T2 full-topology export requires explicit "
+                        "SilaneTopologyConfig.geminal_cross_terms."
+                    )
+                if mount_atom_name is None:
+                    raise ValueError(
+                        "Geminal T2 full-topology export requires at least "
+                        "one attachment to resolve the mount atom name."
+                    )
+                if not bundle.has_atom_name(geminal_cross_terms.first_ligand_atom_name):
+                    raise ValueError(
+                        "Silane geminal cross terms reference unknown base "
+                        "ligand atom name "
+                        f"{geminal_cross_terms.first_ligand_atom_name!r}."
+                    )
+                if bundle.bond_by_names(
+                    mount_atom_name,
+                    geminal_cross_terms.first_ligand_atom_name,
+                ) is None:
+                    raise ValueError(
+                        "Silane geminal cross terms require "
+                        f"{geminal_cross_terms.first_ligand_atom_name!r} to "
+                        "be directly bonded to the mount atom "
+                        f"{mount_atom_name!r} in the base T3 topology."
+                    )
 
         if bundle is None:
             diagnostics = self._bare_silica_charge_diagnostics_from_cache(
@@ -2552,6 +2665,14 @@ class Store:
                 "Finalized ligand residue contains atoms that cannot be mapped "
                 "to the supplied base ligand topology bundle: "
                 f"{(record.residue_name, record.atom_name)!r}."
+            )
+
+        def is_generated_geminal_record(record, atom_type):
+            return (
+                bundle is not None
+                and record.residue_name == base_ligand_short + "G"
+                and record.atom_type == atom_type
+                and not bundle.has_atom_name(record.atom_name)
             )
 
         atoms = []
@@ -2685,7 +2806,30 @@ class Store:
                     )
                 )
 
-                if center_element == "O" and outer_elements == ["H", "Si"]:
+                if (
+                    geminal_cross_terms is not None
+                    and center_element == "Si"
+                    and record_b.residue_name == base_ligand_short + "G"
+                    and mount_atom_name is not None
+                    and record_b.atom_name == mount_atom_name
+                    and (
+                        (
+                            is_generated_geminal_record(record_a, "O")
+                            and record_c.atom_name
+                            == geminal_cross_terms.first_ligand_atom_name
+                        )
+                        or (
+                            is_generated_geminal_record(record_c, "O")
+                            and record_a.atom_name
+                            == geminal_cross_terms.first_ligand_atom_name
+                        )
+                    )
+                ):
+                    angle_parameters = (
+                        geminal_cross_terms
+                        .geminal_oxygen_mount_ligand_angle
+                    )
+                elif center_element == "O" and outer_elements == ["H", "Si"]:
                     angle_parameters = (
                         silica_topology
                         .angle_terms
@@ -2799,6 +2943,62 @@ class Store:
                         )
                     )
 
+                if (
+                    geminal_cross_terms is not None
+                    and mol.get_short() == base_ligand_short + "G"
+                ):
+                    generated_geminal_oxygen_serials = [
+                        serial
+                        for serial in serials
+                        if is_generated_geminal_record(record_by_serial[serial], "O")
+                    ]
+                    if len(generated_geminal_oxygen_serials) != 1:
+                        raise ValueError(
+                            "Geminal T2 topology export expects exactly one "
+                            "internally generated hydroxyl oxygen per geminal "
+                            f"residue. Found {len(generated_geminal_oxygen_serials)} "
+                            f"for residue {mol.get_short()!r}."
+                        )
+                    attachment_record = attachment_record_by_molecule_id.get(id(mol))
+                    if attachment_record is None:
+                        raise ValueError(
+                            "Geminal T2 topology export could not resolve the "
+                            "attachment record for one finalized ligand "
+                            "molecule."
+                        )
+                    mount_serial = serials[attachment_record.mount_atom_local_id]
+                    first_ligand_atom_serial = serial_by_bundle_name.get(
+                        geminal_cross_terms.first_ligand_atom_name
+                    )
+                    if first_ligand_atom_serial is None:
+                        raise ValueError(
+                            "Geminal T2 topology export could not resolve "
+                            "the configured first ligand atom "
+                            f"{geminal_cross_terms.first_ligand_atom_name!r} "
+                            "inside one finalized geminal residue."
+                        )
+                    for dihedral_spec in geminal_cross_terms.geminal_dihedrals:
+                        fourth_atom_serial = serial_by_bundle_name.get(
+                            dihedral_spec.fourth_atom_name
+                        )
+                        if fourth_atom_serial is None:
+                            raise ValueError(
+                                "Geminal T2 topology export references "
+                                "unknown ligand atom "
+                                f"{dihedral_spec.fourth_atom_name!r} in "
+                                "SilaneTopologyConfig.geminal_cross_terms."
+                            )
+                        dihedrals.append(
+                            GromacsDihedral(
+                                atom_a=generated_geminal_oxygen_serials[0],
+                                atom_b=mount_serial,
+                                atom_c=first_ligand_atom_serial,
+                                atom_d=fourth_atom_serial,
+                                function=dihedral_spec.function,
+                                parameters=dihedral_spec.parameters,
+                            )
+                        )
+
         top_filename = name if name else self._name + ".top"
         if not top_filename.endswith(".top"):
             top_filename = top_filename + ".top"
@@ -2825,6 +3025,27 @@ class Store:
             ),
         )
 
+        if bundle is not None:
+            final_total_charge = sum(float(atom.charge) for atom in atoms)
+            functionalized_charge_diagnostics = FunctionalizedSlitChargeDiagnostics(
+                expected_t3_fragment_charge=expected_t3_fragment_charge,
+                observed_t3_fragment_charge=observed_t3_fragment_charge,
+                t3_fragment_charge_delta=t3_fragment_charge_delta,
+                derived_t2_fragment_charge=derived_t2_fragment_charge,
+                geminal_added_oh_charge=geminal_added_oh_charge,
+                t2_site_count=t2_site_count,
+                t3_site_count=t3_site_count,
+                final_total_charge=final_total_charge,
+                tolerance=_FUNCTIONALIZED_CHARGE_TOLERANCE,
+            )
+            if not functionalized_charge_diagnostics.is_final_topology_neutral:
+                raise ValueError(
+                    "Functionalized full-slit topology export must remain "
+                    "neutral under the current silica assignments and the "
+                    "user-supplied silane fragment charges. Observed final "
+                    f"total charge {final_total_charge:.6f}."
+                )
+
         with open(itp_link, "w") as file_out:
             file_out.write(render_itp(atomtype_order, molecule_type))
 
@@ -2837,7 +3058,7 @@ class Store:
                 )
             )
 
-        return True
+        return functionalized_charge_diagnostics
 
     def grid(self, name="", charges=None):
         """Write the ``grid.itp`` topology template for silica grid atoms.

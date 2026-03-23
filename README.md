@@ -76,9 +76,16 @@ with the same `ExperimentalSiliconStateTarget` and a `SilaneAttachmentConfig`.
 Built-in `tqdm` progress bars are available through
 `FunctionalizedSlitProgressConfig`; auto mode shows progress in interactive
 terminal and notebook sessions while staying quiet in typical test contexts.
-Built-in TMS exports use a bundled flat ligand topology automatically. Other
-custom silanes can opt into the same full-slab export by supplying a
-`SilaneTopologyConfig` with a self-contained flat ligand `.itp` bundle.
+Functionalized coordinate export works with just the ligand coordinates, but
+self-contained functionalized `.top` / `.itp` output now requires an explicit
+`SilaneTopologyConfig` with a self-contained flat ligand `.itp` bundle, even
+for TMS. That bundle is interpreted as one base post-condensation `T3`
+fragment that already contains the replacement surface Si; under the current
+default silica charge model its total charge must therefore be `+0.96`. When
+the target includes `T2` sites, the exporter derives them internally from the
+same base fragment by adding one silica `OH`, so the topology config must
+also provide explicit `SilaneGeminalCrossTerms` for the generated
+`O(geminal)-Si(mount)-ligand` cross terms.
 
 
 ## Installation

@@ -563,6 +563,65 @@ class BareSilicaChargeDiagnostics:
         return self.coordination_identity_delta == 0
 
 
+@dataclass(frozen=True)
+class FunctionalizedSlitChargeDiagnostics:
+    """Charge audit for one functionalized full-slit topology export.
+
+    Parameters
+    ----------
+    expected_t3_fragment_charge : float
+        Expected total charge of the user-supplied base ``T3`` fragment under
+        the resolved silica model.
+    observed_t3_fragment_charge : float
+        Total charge parsed from the user-supplied flat ligand topology
+        bundle.
+    t3_fragment_charge_delta : float
+        Difference ``observed_t3_fragment_charge - expected_t3_fragment_charge``.
+    derived_t2_fragment_charge : float
+        Expected total charge of the internally generated geminal ``T2`` form.
+    geminal_added_oh_charge : float
+        Charge contribution of the internally added silica ``OH`` pair.
+    t2_site_count : int
+        Number of exported geminal ``T2`` residues.
+    t3_site_count : int
+        Number of exported ``T3`` residues.
+    final_total_charge : float
+        Summed total charge of the final assembled functionalized slit
+        topology.
+    tolerance : float, optional
+        Absolute tolerance used for the fragment-charge and final-neutrality
+        checks.
+    """
+
+    expected_t3_fragment_charge: float
+    observed_t3_fragment_charge: float
+    t3_fragment_charge_delta: float
+    derived_t2_fragment_charge: float
+    geminal_added_oh_charge: float
+    t2_site_count: int
+    t3_site_count: int
+    final_total_charge: float
+    tolerance: float = 1e-6
+
+    @property
+    def is_base_fragment_charge_valid(self):
+        """Return whether the base ``T3`` fragment charge matches the target."""
+        return abs(self.t3_fragment_charge_delta) <= self.tolerance
+
+    @property
+    def is_final_topology_neutral(self):
+        """Return whether the final assembled slit topology is neutral."""
+        return abs(self.final_total_charge) <= self.tolerance
+
+    @property
+    def is_valid(self):
+        """Return whether both functionalized-slit charge invariants hold."""
+        return (
+            self.is_base_fragment_charge_valid
+            and self.is_final_topology_neutral
+        )
+
+
 def _build_default_silica_topology():
     """Build the package-default editable silica topology model.
 
@@ -1046,6 +1105,17 @@ class ParsedTopologyBundle:
             True when ``atom_name`` is present in the bundle.
         """
         return atom_name in self.atom_index_by_name
+
+    def total_charge(self):
+        """Return the total molecular charge parsed from the bundle.
+
+        Returns
+        -------
+        total_charge : float
+            Sum of the parsed ``[ atoms ]`` charge tokens converted to
+            floating-point values.
+        """
+        return sum(float(atom.charge) for atom in self.moleculetype.atoms)
 
     def bond_by_names(self, atom_name_a, atom_name_b):
         """Return one bond definition by atom names.

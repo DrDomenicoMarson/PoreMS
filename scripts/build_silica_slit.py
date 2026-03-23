@@ -10,7 +10,6 @@ import porems as pms
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PACKAGE_DIR = Path(pms.__file__).resolve().parent
 
 
 @dataclass(frozen=True)
@@ -22,6 +21,15 @@ class BuildSilicaSlitSettings:
     ligand_name : str, optional
         Ligand selector. Supported values are ``"bare"``, ``"TMS"``, and
         ``"TEPS"``.
+    tms_itp_path : Path or None, optional
+        Optional self-contained flat ``.itp`` file used when ``ligand_name``
+        is ``"TMS"``. Functionalized topology export now requires explicit
+        user-provided topology input even for TMS. The supplied bundle is
+        expected to describe one base ``T3`` silane fragment whose total
+        charge already matches the active silica-derived target.
+    tms_moleculetype_name : str, optional
+        Optional explicit ``[ moleculetype ]`` name expected inside
+        ``tms_itp_path``.
     teps_itp_path : Path or None, optional
         Optional self-contained flat ``.itp`` file used when ``ligand_name``
         is ``"TEPS"``. The script does not use the legacy helper-topology
@@ -39,7 +47,9 @@ class BuildSilicaSlitSettings:
         When ``True``, also write an inspection-oriented mmCIF file.
     """
 
-    ligand_name: str = "TMS"
+    ligand_name: str = "bare"
+    tms_itp_path: Path | None = None
+    tms_moleculetype_name: str = ""
     teps_itp_path: Path | None = None
     teps_moleculetype_name: str = ""
     output_dir: Path | None = None
@@ -48,17 +58,6 @@ class BuildSilicaSlitSettings:
 
 
 SETTINGS = BuildSilicaSlitSettings()
-
-
-def _bundled_tms_topology_path():
-    """Return the bundled self-contained TMS topology path.
-
-    Returns
-    -------
-    topology_path : Path
-        Absolute path to the package-provided flat TMS ``.itp`` bundle.
-    """
-    return PACKAGE_DIR / "templates" / "tms_slit.itp"
 
 
 def _surface_target(ligand_name):
@@ -155,6 +154,66 @@ def _teps_topology_config(settings):
     )
 
 
+def _tms_topology_config(settings):
+    """Return the explicit full-topology input for the TMS example.
+
+    Parameters
+    ----------
+    settings : BuildSilicaSlitSettings
+        Script settings carrying the optional custom TMS topology path.
+
+    Returns
+    -------
+    topology : pms.SilaneTopologyConfig
+        Self-contained TMS topology input forwarded to the slit exporter.
+
+    Raises
+    ------
+    ValueError
+        Raised when the script is asked to build the TMS case without an
+        explicit flat topology bundle.
+    """
+    if settings.tms_itp_path is None:
+        raise ValueError(
+            "The TMS example now requires a self-contained flat .itp bundle "
+            "via BuildSilicaSlitSettings.tms_itp_path so the script can use "
+            "the explicit full slit topology exporter."
+        )
+
+    return pms.SilaneTopologyConfig(
+        itp_path=str(settings.tms_itp_path),
+        moleculetype_name=settings.tms_moleculetype_name,
+        geminal_cross_terms=_default_tms_geminal_cross_terms(),
+    )
+
+
+def _default_tms_geminal_cross_terms():
+    """Return the built-in geminal cross terms used by the TMS example.
+
+    Returns
+    -------
+    cross_terms : pms.SilaneGeminalCrossTerms
+        TMS-specific geminal cross terms consistent with the package's
+        example ``TMSG`` topology layout. The helper assumes the base TMS
+        fragment uses the package-default atom naming convention
+        ``Si1-O1-Si2``.
+    """
+    return pms.SilaneGeminalCrossTerms(
+        first_ligand_atom_name="O1",
+        geminal_oxygen_mount_ligand_angle=pms.GromacsAngleParameters.harmonic(
+            angle_deg=105.56,
+            force_constant=384.223760,
+        ),
+        geminal_dihedrals=(
+            pms.GeminalMountDihedralSpec(
+                fourth_atom_name="Si2",
+                function=1,
+                parameters=("0.00000", "1.60387", "3"),
+            ),
+        ),
+    )
+
+
 def _functionalized_config(settings):
     """Return the functionalized slit configuration for one ligand example.
 
@@ -177,10 +236,7 @@ def _functionalized_config(settings):
     ligand_key = settings.ligand_name.upper()
     if ligand_key == "TMS":
         molecule = pms.gen.tms()
-        topology = pms.SilaneTopologyConfig(
-            itp_path=str(_bundled_tms_topology_path()),
-            moleculetype_name="TMS",
-        )
+        topology = _tms_topology_config(settings)
     elif ligand_key == "TEPS":
         molecule = pms.Molecule("TEPS", "TEPS", str(SCRIPT_DIR / "TEPS.pdb"))
         topology = _teps_topology_config(settings)

@@ -113,10 +113,16 @@ residues.
 ``FunctionalizedSlitProgressConfig`` enables built-in ``tqdm`` progress bars
 for the exact functionalized slit workflow. Auto mode shows progress in
 interactive terminals and notebooks while staying quiet in typical non-
-interactive test and batch contexts. Built-in TMS ligands resolve to a bundled
-flat topology automatically. Other silanes can participate in the same
-self-contained full-slab export by supplying ``SilaneTopologyConfig`` on the
-attachment definition.
+interactive test and batch contexts. Functionalized coordinate export works
+with just the ligand coordinates, but self-contained functionalized full-slab
+topology export requires ``SilaneTopologyConfig`` on the attachment
+definition, including for TMS. The supplied flat ITP is interpreted as one
+base post-condensation ``T3`` fragment that already contains the replacement
+surface Si, so under the current default silica charge model its total charge
+must be ``+0.96``. When the requested surface contains ``T2`` sites, the slit
+exporter generates them internally from that same base fragment by adding one
+silica ``OH`` and therefore also requires explicit
+``SilaneGeminalCrossTerms`` for the generated geminal cross terms.
 
 
 Create surface molecules
@@ -159,7 +165,10 @@ following code block can be used as a base.
 .. note::
 
   Parametrization must be carried out by the user. Topology generation should
-  be performed for both a singular binding site and a geminal binding site.
+  provide one base post-condensation ``T3`` fragment topology. Geminal
+  ``T2`` sites are generated internally by the slit exporter, so users should
+  provide the associated geminal cross terms rather than a separate ``T2``
+  topology.
 
 Create pore system
 ------------------

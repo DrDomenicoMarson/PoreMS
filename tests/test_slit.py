@@ -1,3 +1,4 @@
+from dataclasses import replace
 import inspect
 import json
 import os
@@ -112,6 +113,118 @@ def teps_ligand(repo_root):
     """
     teps_path = Path(repo_root) / "scripts" / "TEPS.pdb"
     return pms.Molecule("TEPS", "TEPS", str(teps_path))
+
+
+def bundled_tms_template_path():
+    """Return the checked-in legacy TMS flat topology path.
+
+    Returns
+    -------
+    itp_path : Path
+        Package path to the legacy checked-in TMS flat topology bundle.
+    """
+    return Path(pms.__file__).resolve().parent / "templates" / "tms_slit.itp"
+
+
+def explicit_tms_geminal_cross_terms():
+    """Return explicit generated geminal cross terms for TMS export tests.
+
+    Returns
+    -------
+    cross_terms : SilaneGeminalCrossTerms
+        Deterministic geminal cross terms used by the functionalized export
+        tests.
+    """
+    return pms.SilaneGeminalCrossTerms(
+        first_ligand_atom_name="O1",
+        geminal_oxygen_mount_ligand_angle=topo_mod.GromacsAngleParameters.harmonic(
+            angle_deg=117.65432,
+            force_constant=432.123456,
+        ),
+        geminal_dihedrals=(
+            pms.GeminalMountDihedralSpec(
+                fourth_atom_name="Si2",
+                function=1,
+                parameters=("12.34567", "0.98765", "2"),
+            ),
+        ),
+    )
+
+
+def explicit_tms_topology_config(
+    tmp_path,
+    total_charge=0.96,
+    include_geminal_terms=True,
+    junction_parameters=None,
+    source_itp_path=None,
+):
+    """Return an explicit TMS topology config for full-slab export tests.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Temporary directory used to materialize corrected flat topology files.
+    total_charge : float, optional
+        Target total charge written onto the base parsed TMS fragment.
+    include_geminal_terms : bool, optional
+        True to include explicit generated geminal cross terms on the returned
+        config.
+    junction_parameters : SlitJunctionParameters or None, optional
+        Optional explicit legacy junction-parameter override carried by the
+        returned topology config.
+    source_itp_path : Path or None, optional
+        Optional explicit source ``.itp`` path. When omitted, the checked-in
+        legacy TMS bundle is used as the source text.
+
+    Returns
+    -------
+    topology : SilaneTopologyConfig
+        Explicit TMS topology config suitable for the functionalized slit
+        exporter.
+    """
+    source_itp_path = (
+        bundled_tms_template_path()
+        if source_itp_path is None
+        else Path(source_itp_path)
+    )
+    bundle = topo_mod.parse_flat_itp(
+        source_itp_path,
+        moleculetype_name="TMS",
+    )
+    charge_delta = total_charge - bundle.total_charge()
+    corrected_atoms = []
+    for atom in bundle.moleculetype.atoms:
+        charge = float(atom.charge)
+        if atom.atom_name == "Si1":
+            charge += charge_delta
+        corrected_atoms.append(
+            replace(
+                atom,
+                charge=f"{charge:.6f}",
+            )
+        )
+
+    corrected_bundle_path = Path(tmp_path) / "tms_explicit_charge_target.itp"
+    with open(corrected_bundle_path, "w") as file_out:
+        file_out.write(
+            topo_mod.render_itp(
+                bundle.atomtypes,
+                replace(bundle.moleculetype, atoms=tuple(corrected_atoms)),
+            )
+        )
+
+    topology_kwargs = {
+        "itp_path": str(corrected_bundle_path),
+        "moleculetype_name": "TMS",
+        "geminal_cross_terms": (
+            explicit_tms_geminal_cross_terms()
+            if include_geminal_terms
+            else None
+        ),
+    }
+    if junction_parameters is not None:
+        topology_kwargs["junction_parameters"] = junction_parameters
+    return pms.SilaneTopologyConfig(**topology_kwargs)
 
 
 def cif_loop_rows(cif_text, first_tag):
@@ -1110,12 +1223,15 @@ class TestAmorphousSlitPreparation:
         assert hasattr(pms, "SurfacePreparationDiagnostics")
         assert hasattr(pms, "BareSilicaChargeContribution")
         assert hasattr(pms, "BareSilicaChargeDiagnostics")
+        assert hasattr(pms, "FunctionalizedSlitChargeDiagnostics")
         assert hasattr(pms, "SilaneAttachmentConfig")
         assert hasattr(pms, "SlitTimingSummary")
         assert hasattr(pms, "FunctionalizedSlitProgressConfig")
         assert hasattr(pms, "FunctionalizedSlitStericConfig")
         assert hasattr(pms, "FunctionalizedAmorphousSlitConfig")
         assert hasattr(pms, "FunctionalizedSlitResult")
+        assert hasattr(pms, "GeminalMountDihedralSpec")
+        assert hasattr(pms, "SilaneGeminalCrossTerms")
         assert hasattr(pms, "GraphBond")
         assert hasattr(pms, "GraphAngle")
         assert hasattr(pms, "AttachmentRecord")
@@ -1134,19 +1250,15 @@ class TestAmorphousSlitPreparation:
 
 
 class TestFunctionalizedAmorphousSlit:
-    def test_bundled_tms_topology_is_a_self_contained_flat_bundle(self):
-        bundle = topo_mod.parse_flat_itp(
-            slit_mod._bundled_tms_topology_path(),
-            moleculetype_name="TMS",
-        )
-
-        assert bundle.moleculetype.name == "TMS"
-        assert bundle.moleculetype.nrexcl == 3
-        assert len(bundle.atomtypes) == 4
-        assert len(bundle.moleculetype.atoms) == 15
-        assert bundle.has_atom_name("Si1")
-        assert bundle.bond_by_names("Si1", "O1") is not None
-        assert bundle.angle_by_names("Si1", "O1", "Si2") is not None
+    def test_resolve_silane_topology_config_requires_explicit_topology_input(self):
+        assert slit_mod.resolve_silane_topology_config(None) is None
+        assert slit_mod.resolve_silane_topology_config(
+            pms.SilaneAttachmentConfig(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+            )
+        ) is None
 
     def test_silane_attachment_config_defaults_to_ten_degree_rotation_scan(self):
         ligand = pms.SilaneAttachmentConfig(
@@ -1419,8 +1531,11 @@ class TestFunctionalizedAmorphousSlit:
             write_cif=False,
         )
 
+        assert result.charge_diagnostics is None
         assert result.report.timing_summary.finalize_s > 0
         assert result.report.timing_summary.store_export_s > 0
+        assert not (tmp_path / "functionalized_progress_write" / "functionalized_progress_write.top").exists()
+        assert not (tmp_path / "functionalized_progress_write" / "functionalized_progress_write.itp").exists()
         stage_bars = [bar for bar in created if bar.unit == "stage"]
         assert len(stage_bars) == 1
         assert stage_bars[0].total == 6
@@ -1610,6 +1725,7 @@ class TestFunctionalizedAmorphousSlit:
                 molecule=pms.gen.tms(),
                 mount=0,
                 axis=(0, 1),
+                topology=explicit_tms_topology_config(tmp_path),
             ),
         )
 
@@ -1637,7 +1753,18 @@ class TestFunctionalizedAmorphousSlit:
         assert "[ atomtypes ]" in itp_text
         assert "[ dihedrals ]" in itp_text
         assert "si 14 28.08600" in itp_text
+        assert "117.65432 432.123456" in itp_text
+        assert "12.34567 0.98765 2" in itp_text
         assert "OM O1" not in top_text
+        assert result.charge_diagnostics is not None
+        assert result.charge_diagnostics.is_valid
+        assert result.charge_diagnostics.expected_t3_fragment_charge == pytest.approx(0.96)
+        assert result.charge_diagnostics.observed_t3_fragment_charge == pytest.approx(0.96, abs=1e-6)
+        assert result.charge_diagnostics.derived_t2_fragment_charge == pytest.approx(0.64)
+        assert result.charge_diagnostics.t2_site_count == 3
+        assert result.charge_diagnostics.t3_site_count == 4
+        assert result.charge_diagnostics.final_total_charge == pytest.approx(0.0, abs=1e-6)
+        assert sum(row[3] for row in itp_atom_rows(output_dir / "functionalized_export_slit.itp")) == pytest.approx(0.0, abs=1e-6)
         assert result.report.timing_summary.finalize_s > 0
         assert result.report.timing_summary.store_export_s > 0
 
@@ -1668,6 +1795,7 @@ class TestFunctionalizedAmorphousSlit:
                     molecule=pms.gen.tms(),
                     mount=0,
                     axis=(0, 1),
+                    topology=explicit_tms_topology_config(tmp_path),
                 ),
                 progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=False),
             ),
@@ -1719,9 +1847,8 @@ class TestFunctionalizedAmorphousSlit:
                     molecule=pms.gen.tms(),
                     mount=0,
                     axis=(0, 1),
-                    topology=pms.SilaneTopologyConfig(
-                        itp_path=slit_mod._bundled_tms_topology_path(),
-                        moleculetype_name="TMS",
+                    topology=explicit_tms_topology_config(
+                        tmp_path,
                         junction_parameters=legacy_junctions,
                     ),
                 ),
@@ -1743,6 +1870,111 @@ class TestFunctionalizedAmorphousSlit:
         assert "0.16666 123456.789000" in itp_text
         assert "149.12345 654.321000" in itp_text
         assert "112.22222 333.444000" in itp_text
+
+    def test_functionalized_write_skips_topology_without_explicit_silane_itp(self, tmp_path):
+        output_dir = tmp_path / "functionalized_no_explicit_topology"
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+
+        result = pms.write_functionalized_amorphous_slit(
+            str(output_dir),
+            pms.FunctionalizedAmorphousSlitConfig(
+                slit_config=pms.AmorphousSlitConfig(
+                    name="functionalized_no_explicit_topology",
+                    repeat_y=1,
+                    surface_target=target,
+                ),
+                ligand=pms.SilaneAttachmentConfig(
+                    molecule=pms.gen.tms(),
+                    mount=0,
+                    axis=(0, 1),
+                ),
+                progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=False),
+            ),
+            write_pdb=False,
+            write_cif=False,
+        )
+
+        assert result.charge_diagnostics is None
+        assert not (output_dir / "functionalized_no_explicit_topology.top").exists()
+        assert not (output_dir / "functionalized_no_explicit_topology.itp").exists()
+
+    def test_functionalized_export_rejects_charge_mismatched_t3_topology(self, tmp_path):
+        output_dir = tmp_path / "functionalized_invalid_t3_charge"
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+
+        with pytest.raises(ValueError, match="base T3 fragment topology"):
+            pms.write_functionalized_amorphous_slit(
+                str(output_dir),
+                pms.FunctionalizedAmorphousSlitConfig(
+                    slit_config=pms.AmorphousSlitConfig(
+                        name="functionalized_invalid_t3_charge",
+                        repeat_y=1,
+                        surface_target=target,
+                    ),
+                    ligand=pms.SilaneAttachmentConfig(
+                        molecule=pms.gen.tms(),
+                        mount=0,
+                        axis=(0, 1),
+                        topology=pms.SilaneTopologyConfig(
+                            itp_path=str(bundled_tms_template_path()),
+                            moleculetype_name="TMS",
+                            geminal_cross_terms=explicit_tms_geminal_cross_terms(),
+                        ),
+                    ),
+                    progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=False),
+                ),
+                write_pdb=False,
+                write_cif=False,
+            )
+
+    def test_functionalized_export_rejects_missing_geminal_cross_terms(self, tmp_path):
+        output_dir = tmp_path / "functionalized_missing_geminal_terms"
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=65 / 957,
+            q3_fraction=651 / 957,
+            q4_fraction=239 / 957,
+            t2_fraction=1 / 957,
+            t3_fraction=1 / 957,
+            alpha_override=1.0,
+        )
+
+        with pytest.raises(ValueError, match="geminal_cross_terms"):
+            pms.write_functionalized_amorphous_slit(
+                str(output_dir),
+                pms.FunctionalizedAmorphousSlitConfig(
+                    slit_config=pms.AmorphousSlitConfig(
+                        name="functionalized_missing_geminal_terms",
+                        repeat_y=1,
+                        surface_target=target,
+                    ),
+                    ligand=pms.SilaneAttachmentConfig(
+                        molecule=pms.gen.tms(),
+                        mount=0,
+                        axis=(0, 1),
+                        topology=explicit_tms_topology_config(
+                            tmp_path,
+                            include_geminal_terms=False,
+                        ),
+                    ),
+                    progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=False),
+                ),
+                write_pdb=False,
+                write_cif=False,
+            )
 
     def test_teps_exports_use_pdb_aliases_and_consistent_mmcif_metadata(self, tmp_path, repo_root):
         output_dir = tmp_path / "functionalized_amorphous_slit_teps_export"
@@ -1836,6 +2068,8 @@ class TestFunctionalizedAmorphousSlit:
         assert {row[atom_asym_index] for row in atom_rows} <= asym_ids
         assert {row[conn_asym_1_index] for row in conn_rows} <= asym_ids
         assert {row[conn_asym_2_index] for row in conn_rows} <= asym_ids
+        assert not (output_dir / "functionalized_teps_export.top").exists()
+        assert not (output_dir / "functionalized_teps_export.itp").exists()
 
     def test_small_teps_functionalized_smoke_populates_timing_summary(self, repo_root):
         target = pms.ExperimentalSiliconStateTarget(

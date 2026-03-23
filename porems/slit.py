@@ -20,6 +20,7 @@ from tqdm.auto import tqdm as _tqdm_auto
 
 from porems.topology import (
     BareSilicaChargeDiagnostics,
+    FunctionalizedSlitChargeDiagnostics,
     GromacsAngleParameters,
     GromacsBondParameters,
     SilicaAngleTerm,
@@ -749,6 +750,11 @@ class SilaneTopologyConfig:
     moleculetype_name : str, optional
         Optional explicit molecule-type name expected inside ``itp_path``.
         When omitted, the parser accepts the file's own name.
+    geminal_cross_terms : SilaneGeminalCrossTerms or None, optional
+        Optional explicit bonded terms used only when the exporter internally
+        augments the base ``T3`` fragment into a geminal ``T2`` site by
+        adding one silica ``OH`` group. When no geminal sites are exported,
+        this can remain ``None``.
     junction_parameters : SlitJunctionParameters, optional
         Legacy silica-ligand junction parameters translated onto the resolved
         silica topology model when no explicit
@@ -757,9 +763,52 @@ class SilaneTopologyConfig:
 
     itp_path: str
     moleculetype_name: str = ""
+    geminal_cross_terms: "SilaneGeminalCrossTerms | None" = None
     junction_parameters: SlitJunctionParameters = field(
         default_factory=SlitJunctionParameters
     )
+
+
+@dataclass(frozen=True)
+class GeminalMountDihedralSpec:
+    """One optional generated geminal dihedral around the mount silicon.
+
+    Parameters
+    ----------
+    fourth_atom_name : str
+        Ligand-side atom name used as the fourth atom in the generated
+        ``O(geminal)-Si(mount)-first_ligand_atom-X`` dihedral.
+    function : int
+        GROMACS dihedral function type.
+    parameters : tuple[str, ...], optional
+        Optional raw parameter tokens written after ``function``.
+    """
+
+    fourth_atom_name: str
+    function: int
+    parameters: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SilaneGeminalCrossTerms:
+    """Explicit bonded terms used when generating internal geminal ``T2`` sites.
+
+    Parameters
+    ----------
+    first_ligand_atom_name : str
+        Atom name of the first ligand-side atom bonded to the mount silicon in
+        the base ``T3`` fragment topology.
+    geminal_oxygen_mount_ligand_angle : GromacsAngleParameters
+        Angle parameters used for the generated
+        ``O(geminal)-Si(mount)-first_ligand_atom`` term.
+    geminal_dihedrals : tuple[GeminalMountDihedralSpec, ...], optional
+        Optional explicit generated dihedrals of the form
+        ``O(geminal)-Si(mount)-first_ligand_atom-X``.
+    """
+
+    first_ligand_atom_name: str
+    geminal_oxygen_mount_ligand_angle: GromacsAngleParameters
+    geminal_dihedrals: tuple[GeminalMountDihedralSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -893,11 +942,16 @@ class FunctionalizedSlitResult:
     silica_topology : SilicaTopologyModel
         Resolved silica topology model actually associated with this slit
         result.
+    charge_diagnostics : FunctionalizedSlitChargeDiagnostics or None, optional
+        Functionalized full-topology charge diagnostics when an explicit
+        silane topology bundle was used during export. Preparation-only
+        results and coordinate-only exports leave this as ``None``.
     """
 
     system: pms.PoreKit
     report: SlitPreparationReport
     silica_topology: SilicaTopologyModel
+    charge_diagnostics: FunctionalizedSlitChargeDiagnostics | None = None
 
 
 @dataclass(frozen=True)
@@ -982,19 +1036,8 @@ def _amorphous_template_path():
     return os.path.join(os.path.dirname(__file__), "templates", "amorph.gro")
 
 
-def _bundled_tms_topology_path():
-    """Return the bundled self-contained TMS topology path.
-
-    Returns
-    -------
-    topology_path : str
-        Absolute path to the bundled flat TMS ``.itp`` file.
-    """
-    return os.path.join(os.path.dirname(__file__), "templates", "tms_slit.itp")
-
-
 def resolve_silane_topology_config(ligand_config):
-    """Return the full-topology input for one silane attachment.
+    """Return the explicit full-topology input for one silane attachment.
 
     Parameters
     ----------
@@ -1004,26 +1047,18 @@ def resolve_silane_topology_config(ligand_config):
     Returns
     -------
     topology_config : SilaneTopologyConfig or None
-        Explicit topology config when available. Built-in TMS ligands resolve
-        to the bundled template automatically. Unsupported ligands return
-        ``None`` so callers can keep the legacy helper-topology path. The
-        returned object is used for ligand-bundle parsing only; explicit
-        user-supplied ``junction_parameters`` are resolved separately onto the
-        silica topology model.
+        Explicit user-supplied topology config when available. When omitted,
+        functionalized coordinate export can still proceed, but no
+        self-contained functionalized slit ``.top`` / ``.itp`` pair is
+        written. The returned object is used for ligand-bundle parsing only;
+        the flat ITP is interpreted as one base ``T3`` fragment and any
+        explicit user-supplied ``junction_parameters`` are resolved
+        separately onto the silica topology model.
     """
     if ligand_config is None:
         return None
 
-    if ligand_config.topology is not None:
-        return ligand_config.topology
-
-    if ligand_config.molecule.get_short() == "TMS":
-        return SilaneTopologyConfig(
-            itp_path=_bundled_tms_topology_path(),
-            moleculetype_name="TMS",
-        )
-
-    return None
+    return ligand_config.topology
 
 
 def _apply_legacy_junction_parameter_overrides(silica_topology, junction_parameters):
@@ -3045,12 +3080,13 @@ def write_functionalized_amorphous_slit(
     -------
     result : FunctionalizedSlitResult
         Finalized functionalized slit system and its preparation report.
-        When built-in or user-supplied flat ligand topology input is
-        available, the export writes a self-contained full-slab ``.itp`` /
-        ``.top`` pair and exposes the resolved silica topology model on
-        ``result``. Unsupported custom ligands fall back to the legacy
-        helper-topology export path until an explicit
-        :class:`SilaneTopologyConfig` is supplied.
+        When explicit flat ligand topology input is available, the export
+        writes a self-contained full-slab ``.itp`` / ``.top`` pair and
+        exposes the resolved silica topology model plus functionalized charge
+        diagnostics on ``result``. When no explicit
+        :class:`SilaneTopologyConfig` is supplied, the writer still stores the
+        finalized coordinates and reports but skips functionalized topology
+        files.
     """
     progress_tracker = _FunctionalizedProgressTracker(
         total_stages=6,
@@ -3079,11 +3115,11 @@ def write_functionalized_amorphous_slit(
             write_pdb_conect=write_pdb_conect,
             write_cif=write_cif,
             write_cif_bonds=write_cif_bonds,
-            write_legacy_topology_helpers=topology_config is None,
+            write_legacy_topology_helpers=False,
             validate_connectivity=validate_connectivity,
         )
         if topology_config is not None:
-            pms.Store(
+            result.charge_diagnostics = pms.Store(
                 result.system._pore,
                 output_dir,
                 sort_list=result.system._sort_list,
