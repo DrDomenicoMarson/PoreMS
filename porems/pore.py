@@ -157,7 +157,9 @@ class _ScaffoldClassificationCache:
     framework_oxygen_ids : tuple[int, ...]
         Degree-two oxygen ids bonded to two silicon atoms.
     final_scaffold_oxygen_ids : tuple[int, ...]
-        Oxygen ids exported as scaffold atoms in the finalized state.
+        Oxygen ids exported as scaffold atoms in the finalized state,
+        including attachment-referenced retained oxygens whose missing silica
+        bonds are reconstructed later during topology export.
     final_scaffold_silicon_ids : tuple[int, ...]
         Silicon ids exported as scaffold atoms in the finalized state.
     """
@@ -568,18 +570,13 @@ class Pore():
                 if is_framework_oxygen:
                     framework_oxygen_ids.append(atom_id)
                     final_scaffold_oxygen_ids.append(atom_id)
+                elif atom_id in attachment_scaffold_oxygen_ids:
+                    final_scaffold_oxygen_ids.append(atom_id)
                 elif (
-                    atom_id not in attachment_scaffold_oxygen_ids
-                    and degree == 1
+                    degree == 1
                     and neighbor_types == ["Si"]
                 ):
                     surface_handle_oxygen_ids.append(atom_id)
-                elif (
-                    atom_id in attachment_scaffold_oxygen_ids
-                    and degree == 1
-                    and neighbor_types == ["Si"]
-                ):
-                    final_scaffold_oxygen_ids.append(atom_id)
 
             elif atom_type == "Si" and degree > 0:
                 final_scaffold_silicon_ids.append(atom_id)
@@ -1303,7 +1300,9 @@ class Pore():
         -------
         oxygen_ids : list[int]
             Matrix oxygen ids exported as ``OM`` after finalization, including
-            framework oxygens and retained silica-ligand junction oxygens.
+            framework oxygens and every attachment-referenced retained scaffold
+            oxygen, even when the live matrix no longer preserves both silica
+            bonds that will be reconstructed during topology export.
         """
         return list(self._get_scaffold_cache().final_scaffold_oxygen_ids)
 
@@ -1422,8 +1421,13 @@ class Pore():
             atom_type = self._block.get_atom_type(atom_id)
             if atom_type == "O":
                 if atom_id not in framework_oxygen:
+                    detail = (
+                        "a valid framework oxygen or retained attachment oxygen"
+                        if allow_attachment_oxygen
+                        else "a valid two-coordinate framework oxygen"
+                    )
                     raise ValueError(
-                        f"Scaffold oxygen {atom_id} cannot be exported as OM because it is not a valid two-coordinate framework oxygen."
+                        f"Scaffold oxygen {atom_id} cannot be exported as OM because it is not {detail}."
                     )
             elif atom_type != "Si":
                 raise ValueError(

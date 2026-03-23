@@ -14,6 +14,8 @@ from .molecule import Molecule
 from .pattern import BetaCristobalit, AlphaCristobalit
 from .pore import BindingSite, SurfacePreparationDiagnostics, Pore
 from .topology import (
+    BareSilicaChargeContribution,
+    BareSilicaChargeDiagnostics,
     SilicaAngleTerm,
     SilicaAngleTermSet,
     SilicaAtomAssignment,
@@ -84,6 +86,7 @@ __all__ = [
     "Dice", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
     "BindingSite", "SurfacePreparationDiagnostics", "Pore",
+    "BareSilicaChargeContribution", "BareSilicaChargeDiagnostics",
     "SilicaAtomTypeModel", "SilicaAtomTypeSet",
     "SilicaAtomAssignment", "SilicaAtomAssignmentSet",
     "SilicaBondTerm", "SilicaBondTermSet",

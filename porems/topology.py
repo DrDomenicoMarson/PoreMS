@@ -465,6 +465,104 @@ class SilicaTopologyModel:
         return yaml.safe_dump(self.to_dict(), sort_keys=False)
 
 
+@dataclass(frozen=True)
+class BareSilicaChargeContribution:
+    """One charge contribution used by the bare-slit neutrality audit.
+
+    Parameters
+    ----------
+    atom_role : str
+        Human-readable silica role name such as ``"framework_oxygen"``.
+    atom_type_name : str
+        GROMACS atom-type identifier written for this role.
+    atom_count : int
+        Number of exported atoms that currently use this role.
+    charge_per_atom : float
+        Partial charge assigned to each atom in this role.
+    total_charge : float
+        Total charge contribution of the role, equal to
+        ``atom_count * charge_per_atom``.
+    """
+
+    atom_role: str
+    atom_type_name: str
+    atom_count: int
+    charge_per_atom: float
+    total_charge: float
+
+
+@dataclass(frozen=True)
+class BareSilicaChargeDiagnostics:
+    """Charge-neutrality diagnostics for one finalized bare silica slit.
+
+    Parameters
+    ----------
+    framework_silicon : BareSilicaChargeContribution
+        Contribution of exported ``SI`` scaffold silicon atoms.
+    framework_oxygen : BareSilicaChargeContribution
+        Contribution of exported ``OM`` scaffold oxygen atoms.
+    silanol_silicon : BareSilicaChargeContribution
+        Contribution of silicon atoms inside ``SL`` residues.
+    silanol_oxygen : BareSilicaChargeContribution
+        Contribution of oxygen atoms inside ``SL`` residues.
+    silanol_hydrogen : BareSilicaChargeContribution
+        Contribution of hydrogen atoms inside ``SL`` residues.
+    geminal_silicon : BareSilicaChargeContribution
+        Contribution of silicon atoms inside ``SLG`` residues.
+    geminal_oxygen : BareSilicaChargeContribution
+        Contribution of oxygen atoms inside ``SLG`` residues.
+    geminal_hydrogen : BareSilicaChargeContribution
+        Contribution of hydrogen atoms inside ``SLG`` residues.
+    silanol_site_count : int
+        Number of exported single-silanol ``SL`` residues.
+    geminal_site_count : int
+        Number of exported geminal-silanol ``SLG`` residues.
+    total_silicon_count : int
+        Total number of exported silica silicon atoms across scaffold and
+        hydroxylated surface residues.
+    total_hydroxyl_count : int
+        Total number of hydroxyl groups, counted via exported hydroxyl
+        hydrogen atoms.
+    coordination_identity_left : int
+        Left-hand side of the silica coordination identity ``4*N_Si``.
+    coordination_identity_right : int
+        Right-hand side of the silica coordination identity
+        ``2*N_OM + N_OH``.
+    coordination_identity_delta : int
+        Difference ``coordination_identity_left - coordination_identity_right``.
+    total_charge : float
+        Summed total charge of the exported bare slit under the active silica
+        assignments.
+    """
+
+    framework_silicon: BareSilicaChargeContribution
+    framework_oxygen: BareSilicaChargeContribution
+    silanol_silicon: BareSilicaChargeContribution
+    silanol_oxygen: BareSilicaChargeContribution
+    silanol_hydrogen: BareSilicaChargeContribution
+    geminal_silicon: BareSilicaChargeContribution
+    geminal_oxygen: BareSilicaChargeContribution
+    geminal_hydrogen: BareSilicaChargeContribution
+    silanol_site_count: int
+    geminal_site_count: int
+    total_silicon_count: int
+    total_hydroxyl_count: int
+    coordination_identity_left: int
+    coordination_identity_right: int
+    coordination_identity_delta: int
+    total_charge: float
+
+    @property
+    def is_neutral(self):
+        """Return whether the audited bare slit is charge neutral."""
+        return abs(self.total_charge) <= 1e-8
+
+    @property
+    def coordination_identity_holds(self):
+        """Return whether ``4*N_Si = 2*N_OM + N_OH`` holds exactly."""
+        return self.coordination_identity_delta == 0
+
+
 def _build_default_silica_topology():
     """Build the package-default editable silica topology model.
 

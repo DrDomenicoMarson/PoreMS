@@ -22,6 +22,8 @@ from porems.connectivity import (
 from porems.molecule import Molecule
 from porems.pore import Pore
 from porems.topology import (
+    BareSilicaChargeContribution,
+    BareSilicaChargeDiagnostics,
     GromacsAngle,
     GromacsAtom,
     GromacsAtomType,
@@ -478,6 +480,51 @@ def _silica_atomtype_lookup(silica_topology):
             )
         atomtypes_by_name[atomtype.name] = atomtype
     return atomtypes_by_name
+
+
+def _silica_assignment_role_name(record):
+    """Return the silica-assignment role used for one exported atom.
+
+    Parameters
+    ----------
+    record : _StructureAtomRecord
+        Serialized atom record in writer order.
+
+    Returns
+    -------
+    role_name : str
+        Attribute name on :class:`porems.topology.SilicaAtomAssignmentSet`
+        describing the matching silica role.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``record`` does not map to a supported silica export
+        role.
+    """
+    if record.residue_name == "OM":
+        return "framework_oxygen"
+    if record.residue_name == "SI":
+        return "framework_silicon"
+    if record.residue_name == "SL":
+        if record.atom_type == "Si":
+            return "silanol_silicon"
+        if record.atom_type == "O":
+            return "silanol_oxygen"
+        if record.atom_type == "H":
+            return "silanol_hydrogen"
+    if record.residue_name == "SLG":
+        if record.atom_type == "Si":
+            return "geminal_silicon"
+        if record.atom_type == "O":
+            return "geminal_oxygen"
+        if record.atom_type == "H":
+            return "geminal_hydrogen"
+
+    raise ValueError(
+        "Unsupported silica residue/atom combination for full slit topology "
+        f"export: {(record.residue_name, record.atom_type, record.atom_name)!r}."
+    )
 
 
 @dataclass(frozen=True)
@@ -1983,6 +2030,163 @@ class Store:
             for mol_short in self._short_list:
                 file_out.write(mol_short+" "+str(len(self._inp.get_mol_dict()[mol_short]))+"\n")
 
+    def _bare_silica_charge_diagnostics_from_cache(self, cache, silica_topology):
+        """Build bare-silica charge diagnostics from cached export records.
+
+        Parameters
+        ----------
+        cache : _StructureExportCache
+            Cached structure-export records in writer order.
+        silica_topology : SilicaTopologyModel
+            Resolved silica topology model whose assignments should be
+            audited.
+
+        Returns
+        -------
+        diagnostics : BareSilicaChargeDiagnostics
+            Charge and coordination diagnostics for the finalized bare slit.
+
+        Raises
+        ------
+        ValueError
+            Raised when the wrapped pore contains non-bare residues or when a
+            silica assignment cannot be resolved for one exported atom.
+        """
+        unsupported_residues = sorted(
+            {
+                record.residue_name
+                for record in cache.atom_records
+                if record.residue_name not in {"OM", "SI", "SL", "SLG"}
+            }
+        )
+        if unsupported_residues:
+            raise ValueError(
+                "Bare slit charge diagnostics only support bare silica "
+                f"residues. Found {unsupported_residues!r}."
+            )
+
+        role_counts = {
+            "framework_silicon": 0,
+            "framework_oxygen": 0,
+            "silanol_silicon": 0,
+            "silanol_oxygen": 0,
+            "silanol_hydrogen": 0,
+            "geminal_silicon": 0,
+            "geminal_oxygen": 0,
+            "geminal_hydrogen": 0,
+        }
+        for record in cache.atom_records:
+            role_name = _silica_assignment_role_name(record)
+            role_counts[role_name] += 1
+
+        def contribution(role_name):
+            assignment = getattr(silica_topology.atom_assignments, role_name)
+            charge_per_atom = float(assignment.charge)
+            atom_count = role_counts[role_name]
+            return BareSilicaChargeContribution(
+                atom_role=role_name,
+                atom_type_name=assignment.atom_type_name,
+                atom_count=atom_count,
+                charge_per_atom=charge_per_atom,
+                total_charge=atom_count * charge_per_atom,
+            )
+
+        framework_silicon = contribution("framework_silicon")
+        framework_oxygen = contribution("framework_oxygen")
+        silanol_silicon = contribution("silanol_silicon")
+        silanol_oxygen = contribution("silanol_oxygen")
+        silanol_hydrogen = contribution("silanol_hydrogen")
+        geminal_silicon = contribution("geminal_silicon")
+        geminal_oxygen = contribution("geminal_oxygen")
+        geminal_hydrogen = contribution("geminal_hydrogen")
+
+        total_silicon_count = (
+            framework_silicon.atom_count
+            + silanol_silicon.atom_count
+            + geminal_silicon.atom_count
+        )
+        total_hydroxyl_count = (
+            silanol_hydrogen.atom_count
+            + geminal_hydrogen.atom_count
+        )
+        coordination_identity_left = 4 * total_silicon_count
+        coordination_identity_right = (
+            2 * framework_oxygen.atom_count
+            + total_hydroxyl_count
+        )
+        total_charge = (
+            framework_silicon.total_charge
+            + framework_oxygen.total_charge
+            + silanol_silicon.total_charge
+            + silanol_oxygen.total_charge
+            + silanol_hydrogen.total_charge
+            + geminal_silicon.total_charge
+            + geminal_oxygen.total_charge
+            + geminal_hydrogen.total_charge
+        )
+
+        return BareSilicaChargeDiagnostics(
+            framework_silicon=framework_silicon,
+            framework_oxygen=framework_oxygen,
+            silanol_silicon=silanol_silicon,
+            silanol_oxygen=silanol_oxygen,
+            silanol_hydrogen=silanol_hydrogen,
+            geminal_silicon=geminal_silicon,
+            geminal_oxygen=geminal_oxygen,
+            geminal_hydrogen=geminal_hydrogen,
+            silanol_site_count=silanol_silicon.atom_count,
+            geminal_site_count=geminal_silicon.atom_count,
+            total_silicon_count=total_silicon_count,
+            total_hydroxyl_count=total_hydroxyl_count,
+            coordination_identity_left=coordination_identity_left,
+            coordination_identity_right=coordination_identity_right,
+            coordination_identity_delta=(
+                coordination_identity_left - coordination_identity_right
+            ),
+            total_charge=total_charge,
+        )
+
+    def bare_slit_charge_diagnostics(self, silica_topology=None):
+        """Return bare-silica charge diagnostics for a finalized slit export.
+
+        Parameters
+        ----------
+        silica_topology : SilicaTopologyModel or None, optional
+            Resolved silica topology model whose atom assignments should be
+            audited. When omitted, the package defaults are used.
+
+        Returns
+        -------
+        diagnostics : BareSilicaChargeDiagnostics
+            Charge and coordination diagnostics for the finalized bare slit.
+
+        Raises
+        ------
+        TypeError
+            Raised when the wrapped input is not a :class:`porems.pore.Pore`
+            or when ``silica_topology`` has the wrong type.
+        ValueError
+            Raised when the wrapped pore is not finalized or when non-bare
+            residues are present.
+        """
+        if not isinstance(self._inp, Pore):
+            raise TypeError("Store: Unsupported input type for bare slit charge diagnostics...")
+        if not self._inp.is_finalized():
+            raise ValueError("Store: Bare slit charge diagnostics require a finalized pore.")
+        if silica_topology is None:
+            silica_topology = default_silica_topology()
+        elif not isinstance(silica_topology, SilicaTopologyModel):
+            raise TypeError(
+                "Store: silica_topology must be a SilicaTopologyModel instance "
+                "or None."
+            )
+
+        cache = self._export_cache(use_atom_names=True)
+        return self._bare_silica_charge_diagnostics_from_cache(
+            cache,
+            silica_topology,
+        )
+
     def full_slit_topology(
         self,
         name="",
@@ -2020,7 +2224,9 @@ class Store:
             Raised when the wrapped input is not a :class:`porems.pore.Pore`.
         ValueError
             Raised when the pore is not finalized or when the available
-            topology information is internally inconsistent.
+            topology information is internally inconsistent. Bare slit export
+            also raises when the finalized silica bookkeeping no longer
+            preserves zero total charge under the active silica assignments.
         """
         if not isinstance(self._inp, Pore):
             raise TypeError("Store: Unsupported input type for full slit topology creation...")
@@ -2061,11 +2267,8 @@ class Store:
             if base_ligand_short:
                 ligand_shorts = {base_ligand_short, base_ligand_short + "G"}
 
-        cache = self._collect_structure_records(use_atom_names=True)
-        graph = self._assembled_structure_graph(
-            cache.atom_records,
-            cache.molecule_serials,
-        )
+        cache = self._export_cache(use_atom_names=True)
+        graph = self._export_graph(use_atom_names=True)
         record_by_serial = {
             record.serial: record
             for record in cache.atom_records
@@ -2082,6 +2285,20 @@ class Store:
         if unsupported_residues:
             return False
 
+        if bundle is None:
+            diagnostics = self._bare_silica_charge_diagnostics_from_cache(
+                cache,
+                silica_topology,
+            )
+            if not diagnostics.coordination_identity_holds or not diagnostics.is_neutral:
+                raise ValueError(
+                    "Bare slit full-topology export must preserve zero total "
+                    "charge under the current silica assignments. Observed "
+                    f"total_charge={diagnostics.total_charge:.8f}, "
+                    "coordination_identity_delta="
+                    f"{diagnostics.coordination_identity_delta}."
+                )
+
         silica_atomtypes = _silica_atomtypes_in_order(silica_topology)
         silica_atomtype_by_name = _silica_atomtype_lookup(silica_topology)
 
@@ -2095,27 +2312,9 @@ class Store:
             return assignment.atom_type_name, assignment.charge, assignment.mass
 
         def silica_atom_fields(record):
-            if record.residue_name == "OM":
-                return assignment_fields(silica_topology.atom_assignments.framework_oxygen)
-            if record.residue_name == "SI":
-                return assignment_fields(silica_topology.atom_assignments.framework_silicon)
-            if record.residue_name == "SL":
-                if record.atom_type == "Si":
-                    return assignment_fields(silica_topology.atom_assignments.silanol_silicon)
-                if record.atom_type == "O":
-                    return assignment_fields(silica_topology.atom_assignments.silanol_oxygen)
-                if record.atom_type == "H":
-                    return assignment_fields(silica_topology.atom_assignments.silanol_hydrogen)
-            if record.residue_name == "SLG":
-                if record.atom_type == "Si":
-                    return assignment_fields(silica_topology.atom_assignments.geminal_silicon)
-                if record.atom_type == "O":
-                    return assignment_fields(silica_topology.atom_assignments.geminal_oxygen)
-                if record.atom_type == "H":
-                    return assignment_fields(silica_topology.atom_assignments.geminal_hydrogen)
-            raise ValueError(
-                "Unsupported silica residue/atom combination for full slit "
-                f"topology export: {(record.residue_name, record.atom_type, record.atom_name)!r}."
+            role_name = _silica_assignment_role_name(record)
+            return assignment_fields(
+                getattr(silica_topology.atom_assignments, role_name)
             )
 
         def ligand_atom_fields(record):

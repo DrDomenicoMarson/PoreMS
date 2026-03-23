@@ -41,6 +41,36 @@ def experimental_target_from_surface(surface_target, alpha, alpha_override=None)
     )
 
 
+def itp_atom_rows(itp_path):
+    """Return parsed ``[ atoms ]`` rows from one topology file.
+
+    Parameters
+    ----------
+    itp_path : str or Path
+        Path to the generated ``.itp`` file.
+
+    Returns
+    -------
+    rows : list[tuple[str, str, str, float]]
+        Parsed rows as ``(atom_type, residue_name, atom_name, charge)``.
+    """
+    rows = []
+    section = None
+    with open(itp_path, "r") as file_in:
+        for line in file_in:
+            stripped = line.strip()
+            if not stripped or stripped.startswith(";"):
+                continue
+            if stripped.startswith("[") and stripped.endswith("]"):
+                section = stripped.strip("[]").strip().lower()
+                continue
+            if section == "atoms":
+                fields = stripped.split()
+                if len(fields) >= 7:
+                    rows.append((fields[1], fields[3], fields[4], float(fields[6])))
+    return rows
+
+
 def teps_ligand(repo_root):
     """Return the local explicit-bond TEPS ligand used for slit smoke tests.
 
@@ -360,7 +390,47 @@ class TestAmorphousSlitPreparation:
     def test_bare_results_expose_resolved_silica_topology(self):
         assert isinstance(self.prepared_result.silica_topology, pms.SilicaTopologyModel)
         assert isinstance(self.stored_result.silica_topology, pms.SilicaTopologyModel)
+        assert self.prepared_result.bare_charge_diagnostics is None
+        assert isinstance(self.stored_result.bare_charge_diagnostics, pms.BareSilicaChargeDiagnostics)
         assert self.prepared_result.silica_topology.bond_terms.framework_si_o.force_constant == pytest.approx(251040.0)
+
+    def test_bare_charge_diagnostics_match_surface_roles_and_are_neutral(self):
+        diagnostics = self.stored_result.bare_charge_diagnostics
+
+        assert diagnostics is not None
+        assert diagnostics.is_neutral
+        assert diagnostics.coordination_identity_holds
+        assert diagnostics.total_charge == pytest.approx(0.0, abs=1e-8)
+        assert diagnostics.coordination_identity_delta == 0
+        assert diagnostics.silanol_site_count == self.stored_report.final_surface.q3_sites
+        assert diagnostics.geminal_site_count == self.stored_report.final_surface.q2_sites
+        assert diagnostics.silanol_silicon.atom_count == self.stored_report.final_surface.q3_sites
+        assert diagnostics.silanol_oxygen.atom_count == self.stored_report.final_surface.q3_sites
+        assert diagnostics.silanol_hydrogen.atom_count == self.stored_report.final_surface.q3_sites
+        assert diagnostics.geminal_silicon.atom_count == self.stored_report.final_surface.q2_sites
+        assert diagnostics.geminal_oxygen.atom_count == 2 * self.stored_report.final_surface.q2_sites
+        assert diagnostics.geminal_hydrogen.atom_count == 2 * self.stored_report.final_surface.q2_sites
+
+    def test_store_bare_charge_diagnostics_matches_stored_result(self):
+        diagnostics = pms.Store(
+            self.stored_result.system._pore,
+            sort_list=self.stored_result.system._sort_list,
+        ).bare_slit_charge_diagnostics(
+            silica_topology=self.stored_result.silica_topology,
+        )
+
+        assert diagnostics == self.stored_result.bare_charge_diagnostics
+
+    def test_bare_charge_diagnostics_satisfy_coordination_identity(self):
+        diagnostics = self.stored_result.bare_charge_diagnostics
+
+        assert diagnostics is not None
+        assert diagnostics.coordination_identity_left == 4 * diagnostics.total_silicon_count
+        assert diagnostics.coordination_identity_right == (
+            2 * diagnostics.framework_oxygen.atom_count
+            + diagnostics.total_hydroxyl_count
+        )
+        assert diagnostics.coordination_identity_left == diagnostics.coordination_identity_right
 
     def test_prepared_surface_composition_matches_target(self):
         expected_alpha_auto = (
@@ -771,6 +841,31 @@ class TestAmorphousSlitPreparation:
         assert "[ atomtypes ]" in itp_text
         assert "[ moleculetype ]" in itp_text
 
+        atom_rows = itp_atom_rows(
+            os.path.join(self.output_dir, "test_bare_amorphous_slit.itp")
+        )
+        total_charge = sum(row[3] for row in atom_rows)
+        residue_counts = {
+            residue_name: sum(1 for _atom_type, residue, _atom_name, _charge in atom_rows if residue == residue_name)
+            for residue_name in {"OM", "SI", "SL", "SLG"}
+        }
+
+        diagnostics = self.stored_result.bare_charge_diagnostics
+        assert diagnostics is not None
+        assert total_charge == pytest.approx(0.0, abs=1e-8)
+        assert residue_counts["OM"] == diagnostics.framework_oxygen.atom_count
+        assert residue_counts["SI"] == diagnostics.framework_silicon.atom_count
+        assert residue_counts["SL"] == (
+            diagnostics.silanol_silicon.atom_count
+            + diagnostics.silanol_oxygen.atom_count
+            + diagnostics.silanol_hydrogen.atom_count
+        )
+        assert residue_counts["SLG"] == (
+            diagnostics.geminal_silicon.atom_count
+            + diagnostics.geminal_oxygen.atom_count
+            + diagnostics.geminal_hydrogen.atom_count
+        )
+
         report_path = os.path.join(
             self.output_dir,
             "test_bare_amorphous_slit_report.json",
@@ -891,6 +986,8 @@ class TestAmorphousSlitPreparation:
         assert isinstance(self.prepared_report.preparation_diagnostics, pms.SurfacePreparationDiagnostics)
         assert hasattr(pms, "SiliconStateFractions")
         assert hasattr(pms, "SurfacePreparationDiagnostics")
+        assert hasattr(pms, "BareSilicaChargeContribution")
+        assert hasattr(pms, "BareSilicaChargeDiagnostics")
         assert hasattr(pms, "SilaneAttachmentConfig")
         assert hasattr(pms, "SlitTimingSummary")
         assert hasattr(pms, "FunctionalizedSlitProgressConfig")

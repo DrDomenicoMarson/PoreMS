@@ -19,6 +19,7 @@ import porems as pms
 from tqdm.auto import tqdm as _tqdm_auto
 
 from porems.topology import (
+    BareSilicaChargeDiagnostics,
     GromacsAngleParameters,
     GromacsBondParameters,
     SilicaAngleTerm,
@@ -685,11 +686,16 @@ class SlitPreparationResult:
     silica_topology : SilicaTopologyModel
         Resolved silica topology model actually associated with this slit
         result.
+    bare_charge_diagnostics : BareSilicaChargeDiagnostics or None, optional
+        Bare-slit charge-neutrality diagnostics computed for finalized bare
+        exports. Prepared but not yet finalized results leave this as
+        ``None``.
     """
 
     system: pms.PoreKit
     report: SlitPreparationReport
     silica_topology: SilicaTopologyModel
+    bare_charge_diagnostics: BareSilicaChargeDiagnostics | None = None
 
 
 @dataclass(frozen=True)
@@ -2772,7 +2778,8 @@ def prepare_amorphous_slit_surface(config=None):
     result : SlitPreparationResult
         Attach-ready bare slit system, its preparation report, and the
         resolved silica topology model that would be used for full-slab slit
-        topology export.
+        topology export. Bare charge-neutrality diagnostics are only populated
+        after finalized export.
 
     Raises
     ------
@@ -2961,7 +2968,8 @@ def write_bare_amorphous_slit(
     result : SlitPreparationResult
         Finalized bare slit system and its preparation report. The export
         writes a self-contained full-slab ``.itp`` / ``.top`` pair and
-        exposes the resolved silica topology model on ``result``.
+        exposes the resolved silica topology model plus finalized bare-slit
+        charge-neutrality diagnostics on ``result``.
     """
     result = prepare_amorphous_slit_surface(config=config)
     pms.utils.mkdirp(output_dir)
@@ -2977,11 +2985,15 @@ def write_bare_amorphous_slit(
         write_legacy_topology_helpers=False,
         validate_connectivity=validate_connectivity,
     )
-    pms.Store(
+    topology_store = pms.Store(
         result.system._pore,
         output_dir,
         sort_list=result.system._sort_list,
-    ).full_slit_topology(
+    )
+    result.bare_charge_diagnostics = topology_store.bare_slit_charge_diagnostics(
+        silica_topology=result.silica_topology,
+    )
+    topology_store.full_slit_topology(
         silica_topology=result.silica_topology,
     )
 
