@@ -5,11 +5,11 @@ import porems as pms
 SLIT_WIDTH = 7.0
 
 systems = {
-    "0_0": pms.ExperimentalSiliconStateTarget(alpha_override=0.400, q2_fraction=0.0170, q3_fraction=0.1675),
-    "9_1": pms.ExperimentalSiliconStateTarget(alpha_override=0.397, q2_fraction=0.0133, q3_fraction=0.1735, t2_fraction=0.0195, t3_fraction=0.0367),
-    "8_2": pms.ExperimentalSiliconStateTarget(alpha_override=0.391, q2_fraction=0.0158, q3_fraction=0.1637, t2_fraction=0.0508, t3_fraction=0.0818),
-    "7_3": pms.ExperimentalSiliconStateTarget(alpha_override=0.328, q2_fraction=0.0101, q3_fraction=0.1275, t2_fraction=0.0622, t3_fraction=0.1144),
-    "6_4": pms.ExperimentalSiliconStateTarget(alpha_override=0.277, q2_fraction=0.0149, q3_fraction=0.0976, t2_fraction=0.0605, t3_fraction=0.1836),
+    "0_0": pms.ExperimentalSiliconStateTarget(alpha_override=0.52, q2_fraction=0.0170, q3_fraction=0.1675),
+    "9_1": pms.ExperimentalSiliconStateTarget(alpha_override=0.51, q2_fraction=0.0133, q3_fraction=0.1735, t2_fraction=0.0195, t3_fraction=0.0367),
+    "8_2": pms.ExperimentalSiliconStateTarget(alpha_override=0.50, q2_fraction=0.0158, q3_fraction=0.1637, t2_fraction=0.0508, t3_fraction=0.0818),
+    "7_3": pms.ExperimentalSiliconStateTarget(alpha_override=0.43, q2_fraction=0.0101, q3_fraction=0.1275, t2_fraction=0.0622, t3_fraction=0.1144),
+    "6_4": pms.ExperimentalSiliconStateTarget(alpha_override=0.38, q2_fraction=0.0149, q3_fraction=0.0976, t2_fraction=0.0605, t3_fraction=0.1836),
 }
 
 
