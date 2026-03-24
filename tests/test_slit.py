@@ -42,6 +42,11 @@ def experimental_target_from_surface(surface_target, alpha, alpha_override=None)
     )
 
 
+def test_topology_parameter_helpers_are_exported_from_package_root():
+    assert pms.GromacsAngleParameters is topo_mod.GromacsAngleParameters
+    assert pms.GromacsBondParameters is topo_mod.GromacsBondParameters
+
+
 def itp_atom_rows(itp_path):
     """Return parsed ``[ atoms ]`` rows from one topology file.
 
