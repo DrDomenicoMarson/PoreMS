@@ -1,5 +1,5 @@
 shape_00:
-  diameter: 7.042924460516326
+  diameter: 7.034593491642371
   parameter:
     central:
     - 0
@@ -12,10 +12,10 @@ shape_00:
     height: 7.0
     length: 9.605
     width: 9.605
-  roughness: 0.0911893427809015
+  roughness: 0.09378959496346237
   shape: SLIT
-  surface: 227.55060388651862
-  volume: 649.7522151025057
+  surface: 227.39056597444994
+  volume: 648.983633029796
 system:
   centroid:
   - 4.795770749999997
@@ -27,6 +27,6 @@ system:
   - 9.605
   reservoir: 0
   surface:
-    ex: 49.217471113481395
-    in: 227.55060388651862
-  volume: 649.7522151025057
+    ex: 49.377509025550054
+    in: 227.39056597444994
+  volume: 648.983633029796
