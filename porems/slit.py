@@ -965,6 +965,37 @@ class FunctionalizedAmorphousSlitConfig:
         default_factory=FunctionalizedSlitProgressConfig
     )
 
+    def __post_init__(self):
+        """Validate the functionalized slit configuration payload.
+
+        Raises
+        ------
+        TypeError
+            Raised when any nested configuration object has the wrong type.
+            This commonly catches accidental trailing commas that turn the
+            ``ligand`` payload into a one-element tuple instead of a single
+            :class:`SilaneAttachmentConfig`.
+        """
+        if not isinstance(self.slit_config, AmorphousSlitConfig):
+            raise TypeError(
+                "slit_config must be an AmorphousSlitConfig instance."
+            )
+        if not isinstance(self.ligand, SilaneAttachmentConfig):
+            raise TypeError(
+                "ligand must be a SilaneAttachmentConfig instance, not "
+                f"{type(self.ligand).__name__}."
+            )
+        if not isinstance(self.steric_settings, FunctionalizedSlitStericConfig):
+            raise TypeError(
+                "steric_settings must be a FunctionalizedSlitStericConfig "
+                "instance."
+            )
+        if not isinstance(self.progress_settings, FunctionalizedSlitProgressConfig):
+            raise TypeError(
+                "progress_settings must be a FunctionalizedSlitProgressConfig "
+                "instance."
+            )
+
 
 @dataclass
 class FunctionalizedSlitResult:

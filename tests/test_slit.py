@@ -1319,6 +1319,19 @@ class TestFunctionalizedAmorphousSlit:
         assert progress.enabled is None
         assert not (progress.leave)
 
+    def test_functionalized_config_rejects_tuple_ligand_payload(self):
+        with pytest.raises(TypeError, match="SilaneAttachmentConfig"):
+            pms.FunctionalizedAmorphousSlitConfig(
+                slit_config=pms.AmorphousSlitConfig(),
+                ligand=(
+                    pms.SilaneAttachmentConfig(
+                        molecule=pms.gen.tms(),
+                        mount=0,
+                        axis=(0, 1),
+                    ),
+                ),
+            )
+
     def test_progress_auto_mode_is_quiet_under_pytest(self):
         bar = slit_mod._create_progress_bar(
             total=3,
