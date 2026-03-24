@@ -48,6 +48,64 @@ _FULL_SLIT_NREXCL = 3
 _FUNCTIONALIZED_CHARGE_TOLERANCE = 1e-6
 
 
+def _full_slit_mount_ligand_cross_angle_role(
+    record_a,
+    record_b,
+    record_c,
+    *,
+    ligand_shorts,
+    mount_atom_name,
+    first_ligand_atom_name,
+    is_generated_geminal_record,
+):
+    """Classify one mount-silicon cross-angle environment for slit export.
+
+    Parameters
+    ----------
+    record_a : object
+        First outer atom record. The record must expose ``residue_name``,
+        ``atom_name``, and ``atom_type`` attributes.
+    record_b : object
+        Center atom record. The record must expose ``residue_name``,
+        ``atom_name``, and ``atom_type`` attributes.
+    record_c : object
+        Second outer atom record. The record must expose ``residue_name``,
+        ``atom_name``, and ``atom_type`` attributes.
+    ligand_shorts : set[str]
+        Allowed ligand residue short names, including geminal variants.
+    mount_atom_name : str or None
+        Atom name of the ligand mount silicon.
+    first_ligand_atom_name : str
+        Atom name of the first ligand atom directly bound to the mount
+        silicon.
+    is_generated_geminal_record : callable
+        Predicate returning ``True`` for internally generated geminal oxygen
+        records.
+
+    Returns
+    -------
+    role : str or None
+        ``"scaffold"`` for ``O(scaffold)-Si(mount)-first_ligand_atom``,
+        ``"geminal"`` for ``O(geminal)-Si(mount)-first_ligand_atom``, or
+        ``None`` when the angle does not match either cross-angle family.
+    """
+    if mount_atom_name is None:
+        return None
+    if record_b.residue_name not in ligand_shorts or record_b.atom_name != mount_atom_name:
+        return None
+    if db.get_element(record_b.atom_type) != "Si":
+        return None
+
+    for oxygen_record, ligand_record in ((record_a, record_c), (record_c, record_a)):
+        if ligand_record.atom_name != first_ligand_atom_name:
+            continue
+        if oxygen_record.residue_name == "OM" and db.get_element(oxygen_record.atom_type) == "O":
+            return "scaffold"
+        if is_generated_geminal_record(oxygen_record, "O"):
+            return "geminal"
+    return None
+
+
 @dataclass(frozen=True)
 class _PdbResidueAliasRecord:
     """Mapping from one native residue name to its PDB-safe alias.
@@ -2805,30 +2863,47 @@ class Store:
                         db.get_element(record_c.atom_type),
                     )
                 )
+                mount_cross_angle_role = None
+                if geminal_cross_terms is not None:
+                    mount_cross_angle_role = _full_slit_mount_ligand_cross_angle_role(
+                        record_a,
+                        record_b,
+                        record_c,
+                        ligand_shorts=ligand_shorts,
+                        mount_atom_name=mount_atom_name,
+                        first_ligand_atom_name=geminal_cross_terms.first_ligand_atom_name,
+                        is_generated_geminal_record=is_generated_geminal_record,
+                    )
 
                 if (
                     geminal_cross_terms is not None
                     and center_element == "Si"
                     and record_b.residue_name == base_ligand_short + "G"
-                    and mount_atom_name is not None
-                    and record_b.atom_name == mount_atom_name
-                    and (
-                        (
-                            is_generated_geminal_record(record_a, "O")
-                            and record_c.atom_name
-                            == geminal_cross_terms.first_ligand_atom_name
-                        )
-                        or (
-                            is_generated_geminal_record(record_c, "O")
-                            and record_a.atom_name
-                            == geminal_cross_terms.first_ligand_atom_name
-                        )
-                    )
+                    and mount_cross_angle_role == "geminal"
                 ):
                     angle_parameters = (
                         geminal_cross_terms
                         .geminal_oxygen_mount_ligand_angle
                     )
+                elif mount_cross_angle_role == "scaffold":
+                    if (
+                        geminal_cross_terms
+                        .scaffold_oxygen_mount_ligand_angle
+                        is not None
+                    ):
+                        angle_parameters = (
+                            geminal_cross_terms
+                            .scaffold_oxygen_mount_ligand_angle
+                        )
+                    elif outer_elements != ["O", "O"]:
+                        raise ValueError(
+                            "Full slit topology export requires explicit "
+                            "SilaneGeminalCrossTerms."
+                            "scaffold_oxygen_mount_ligand_angle for "
+                            "retained scaffold O-Si(mount)-first_ligand_atom "
+                            f"angles when the first ligand atom is not oxygen. "
+                            f"Encountered {(record_a.residue_name, record_a.atom_name, record_b.residue_name, record_b.atom_name, record_c.residue_name, record_c.atom_name)!r}."
+                        )
                 elif center_element == "O" and outer_elements == ["H", "Si"]:
                     angle_parameters = (
                         silica_topology

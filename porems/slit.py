@@ -776,9 +776,12 @@ class SilaneTopologyConfig:
     geminal_cross_terms : SilaneGeminalCrossTerms or None, optional
         Optional explicit bonded terms used only when the exporter internally
         augments the base ``T3`` fragment into a geminal ``T2`` site by
-        adding one silica ``OH`` group. When the requested target includes
-        geminal ``T2`` sites, these terms are required. When no geminal sites
-        are exported, this can remain ``None``.
+        adding one silica ``OH`` group. This same helper also carries the
+        optional retained-scaffold ``O-Si(mount)-first_ligand_atom`` angle
+        needed by ligands whose first atom bound to the mount silicon is not
+        oxygen. When the requested target includes geminal ``T2`` sites,
+        these terms are required. When no geminal sites are exported and the
+        first ligand atom is oxygen, this can remain ``None``.
     junction_parameters : SlitJunctionParameters, optional
         Legacy silica-ligand junction parameters translated onto the resolved
         silica topology model when no explicit
@@ -798,6 +801,34 @@ class SilaneTopologyConfig:
     junction_parameters: SlitJunctionParameters = field(
         default_factory=SlitJunctionParameters
     )
+
+    def __post_init__(self):
+        """Validate the silane topology configuration payload.
+
+        Raises
+        ------
+        TypeError
+            Raised when ``itp_path`` is not a string or when nested topology
+            helper payloads use the wrong type. This catches accidental
+            trailing commas that turn ``geminal_cross_terms`` into a one-item
+            tuple instead of a :class:`SilaneGeminalCrossTerms` instance.
+        """
+        if not isinstance(self.itp_path, str):
+            raise TypeError("itp_path must be a string path.")
+        if not isinstance(self.moleculetype_name, str):
+            raise TypeError("moleculetype_name must be a string.")
+        if self.geminal_cross_terms is not None and not isinstance(
+            self.geminal_cross_terms,
+            SilaneGeminalCrossTerms,
+        ):
+            raise TypeError(
+                "geminal_cross_terms must be a SilaneGeminalCrossTerms "
+                f"instance or None, not {type(self.geminal_cross_terms).__name__}."
+            )
+        if not isinstance(self.junction_parameters, SlitJunctionParameters):
+            raise TypeError(
+                "junction_parameters must be a SlitJunctionParameters instance."
+            )
 
 
 @dataclass(frozen=True)
@@ -822,7 +853,7 @@ class GeminalMountDihedralSpec:
 
 @dataclass(frozen=True)
 class SilaneGeminalCrossTerms:
-    """Explicit bonded terms used when generating internal geminal ``T2`` sites.
+    """Explicit bonded cross terms around the ligand mount silicon.
 
     Parameters
     ----------
@@ -832,6 +863,11 @@ class SilaneGeminalCrossTerms:
     geminal_oxygen_mount_ligand_angle : GromacsAngleParameters
         Angle parameters used for the generated
         ``O(geminal)-Si(mount)-first_ligand_atom`` term.
+    scaffold_oxygen_mount_ligand_angle : GromacsAngleParameters or None, optional
+        Optional angle parameters used for retained scaffold
+        ``O(scaffold)-Si(mount)-first_ligand_atom`` terms. This is required
+        when the first ligand atom is not oxygen because the generic silica
+        ``O-Si-O`` defaults no longer apply.
     geminal_dihedrals : tuple[GeminalMountDihedralSpec, ...], optional
         Optional explicit generated dihedrals of the form
         ``O(geminal)-Si(mount)-first_ligand_atom-X``.
@@ -839,7 +875,47 @@ class SilaneGeminalCrossTerms:
 
     first_ligand_atom_name: str
     geminal_oxygen_mount_ligand_angle: GromacsAngleParameters
+    scaffold_oxygen_mount_ligand_angle: GromacsAngleParameters | None = None
     geminal_dihedrals: tuple[GeminalMountDihedralSpec, ...] = ()
+
+    def __post_init__(self):
+        """Validate the geminal cross-term payload.
+
+        Raises
+        ------
+        TypeError
+            Raised when the angle or any optional generated dihedral uses the
+            wrong helper type.
+        """
+        if not isinstance(self.first_ligand_atom_name, str):
+            raise TypeError("first_ligand_atom_name must be a string.")
+        if (
+            self.scaffold_oxygen_mount_ligand_angle is not None
+            and not isinstance(
+                self.scaffold_oxygen_mount_ligand_angle,
+                GromacsAngleParameters,
+            )
+        ):
+            raise TypeError(
+                "scaffold_oxygen_mount_ligand_angle must be a "
+                "GromacsAngleParameters instance or None."
+            )
+        if not isinstance(
+            self.geminal_oxygen_mount_ligand_angle,
+            GromacsAngleParameters,
+        ):
+            raise TypeError(
+                "geminal_oxygen_mount_ligand_angle must be a "
+                "GromacsAngleParameters instance."
+            )
+        if not isinstance(self.geminal_dihedrals, tuple):
+            raise TypeError("geminal_dihedrals must be a tuple.")
+        for dihedral in self.geminal_dihedrals:
+            if not isinstance(dihedral, GeminalMountDihedralSpec):
+                raise TypeError(
+                    "geminal_dihedrals must contain only "
+                    "GeminalMountDihedralSpec instances."
+                )
 
 
 @dataclass(frozen=True)

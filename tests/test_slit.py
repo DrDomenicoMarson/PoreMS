@@ -1,4 +1,4 @@
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 import inspect
 import json
 import os
@@ -45,6 +45,13 @@ def experimental_target_from_surface(surface_target, alpha, alpha_override=None)
 def test_topology_parameter_helpers_are_exported_from_package_root():
     assert pms.GromacsAngleParameters is topo_mod.GromacsAngleParameters
     assert pms.GromacsBondParameters is topo_mod.GromacsBondParameters
+
+
+@dataclass(frozen=True)
+class _AngleRecordProbe:
+    residue_name: str
+    atom_name: str
+    atom_type: str
 
 
 def itp_atom_rows(itp_path):
@@ -1331,6 +1338,51 @@ class TestFunctionalizedAmorphousSlit:
                     ),
                 ),
             )
+
+    def test_silane_topology_config_rejects_tuple_geminal_cross_terms(self):
+        with pytest.raises(TypeError, match="SilaneGeminalCrossTerms"):
+            pms.SilaneTopologyConfig(
+                itp_path="demo.itp",
+                geminal_cross_terms=(
+                    pms.SilaneGeminalCrossTerms(
+                        first_ligand_atom_name="C1",
+                        geminal_oxygen_mount_ligand_angle=(
+                            pms.GromacsAngleParameters.harmonic(
+                                angle_deg=109.5,
+                                force_constant=418.4,
+                            )
+                        ),
+                    ),
+                ),
+            )
+
+    def test_mount_ligand_cross_angle_role_classifies_scaffold_and_geminal(self):
+        mount = _AngleRecordProbe(residue_name="TPSG", atom_name="Si", atom_type="Si")
+        first = _AngleRecordProbe(residue_name="TPSG", atom_name="CA1", atom_type="ca")
+        scaffold_oxygen = _AngleRecordProbe(residue_name="OM", atom_name="OM1", atom_type="O")
+        geminal_oxygen = _AngleRecordProbe(residue_name="TPSG", atom_name="O1", atom_type="O")
+
+        def is_generated_geminal_record(record, atom_type):
+            return record.atom_name == "O1" and atom_type == "O"
+
+        assert store_mod._full_slit_mount_ligand_cross_angle_role(
+            scaffold_oxygen,
+            mount,
+            first,
+            ligand_shorts={"TPS", "TPSG"},
+            mount_atom_name="Si",
+            first_ligand_atom_name="CA1",
+            is_generated_geminal_record=is_generated_geminal_record,
+        ) == "scaffold"
+        assert store_mod._full_slit_mount_ligand_cross_angle_role(
+            geminal_oxygen,
+            mount,
+            first,
+            ligand_shorts={"TPS", "TPSG"},
+            mount_atom_name="Si",
+            first_ligand_atom_name="CA1",
+            is_generated_geminal_record=is_generated_geminal_record,
+        ) == "geminal"
 
     def test_progress_auto_mode_is_quiet_under_pytest(self):
         bar = slit_mod._create_progress_bar(
