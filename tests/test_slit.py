@@ -860,7 +860,10 @@ class TestAmorphousSlitPreparation:
             )
 
     def test_invalid_alpha_target_combinations_raise(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValueError,
+            match=r"Minimum required alpha is 0\.500000, observed 0\.400000",
+        ):
             slit_mod._surface_target_from_experimental(
                 pms.ExperimentalSiliconStateTarget(
                     q2_fraction=0.5,

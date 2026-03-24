@@ -1583,16 +1583,10 @@ def _surface_target_from_experimental(target, alpha):
     ------
     ValueError
         Raised when the experimental ratios and alpha are incompatible with a
-        surface-only interpretation.
+        surface-only interpretation. In particular, the effective ``alpha``
+        must be at least the experimental non-``Q4`` fraction so the
+        converted surface-only ``Q4`` fraction remains non-negative.
     """
-    surface_target = SiliconStateFractions(
-        q2_fraction=target.q2_fraction / alpha,
-        q3_fraction=target.q3_fraction / alpha,
-        q4_fraction=(target.q4_fraction - (1.0 - alpha)) / alpha,
-        t2_fraction=target.t2_fraction / alpha,
-        t3_fraction=target.t3_fraction / alpha,
-    )
-
     non_q4_fraction = (
         target.q2_fraction
         + target.q3_fraction
@@ -1602,8 +1596,17 @@ def _surface_target_from_experimental(target, alpha):
     if alpha + 1e-9 < non_q4_fraction:
         raise ValueError(
             "The effective alpha is too small for the requested experimental "
-            "non-Q4 silicon-state fractions."
+            "non-Q4 silicon-state fractions. Minimum required alpha is "
+            f"{non_q4_fraction:.6f}, observed {alpha:.6f}."
         )
+
+    surface_target = SiliconStateFractions(
+        q2_fraction=target.q2_fraction / alpha,
+        q3_fraction=target.q3_fraction / alpha,
+        q4_fraction=(target.q4_fraction - (1.0 - alpha)) / alpha,
+        t2_fraction=target.t2_fraction / alpha,
+        t3_fraction=target.t3_fraction / alpha,
+    )
 
     return surface_target
 
