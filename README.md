@@ -188,7 +188,7 @@ Required inputs for functionalized full-topology export:
 - explicit `SilaneGeminalCrossTerms` whenever the target includes `T2` sites
 
 Under the current default silica model, the expected base `T3` fragment charge
-is `+0.96`. If you pass a custom `silica_topology`, that charge target can
+is `+0.825`. If you pass a custom `silica_topology`, that charge target can
 change and should be checked against `default_silica_topology()` or your
 modified model before export.
 

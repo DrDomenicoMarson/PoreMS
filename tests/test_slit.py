@@ -153,7 +153,7 @@ def explicit_tms_geminal_cross_terms():
 
 def explicit_tms_topology_config(
     tmp_path,
-    total_charge=0.96,
+    total_charge=0.825,
     include_geminal_terms=True,
     junction_parameters=None,
     source_itp_path=None,
@@ -508,9 +508,7 @@ class TestAmorphousSlitPreparation:
         model_a.bond_terms.framework_si_o.force_constant = 123456.0
 
         assert model_b.bond_terms.framework_si_o.force_constant == pytest.approx(251040.0)
-        assert model_b.atomtypes.framework_silicon.origin == (
-            "porems/templates/topol.top [ atomtypes ] SI"
-        )
+        assert model_b.atomtypes.framework_silicon.origin == "doi:10.1021/cm500365c"
         assert "scripts/_top/tmsg.itp" in model_b.angle_terms.graft_oxygen_mount_oxygen.origin
 
     def test_silica_topology_serialization_helpers_return_readable_structures(self):
@@ -1758,9 +1756,9 @@ class TestFunctionalizedAmorphousSlit:
         assert "OM O1" not in top_text
         assert result.charge_diagnostics is not None
         assert result.charge_diagnostics.is_valid
-        assert result.charge_diagnostics.expected_t3_fragment_charge == pytest.approx(0.96)
-        assert result.charge_diagnostics.observed_t3_fragment_charge == pytest.approx(0.96, abs=1e-6)
-        assert result.charge_diagnostics.derived_t2_fragment_charge == pytest.approx(0.64)
+        assert result.charge_diagnostics.expected_t3_fragment_charge == pytest.approx(0.825)
+        assert result.charge_diagnostics.observed_t3_fragment_charge == pytest.approx(0.825, abs=1e-6)
+        assert result.charge_diagnostics.derived_t2_fragment_charge == pytest.approx(0.55)
         assert result.charge_diagnostics.t2_site_count == 3
         assert result.charge_diagnostics.t3_site_count == 4
         assert result.charge_diagnostics.final_total_charge == pytest.approx(0.0, abs=1e-6)

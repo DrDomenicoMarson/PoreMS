@@ -174,7 +174,7 @@ fragment. In practical PoreMS terms, the exporter expects:
   ``T2`` sites
 
 Under the current default silica model, the expected base ``T3`` fragment
-charge is ``+0.96``. If you override ``AmorphousSlitConfig.silica_topology``,
+charge is ``+0.825``. If you override ``AmorphousSlitConfig.silica_topology``,
 the expected charge target may change and should be checked against the active
 model before export.
 
