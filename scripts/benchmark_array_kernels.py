@@ -241,7 +241,6 @@ def _functionalized_slit_config(ligand_name):
         surface_target = pms.ExperimentalSiliconStateTarget(
             q2_fraction=1.01 / 100.0,
             q3_fraction=12.75 / 100.0,
-            q4_fraction=68.58 / 100.0,
             t2_fraction=6.22 / 100.0,
             t3_fraction=11.44 / 100.0,
             alpha_override=0.328,
@@ -251,7 +250,6 @@ def _functionalized_slit_config(ligand_name):
         surface_target = pms.ExperimentalSiliconStateTarget(
             q2_fraction=1.01 / 100.0,
             q3_fraction=12.75 / 100.0,
-            q4_fraction=68.58 / 100.0,
             t2_fraction=6.22 / 100.0,
             t3_fraction=11.44 / 100.0,
             alpha_override=0.328,

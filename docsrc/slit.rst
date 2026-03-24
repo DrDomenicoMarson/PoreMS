@@ -35,7 +35,6 @@ workflows. The input target is always specified through experimental
       surface_target=pms.ExperimentalSiliconStateTarget(
           q2_fraction=66 / 40000,
           q3_fraction=650 / 40000,
-          q4_fraction=1.0 - ((66 + 650) / 40000),
       ),
   )
 
@@ -45,6 +44,10 @@ workflows. The input target is always specified through experimental
 
   result = pms.write_bare_amorphous_slit("output/bare_amorphous_slit", config)
   print(result.bare_charge_diagnostics.is_neutral)
+
+``ExperimentalSiliconStateTarget.q4_fraction`` can be omitted. When omitted,
+it is derived as the remaining fraction after ``Q2``, ``Q3``, ``T2``, and
+``T3``.
 
 ``prepare_amorphous_slit_surface(...)`` returns a
 ``SlitPreparationResult`` containing an attach-ready ``PoreKit`` system and a
@@ -123,7 +126,6 @@ residues.
       surface_target=pms.ExperimentalSiliconStateTarget(
           q2_fraction=63 / 20000,
           q3_fraction=648 / 20000,
-          q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
           t2_fraction=3 / 20000,
           t3_fraction=4 / 20000,
       ),
@@ -204,7 +206,6 @@ slit should also write one self-contained ``.top`` / ``.itp`` pair.
       surface_target=pms.ExperimentalSiliconStateTarget(
           q2_fraction=63 / 20000,
           q3_fraction=648 / 20000,
-          q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
           t2_fraction=3 / 20000,
           t3_fraction=4 / 20000,
       ),

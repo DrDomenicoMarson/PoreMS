@@ -139,7 +139,6 @@ def bare_slit_context(tmp_path_factory: pytest.TempPathFactory) -> BareSlitConte
     surface_target = pms.ExperimentalSiliconStateTarget(
         q2_fraction=0.069,
         q3_fraction=0.681,
-        q4_fraction=0.25,
         alpha_override=1.0,
     )
     config = pms.AmorphousSlitConfig(

@@ -401,8 +401,12 @@ class ExperimentalSiliconStateTarget:
         Experimental ``Q2`` fraction over all Si atoms in the sample.
     q3_fraction : float
         Experimental ``Q3`` fraction over all Si atoms in the sample.
-    q4_fraction : float
-        Experimental ``Q4`` fraction over all Si atoms in the sample.
+    q4_fraction : float or None, optional
+        Experimental ``Q4`` fraction over all Si atoms in the sample. When
+        omitted, the value is derived as
+        ``1.0 - (q2_fraction + q3_fraction + t2_fraction + t3_fraction)``.
+        When provided explicitly, it must match that derived remainder within
+        the class validation tolerance.
     t2_fraction : float, optional
         Experimental ``T2`` fraction over all Si atoms in the sample.
     t3_fraction : float, optional
@@ -415,7 +419,7 @@ class ExperimentalSiliconStateTarget:
 
     q2_fraction: float
     q3_fraction: float
-    q4_fraction: float
+    q4_fraction: float | None = None
     t2_fraction: float = 0.0
     t3_fraction: float = 0.0
     alpha_override: float | None = None
@@ -426,9 +430,24 @@ class ExperimentalSiliconStateTarget:
         Raises
         ------
         ValueError
-            Raised when the fractions are invalid or when an explicit
-            ``alpha`` override lies outside ``(0, 1]``.
+            Raised when the fractions are invalid, when an explicit
+            ``q4_fraction`` does not match the derived remainder, or when an
+            explicit ``alpha`` override lies outside ``(0, 1]``.
         """
+        derived_q4 = 1.0 - (
+            self.q2_fraction +
+            self.q3_fraction +
+            self.t2_fraction +
+            self.t3_fraction
+        )
+        if abs(derived_q4) < 1e-12:
+            derived_q4 = 0.0
+        if self.q4_fraction is None:
+            object.__setattr__(self, "q4_fraction", derived_q4)
+        elif abs(self.q4_fraction - derived_q4) > 1e-6:
+            raise ValueError(
+                "The q4 fraction must match 1.0 - (q2 + q3 + t2 + t3)."
+            )
         SiliconStateFractions(
             self.q2_fraction,
             self.q3_fraction,
@@ -488,7 +507,6 @@ class AmorphousSlitConfig:
         default_factory=lambda: ExperimentalSiliconStateTarget(
             q2_fraction=66 / 40000,
             q3_fraction=650 / 40000,
-            q4_fraction=1.0 - ((66 + 650) / 40000),
         )
     )
     amorph_bond_range_nm: tuple[float, float] = (0.160 - 0.02, 0.160 + 0.02)
@@ -2854,7 +2872,6 @@ def prepare_amorphous_slit_surface(config=None):
     ...     surface_target=pms.ExperimentalSiliconStateTarget(
     ...         q2_fraction=66 / 40000,
     ...         q3_fraction=650 / 40000,
-    ...         q4_fraction=1.0 - ((66 + 650) / 40000),
     ...     ),
     ... )
     >>> result = pms.prepare_amorphous_slit_surface(config)
@@ -2929,7 +2946,6 @@ def prepare_functionalized_amorphous_slit_surface(config):
     ...         surface_target=pms.ExperimentalSiliconStateTarget(
     ...             q2_fraction=63 / 20000,
     ...             q3_fraction=648 / 20000,
-    ...             q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
     ...             t2_fraction=3 / 20000,
     ...             t3_fraction=4 / 20000,
     ...         ),
@@ -3179,7 +3195,6 @@ def write_functionalized_amorphous_slit(
     ...         surface_target=pms.ExperimentalSiliconStateTarget(
     ...             q2_fraction=63 / 20000,
     ...             q3_fraction=648 / 20000,
-    ...             q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
     ...             t2_fraction=3 / 20000,
     ...             t3_fraction=4 / 20000,
     ...         ),
@@ -3223,7 +3238,6 @@ def write_functionalized_amorphous_slit(
     ...         surface_target=pms.ExperimentalSiliconStateTarget(
     ...             q2_fraction=63 / 20000,
     ...             q3_fraction=648 / 20000,
-    ...             q4_fraction=1.0 - ((63 + 648 + 3 + 4) / 20000),
     ...             t2_fraction=3 / 20000,
     ...             t3_fraction=4 / 20000,
     ...         ),

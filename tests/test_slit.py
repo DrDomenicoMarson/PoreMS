@@ -1,4 +1,4 @@
-from dataclasses import replace
+from dataclasses import asdict, replace
 import inspect
 import json
 import os
@@ -809,7 +809,6 @@ class TestAmorphousSlitPreparation:
         target = pms.ExperimentalSiliconStateTarget(
             q2_fraction=0.5,
             q3_fraction=0.0,
-            q4_fraction=0.5,
             alpha_override=0.5,
         )
         surface_target = slit_mod._surface_target_from_experimental(target, 0.5)
@@ -820,7 +819,6 @@ class TestAmorphousSlitPreparation:
         target = pms.ExperimentalSiliconStateTarget(
             q2_fraction=0.02,
             q3_fraction=0.03,
-            q4_fraction=0.95,
             alpha_override=0.2,
         )
         alpha_auto, alpha_effective = slit_mod._effective_alpha(100, 1000, target)
@@ -828,13 +826,33 @@ class TestAmorphousSlitPreparation:
         assert alpha_auto == pytest.approx(0.1, abs=1e-7)
         assert alpha_effective == pytest.approx(0.2, abs=1e-7)
 
+    def test_q4_fraction_is_derived_when_omitted(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=0.02,
+            q3_fraction=0.03,
+            t2_fraction=0.04,
+            t3_fraction=0.01,
+        )
+
+        assert target.q4_fraction == pytest.approx(0.9, abs=1e-12)
+        assert asdict(target)["q4_fraction"] == pytest.approx(0.9, abs=1e-12)
+
+    def test_explicit_q4_fraction_must_match_remainder(self):
+        with pytest.raises(ValueError, match="q4 fraction"):
+            pms.ExperimentalSiliconStateTarget(
+                q2_fraction=0.02,
+                q3_fraction=0.03,
+                q4_fraction=0.89,
+                t2_fraction=0.04,
+                t3_fraction=0.01,
+            )
+
     def test_invalid_alpha_target_combinations_raise(self):
         with pytest.raises(ValueError):
             slit_mod._surface_target_from_experimental(
                 pms.ExperimentalSiliconStateTarget(
                     q2_fraction=0.5,
                     q3_fraction=0.0,
-                    q4_fraction=0.5,
                     alpha_override=0.4,
                 ),
                 0.4,
