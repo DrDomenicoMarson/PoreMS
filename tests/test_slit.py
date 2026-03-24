@@ -507,9 +507,25 @@ class TestAmorphousSlitPreparation:
 
         model_a.bond_terms.framework_si_o.force_constant = 123456.0
 
-        assert model_b.bond_terms.framework_si_o.force_constant == pytest.approx(251040.0)
+        assert model_b.bond_terms.framework_si_o.force_constant == pytest.approx(119244.0)
         assert model_b.atomtypes.framework_silicon.origin == "doi:10.1021/cm500365c"
-        assert "scripts/_top/tmsg.itp" in model_b.angle_terms.graft_oxygen_mount_oxygen.origin
+        assert model_b.angle_terms.graft_oxygen_mount_oxygen.origin == "doi:10.1021/cm500365c"
+        assert model_b.angle_terms.graft_scaffold_si_scaffold_o_mount.angle_deg == pytest.approx(149.0)
+        assert model_b.angle_terms.graft_oxygen_mount_oxygen.angle_deg == pytest.approx(109.5)
+
+    def test_default_legacy_slit_junction_parameters_match_default_silica_model(self):
+        model = pms.default_silica_topology()
+        junctions = pms.SlitJunctionParameters()
+
+        assert junctions.mount_scaffold_bond.parameters == (
+            model.bond_terms.graft_mount_scaffold_si_o.to_gromacs_parameters().parameters
+        )
+        assert junctions.scaffold_si_scaffold_o_mount_angle.parameters == (
+            model.angle_terms.graft_scaffold_si_scaffold_o_mount.to_gromacs_parameters().parameters
+        )
+        assert junctions.oxygen_mount_oxygen_angle.parameters == (
+            model.angle_terms.graft_oxygen_mount_oxygen.to_gromacs_parameters().parameters
+        )
 
     def test_silica_topology_serialization_helpers_return_readable_structures(self):
         model = pms.default_silica_topology()
@@ -519,7 +535,7 @@ class TestAmorphousSlitPreparation:
         yaml_data = yaml.safe_load(model.to_yaml())
 
         assert dict_data["atomtypes"]["framework_silicon"]["name"] == "SI"
-        assert dict_data["bond_terms"]["framework_si_o"]["force_constant"] == pytest.approx(251040.0)
+        assert dict_data["bond_terms"]["framework_si_o"]["force_constant"] == pytest.approx(119244.0)
         assert "origin" in dict_data["angle_terms"]["graft_oxygen_mount_oxygen"]
         assert json_data == dict_data
         assert yaml_data == dict_data
@@ -529,7 +545,7 @@ class TestAmorphousSlitPreparation:
         assert isinstance(self.stored_result.silica_topology, pms.SilicaTopologyModel)
         assert self.prepared_result.bare_charge_diagnostics is None
         assert isinstance(self.stored_result.bare_charge_diagnostics, pms.BareSilicaChargeDiagnostics)
-        assert self.prepared_result.silica_topology.bond_terms.framework_si_o.force_constant == pytest.approx(251040.0)
+        assert self.prepared_result.silica_topology.bond_terms.framework_si_o.force_constant == pytest.approx(119244.0)
 
     def test_bare_charge_diagnostics_match_surface_roles_and_are_neutral(self):
         diagnostics = self.stored_result.bare_charge_diagnostics
@@ -1202,7 +1218,7 @@ class TestAmorphousSlitPreparation:
 
         assert result.silica_topology is not silica_topology
         assert result.silica_topology.bond_terms.framework_si_o.force_constant == pytest.approx(123456.0)
-        assert "0.16300 123456.000000" in itp_text
+        assert "0.16500 123456.000000" in itp_text
 
     def test_top_level_exports_and_version(self):
         assert pms.__version__ == EXPECTED_VERSION

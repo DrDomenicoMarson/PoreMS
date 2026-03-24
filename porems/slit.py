@@ -724,20 +724,20 @@ class SlitJunctionParameters:
 
     mount_scaffold_bond: GromacsBondParameters = field(
         default_factory=lambda: GromacsBondParameters.harmonic(
-            length_nm=0.16300,
-            force_constant=251040.0,
+            length_nm=0.16500,
+            force_constant=119244.0,
         )
     )
     scaffold_si_scaffold_o_mount_angle: GromacsAngleParameters = field(
         default_factory=lambda: GromacsAngleParameters.harmonic(
-            angle_deg=147.0,
-            force_constant=529.527040,
+            angle_deg=149.0,
+            force_constant=418.4,
         )
     )
     oxygen_mount_oxygen_angle: GromacsAngleParameters = field(
         default_factory=lambda: GromacsAngleParameters.harmonic(
-            angle_deg=105.56,
-            force_constant=384.223760,
+            angle_deg=109.5,
+            force_constant=418.4,
         )
     )
 

@@ -726,52 +726,46 @@ def _build_default_silica_topology():
         ),
         bond_terms=SilicaBondTermSet(
             framework_si_o=SilicaBondTerm(
-                length_nm=0.16300,
-                force_constant=251040.0,
-                origin="porems/templates/grid.itp SL/SLG [ bonds ] Si-O",
+                length_nm=0.16500,
+                force_constant=119244.0,
+                origin="doi:10.1021/cm500365c",
             ),
             silanol_o_h=SilicaBondTerm(
-                length_nm=0.10000,
-                force_constant=313800.0,
-                origin="porems/templates/grid.itp SL/SLG [ bonds ] O-H",
+                length_nm=0.09450,
+                force_constant=207108.0,
+                origin="doi:10.1021/cm500365c",
             ),
             graft_mount_scaffold_si_o=SilicaBondTerm(
-                length_nm=0.16300,
-                force_constant=251040.0,
-                origin=(
-                    "porems/templates/grid.itp SL/SLG [ bonds ] Si-O reused "
-                    "for graft junction"
-                ),
+                length_nm=0.16500,
+                force_constant=119244.0,
+                origin="doi:10.1021/cm500365c",
             ),
         ),
         angle_terms=SilicaAngleTermSet(
             framework_si_o_si=SilicaAngleTerm(
-                angle_deg=147.0,
-                force_constant=529.527040,
-                origin="scripts/_top/tms.itp [ angles ] Si1-O1-Si2",
+                angle_deg=149.0,
+                force_constant=418.4,
+                origin="doi:10.1021/cm500365c",
             ),
             silanol_o_si_o=SilicaAngleTerm(
-                angle_deg=105.56,
-                force_constant=384.223760,
-                origin="scripts/_top/tmsg.itp [ angles ] O1-Si1-O2",
+                angle_deg=109.5,
+                force_constant=418.4,
+                origin="doi:10.1021/cm500365c",
             ),
             silanol_si_o_h=SilicaAngleTerm(
-                angle_deg=116.0,
-                force_constant=3970.4800,
-                origin="porems/templates/grid.itp SL/SLG [ angles ] Si-O-H",
+                angle_deg=115.0,
+                force_constant=209.2,
+                origin="doi:10.1021/cm500365c",
             ),
             graft_scaffold_si_scaffold_o_mount=SilicaAngleTerm(
-                angle_deg=147.0,
-                force_constant=529.527040,
-                origin=(
-                    "scripts/_top/tms.itp [ angles ] Si1-O1-Si2 reused for "
-                    "graft junction"
-                ),
+                angle_deg=149.0,
+                force_constant=418.4,
+                origin="doi:10.1021/cm500365c",
             ),
             graft_oxygen_mount_oxygen=SilicaAngleTerm(
-                angle_deg=105.56,
-                force_constant=384.223760,
-                origin="scripts/_top/tmsg.itp [ angles ] O1-Si1-O2",
+                angle_deg=109.5,
+                force_constant=418.4,
+                origin="doi:10.1021/cm500365c",
             ),
         ),
     )
