@@ -278,8 +278,8 @@ def test_identify_clashes_detects_reverse_ring_crossing(module_workspace) -> Non
     assert clash_selection.removed_by_reverse_ring_mask.tolist() == [True]
 
 
-def test_fill_slit_writes_merged_gro_and_human_report(module_workspace) -> None:
-    """The packaged API should write the merged GRO and sectioned text report."""
+def test_fill_slit_writes_merged_gro_and_human_report(module_workspace, capsys) -> None:
+    """The packaged API should write the merged GRO report without stdout output."""
 
     guest_path = module_workspace.root / "guest_fill.gro"
     slit_path = module_workspace.root / "slit_fill.gro"
@@ -300,10 +300,13 @@ def test_fill_slit_writes_merged_gro_and_human_report(module_workspace) -> None:
             random_seed=7,
         )
     )
+    captured = capsys.readouterr()
 
     merged_system = slit_fill_mod._load_gro_system(output_path)
     log_text = log_path.read_text(encoding="utf-8")
 
+    assert captured.out == ""
+    assert captured.err == ""
     assert report.remaining_guest_molecules == 1
     assert report.final_atom_count == 12
     assert report.final_residue_count == 3
@@ -317,13 +320,17 @@ def test_fill_slit_writes_merged_gro_and_human_report(module_workspace) -> None:
     assert "Ring checks" in log_text
     assert "Density" in log_text
     assert "Probe details" in log_text
+    assert "Probe 0.00 nm" in log_text
     assert "Output" in log_text
     assert "General cutoff" in log_text
     assert "0.100 nm" in log_text
 
 
-def test_density_analysis_is_reproducible_and_cli_helpers_accept_argv(module_workspace) -> None:
-    """Density analysis and both CLI helpers should work from explicit argv lists."""
+def test_density_analysis_is_reproducible_and_cli_helpers_accept_argv(
+    module_workspace,
+    capsys,
+) -> None:
+    """Density analysis CLI helpers should be reproducible and stay silent."""
 
     guest_path = module_workspace.root / "guest_cli.gro"
     slit_path = module_workspace.root / "slit_cli.gro"
@@ -391,7 +398,15 @@ def test_density_analysis_is_reproducible_and_cli_helpers_accept_argv(module_wor
     assert report_a.framework_atom_count == 6
     assert probe_a.seed_values == probe_b.seed_values == probe_cli.seed_values
     assert probe_a.accessible_volumes_nm3 == probe_b.accessible_volumes_nm3 == probe_cli.accessible_volumes_nm3
-    assert "Slit Density Report" in density_log_path.read_text(encoding="utf-8")
+    density_log_text = density_log_path.read_text(encoding="utf-8")
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert captured.err == ""
+    assert "Slit Density Report" in density_log_text
+    assert "Probe 0.00 nm" in density_log_text
+    assert density_log_text.index("Probe details") < density_log_text.index("Density summary")
 
 
 def test_fill_slit_raises_when_target_residue_missing(module_workspace) -> None:

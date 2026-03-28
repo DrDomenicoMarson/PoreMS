@@ -2266,13 +2266,11 @@ def _format_value_lines(title: str, rows: Sequence[tuple[str, str]]) -> str:
     return f"{title}\n{'-' * len(title)}\n{body}" if body else f"{title}\n{'-' * len(title)}"
 
 
-def _format_probe_block(index: int, probe_estimate: DensityProbeEstimate) -> str:
+def _format_probe_block(probe_estimate: DensityProbeEstimate) -> str:
     """Format one human-readable probe-density block.
 
     Parameters
     ----------
-    index : int
-        One-based probe index.
     probe_estimate : DensityProbeEstimate
         Probe-density summary to render.
 
@@ -2315,7 +2313,7 @@ def _format_probe_block(index: int, probe_estimate: DensityProbeEstimate) -> str
         ("Mean density", density_mean + " g/cm^3"),
         ("Std density", density_std + " g/cm^3"),
     ]
-    return _format_value_lines(f"Probe {index}", rows)
+    return _format_value_lines(f"Probe {probe_estimate.probe_radius_nm:.2f} nm", rows)
 
 
 def _build_fill_report_text(config: SlitFillConfig, report: SlitFillReport) -> str:
@@ -2447,8 +2445,8 @@ def _build_fill_report_text(config: SlitFillConfig, report: SlitFillReport) -> s
         ],
     )
     probe_details = "\n\n".join(
-        _format_probe_block(index, probe_estimate)
-        for index, probe_estimate in enumerate(report.density_estimate.probe_estimates, start=1)
+        _format_probe_block(probe_estimate)
+        for probe_estimate in report.density_estimate.probe_estimates
     )
     output = _format_value_lines(
         "Output",
@@ -2532,8 +2530,8 @@ def _build_density_report_text(config: SlitDensityConfig, report: SlitDensityRep
         ],
     )
     probe_details = "Probe details\n-------------\n" + "\n\n".join(
-        _format_probe_block(index, probe_estimate)
-        for index, probe_estimate in enumerate(report.density_estimate.probe_estimates, start=1)
+        _format_probe_block(probe_estimate)
+        for probe_estimate in report.density_estimate.probe_estimates
     )
 
     sections = [
@@ -2541,8 +2539,8 @@ def _build_density_report_text(config: SlitDensityConfig, report: SlitDensityRep
         inputs,
         counts,
         framework,
-        density_summary,
         probe_details,
+        density_summary,
     ]
     return "\n\n".join(sections) + "\n"
 
@@ -2743,7 +2741,6 @@ def fill_slit(config: SlitFillConfig) -> SlitFillReport:
     report_text = _build_fill_report_text(config, report)
     assert config.log_path is not None
     config.log_path.write_text(report_text, encoding="utf-8")
-    print(report_text, end="")
     return report
 
 
@@ -2796,7 +2793,6 @@ def estimate_guest_density(config: SlitDensityConfig) -> SlitDensityReport:
     report_text = _build_density_report_text(config, report)
     assert config.log_path is not None
     config.log_path.write_text(report_text, encoding="utf-8")
-    print(report_text, end="")
     return report
 
 
