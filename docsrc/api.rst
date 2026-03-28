@@ -129,6 +129,23 @@ Slit Preparation
 
 .. _utils_api:
 
+Slit Filling / Density
+----------------------
+
+.. autosummary::
+    :toctree: generated/
+
+    slit_fill.SlitFillConfig
+    slit_fill.SurfacePlaneRegion
+    slit_fill.DensityProbeEstimate
+    slit_fill.DensityEstimate
+    slit_fill.SlitFillReport
+    slit_fill.SlitDensityConfig
+    slit_fill.SlitDensityReport
+    slit_fill.fill_slit
+    slit_fill.estimate_guest_density
+
+
 Utilities
 ---------
 

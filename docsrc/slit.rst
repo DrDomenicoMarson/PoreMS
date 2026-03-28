@@ -253,6 +253,69 @@ fragment uses different atom names or different bonded terms, update
 ``SilaneGeminalCrossTerms`` accordingly. The exporter will not infer those
 cross terms from the coordinate fragment.
 
+
+Guest Filling And Density Analysis
+----------------------------------
+
+Once a grafted slit and a guest reservoir box already exist as GRO files,
+PoreMS exposes a dedicated residue-aware post-processing API through
+``porems.slit_fill``. This workflow is intentionally scoped to the current
+silica-slit use case:
+
+* orthorhombic GRO inputs only
+* target guests represented as single-residue molecules
+* aromatic rings identified through six ``CA*``-style atom names
+* hydroxylated silica surface Si atoms used to detect the slit interval
+
+The default workflow therefore matches the current aromatic grafting + ``THY``
+guest system, including the reduced default ``general_cutoff_nm=0.1`` and the
+human-readable sectioned text reports written next to the output files.
+
+.. code-block:: python
+
+  from pathlib import Path
+  import porems.slit_fill as slit_fill
+
+  fill_report = slit_fill.fill_slit(
+      slit_fill.SlitFillConfig(
+          guest_path=Path("confout.gro"),
+          slit_path=Path("msn_9_1.gro"),
+          output_path=Path("merged_guest_slit_ring_check.gro"),
+          target_resname="THY",
+          ring_atom_prefix="CA",
+          general_cutoff_nm=0.1,
+      )
+  )
+  print(fill_report.remaining_guest_molecules)
+
+  density_report = slit_fill.estimate_guest_density(
+      slit_fill.SlitDensityConfig(
+          input_path=Path("merged_guest_slit_ring_check.gro"),
+          target_resname="THY",
+      )
+  )
+  print(density_report.density_estimate.box_average_density_g_cm3)
+
+The same workflow is available through installed console entry points:
+
+.. code-block:: bash
+
+  porems-fill-slit \
+      --guest confout.gro \
+      --slit msn_9_1.gro \
+      --output merged_guest_slit_ring_check.gro \
+      --target-resname THY \
+      --ring-atom-prefix CA \
+      --general-cutoff 0.1
+
+  porems-slit-density \
+      --input merged_guest_slit_ring_check.gro \
+      --target-resname THY
+
+Both commands write human-readable text reports with fixed sections for
+selection, surface planes, clash filters, ring checks, density, and per-probe
+details, while the Python API returns dataclass reports for programmatic use.
+
 Stored outputs
 --------------
 

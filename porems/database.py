@@ -129,6 +129,20 @@ covalent_radii = {
 }
 
 
+# Create van der Waals radii dictionary in nanometers
+vdw_radii = {
+    "H": 0.120,
+    "C": 0.170,
+    "N": 0.155,
+    "O": 0.152,
+    "F": 0.147,
+    "P": 0.180,
+    "S": 0.180,
+    "Cl": 0.175,
+    "Si": 0.210,
+}
+
+
 _PDB_SINGLE_LETTER_ELEMENTS = {"B", "C", "F", "H", "I", "N", "O", "P", "S"}
 _PDB_TWO_LETTER_FALLBACKS = {
     "AL": "Al",
@@ -276,3 +290,29 @@ def get_pdb_element(atom_name, element_token=""):
         return letters_upper[0]
 
     return get_element(letters)
+
+
+def get_vdw_radius(symbol):
+    """Return the van der Waals radius of one atom type.
+
+    Parameters
+    ----------
+    symbol : str
+        Atom-type or element token.
+
+    Returns
+    -------
+    radius : float
+        Van der Waals radius in nanometers.
+
+    Raises
+    ------
+    ValueError
+        Raised when no supported chemical element can be derived or when the
+        resolved element is not present in the local van der Waals table.
+    """
+    element = get_element(symbol)
+    if element in vdw_radii:
+        return vdw_radii[element]
+
+    raise ValueError("DB: Atom name not found.")

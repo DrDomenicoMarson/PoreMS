@@ -13,7 +13,13 @@ setup(
     version=version_ns["__version__"],
     packages=["porems"],
     package_data={"porems": ["templates/*", "py.typed"]},
-    install_requires=["numpy", "numba", "matplotlib", "pandas", "seaborn", "pyyaml", "tqdm"],
+    install_requires=["numpy", "scipy", "numba", "matplotlib", "pandas", "seaborn", "pyyaml", "tqdm"],
     extras_require={"test": ["pytest", "pytest-cov"]},
+    entry_points={
+        "console_scripts": [
+            "porems-fill-slit=porems.slit_fill:fill_slit_main",
+            "porems-slit-density=porems.slit_fill:estimate_guest_density_main",
+        ]
+    },
     python_requires=">=3.14",
 )
