@@ -26,7 +26,7 @@ def do_stuff(select):
     if select == "0_0":
         result = pms.prepare_amorphous_slit_surface(slit_config)
         print(result.report.final_surface)
-        result = pms.write_bare_amorphous_slit(f"msn_{select}/", slit_config, write_pdb=False, write_cif=False)
+        result = pms.write_bare_amorphous_slit(f"msn_{select}/", slit_config, write_pdb=True, write_cif=True)
         print(result.bare_charge_diagnostics.is_neutral)
     else:
         geminal_cross_terms = pms.SilaneGeminalCrossTerms(
@@ -65,7 +65,7 @@ def do_stuff(select):
         result = pms.write_functionalized_amorphous_slit(
             f"msn_{select}/",
             functionalized_config,
-            write_pdb=False, write_cif=False,
+            write_pdb=True, write_cif=True,
             )
         print(result.report.final_surface)
         print(result.charge_diagnostics.is_valid)
