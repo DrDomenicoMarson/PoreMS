@@ -17,8 +17,8 @@ setup(
     extras_require={"test": ["pytest", "pytest-cov"]},
     entry_points={
         "console_scripts": [
-            "porems-fill-slit=porems.slit_fill:fill_slit_main",
-            "porems-slit-density=porems.slit_fill:estimate_guest_density_main",
+            "porems-fill-slit=porems.slit_fill:_fill_slit_console_main",
+            "porems-slit-density=porems.slit_fill:_estimate_guest_density_console_main",
         ]
     },
     python_requires=">=3.14",

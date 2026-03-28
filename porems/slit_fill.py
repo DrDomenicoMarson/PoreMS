@@ -2766,7 +2766,9 @@ def estimate_guest_density(config: SlitDensityConfig) -> SlitDensityReport:
         merged_system=merged_system,
         target_resname=config.target_resname,
     )
-    _validate_slit_coordinates(framework_system)
+    # Density estimation wraps framework coordinates before the periodic
+    # neighbor search, so nominal out-of-box coordinates are harmless here and
+    # the fill-time warning only adds noise for already merged systems.
     guest_molecule_count, guest_atom_count = _count_target_molecules(
         merged_system=merged_system,
         target_resname=config.target_resname,
@@ -3051,6 +3053,19 @@ def fill_slit_main(argv: Sequence[str] | None = None) -> SlitFillReport:
     return fill_slit(config)
 
 
+def _fill_slit_console_main() -> int:
+    """Run the slit-fill console entry point and return a process exit code.
+
+    Returns
+    -------
+    int
+        Successful process exit status.
+    """
+
+    fill_slit_main()
+    return 0
+
+
 def estimate_guest_density_main(argv: Sequence[str] | None = None) -> SlitDensityReport:
     """Parse CLI arguments and run merged-slit density analysis.
 
@@ -3086,3 +3101,16 @@ def estimate_guest_density_main(argv: Sequence[str] | None = None) -> SlitDensit
         random_seed=args.random_seed,
     )
     return estimate_guest_density(config)
+
+
+def _estimate_guest_density_console_main() -> int:
+    """Run the slit-density console entry point and return a process exit code.
+
+    Returns
+    -------
+    int
+        Successful process exit status.
+    """
+
+    estimate_guest_density_main()
+    return 0

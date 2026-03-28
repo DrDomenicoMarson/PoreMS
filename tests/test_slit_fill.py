@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -507,3 +508,32 @@ def test_density_analysis_raises_without_framework(module_workspace) -> None:
         slit_fill_mod.estimate_guest_density(
             slit_fill_mod.SlitDensityConfig(input_path=merged_path)
         )
+
+
+def test_density_analysis_skips_nominal_box_warning(module_workspace) -> None:
+    """Density analysis should not warn for framework atoms outside the nominal box."""
+
+    merged_path = module_workspace.root / "merged_outside_box.gro"
+    atoms: list[tuple[int, str, str, int, float, float, float]] = []
+    atoms.extend(_surface_residue(1, 1, 2.2, 0.5, 0.5))
+    atoms.extend(_surface_residue(2, 4, 1.8, 1.5, 1.5))
+    atoms.extend(_ring_residue(3, "THY", 7, (1.0, 1.0, 1.0)))
+    _write_gro(merged_path, atoms, (2.0, 2.0, 2.0), title="merged-outside-box")
+
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
+        report = slit_fill_mod.estimate_guest_density(
+            slit_fill_mod.SlitDensityConfig(
+                input_path=merged_path,
+                density_probe_radii_nm=(0.0,),
+                density_sample_count=200,
+                density_seed_count=1,
+                random_seed=3,
+            )
+        )
+
+    assert report.framework_atom_count == 6
+    assert not any(
+        "fall outside the nominal slit box range" in str(warning.message)
+        for warning in caught_warnings
+    )
