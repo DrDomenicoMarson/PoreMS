@@ -1,0 +1,219 @@
+# Materials and Methods: Alpha Handling in Amorphous Silica Slit Preparation
+
+## Audit Scope
+
+This report is based on the current slit-construction and filling workflows in
+`porems/slit.py`, `porems/slit_fill.py`, `scripts/build_silica_slit.py`,
+`scripts/TEPS_example/_0_create_slit.py`, and the compatibility wrappers in
+`fill_pore/`. The focus is the conversion of experimental all-silicon
+`Q2/Q3/Q4/T2/T3` fractions into modeled surface-site targets for bare and
+functionalized amorphous slit pores.
+
+The slit-filling scripts do not use `alpha` directly. They were audited because
+they consume the generated slit structures and therefore depend on the surface
+chemistry produced by the alpha-aware preparation step.
+
+## Slit-Pore Model Construction
+
+Amorphous silica slit pores are generated from the packaged amorphous silica
+template (`porems/templates/amorph.gro`). The template is replicated along the
+`y` direction according to `AmorphousSlitConfig.repeat_y`, its connectivity is
+rebuilt from the configured Si-O bond-length interval, and template-specific
+split pairs are removed. The replicated silica block is then cut with
+`PoreKit.shape_slit(...)` at the requested slit width and prepared as an
+interior-only periodic slit. The current high-level slit preparation workflow
+requires zero exterior sites after preparation.
+
+The initially hydroxylated surface is summarized as a set of tracked surface Si
+sites. These sites are classified into `Q2`, `Q3`, and `Q4` states according to
+their available oxygen handles. The target surface composition is obtained by
+first converting the experimental all-silicon fractions into surface-only
+fractions and then rounding those fractions to an integer composition over the
+tracked surface population. If the nearest integer composition cannot be
+realized exactly, nearby compositions within
+`AmorphousSlitConfig.surface_fraction_tolerance` are considered.
+
+Bare slit preparation permits only residual `Q` states. It rejects any target
+with non-zero `T2` or `T3` fractions. The surface is edited by forming
+additional siloxane bridges between eligible neighboring surface Si atoms within
+the configured Si-Si distance range. Bridge oxygen positions are selected from
+sterically screened candidate placements.
+
+Functionalized slit preparation uses the same base slit and Q-state editing,
+but the final target may include `T2` and `T3` sites. The required pre-grafting
+surface is derived from the final target: future `T2` sites must remain geminal
+before attachment, and future `T3` sites must remain singly hydroxylated before
+attachment. The ligand is then attached deterministically to available geminal
+sites for `T2` and to available single sites for `T3`, with optional rotation
+about the attachment axis and slit-only steric acceptance. Full GROMACS
+topology export for functionalized slits requires an explicit
+`SilaneTopologyConfig`; otherwise, the workflow can still export coordinates
+and reports.
+
+## Pore Filling Workflow
+
+The `fill_pore/fill_silica_pore.py` script delegates to
+`porems.slit_fill.fill_slit_main(...)`, and
+`fill_pore/compute_inside_pore_density.py` delegates to
+`porems.slit_fill.estimate_guest_density_main(...)`.
+
+The filling workflow center-crops a larger guest reservoir box to the slit box,
+infers the slit-normal axis and accessible slit interval from hydroxylated
+surface Si atoms, optionally removes target residues outside that interval, and
+then removes residues that clash with the slit framework. Clash detection
+combines a short all-atom cutoff with explicit aromatic-ring crossing checks in
+both directions: guest bonds through slit aromatic rings and slit bonds through
+guest aromatic rings. The final merged GRO file is written with the slit normal
+placed on `z`, and a human-readable log records filtering counts and density
+estimates.
+
+The density workflow computes a box-average guest density and Monte Carlo
+accessible-volume densities for one or more probe radii. The default probe
+radii are 0.00, 0.14, and 0.20 nm. The density estimates are independent of
+`alpha`, but they depend on the generated surface geometry, atom identities,
+and retained guest count.
+
+## Definition of Alpha
+
+In this repository, `alpha` is the surface-to-total silicon fraction used to
+map experimental silicon-state fractions onto the modeled slit surface. The
+experimental target is always specified over all Si atoms in the sample, while
+the slit builder can only edit the tracked surface Si sites. Therefore, `alpha`
+defines the fraction of the experimental silicon population that is treated as
+surface-accessible in the model.
+
+Three related values are reported:
+
+- `alpha_auto`: the geometry-derived estimate from the generated slit.
+- `alpha_override`: an optional user-supplied value stored on
+  `ExperimentalSiliconStateTarget`.
+- `alpha_effective`: the value actually used for conversion. It is equal to
+  `alpha_override` when an override is supplied, otherwise it is equal to
+  `alpha_auto`.
+
+## Alpha Computation and Target Conversion
+
+The automatic value is computed from the prepared base slit as
+
+```text
+alpha_auto = N_surface_Si / N_active_Si
+```
+
+where `N_surface_Si` is the number of tracked interior surface silicon sites
+and `N_active_Si` is the number of active silicon atoms remaining in the slit
+model connectivity matrix.
+
+The effective value is selected as
+
+```text
+alpha_effective = alpha_override, if alpha_override is not None
+alpha_effective = alpha_auto, otherwise
+```
+
+The experimental all-silicon fractions are then converted to modeled
+surface-only fractions as
+
+```text
+Q2_surface = Q2_experimental / alpha_effective
+Q3_surface = Q3_experimental / alpha_effective
+T2_surface = T2_experimental / alpha_effective
+T3_surface = T3_experimental / alpha_effective
+Q4_surface = (Q4_experimental - (1 - alpha_effective)) / alpha_effective
+```
+
+Equivalently, because `Q4_experimental` is the remaining all-silicon fraction,
+`Q4_surface` is the surface fraction left after the converted `Q2`, `Q3`, `T2`,
+and `T3` fractions. The effective alpha must be in `(0, 1]` and must be at
+least as large as the experimental non-`Q4` fraction
+`Q2 + Q3 + T2 + T3`; otherwise, the converted surface-only `Q4` fraction would
+be negative.
+
+For the current `scripts/TEPS_example` slit geometry, all generated reports
+record the same automatic value:
+
+```text
+N_surface_Si = 957
+N_active_Si = 5885
+alpha_auto = 957 / 5885 = 0.16261682242990655
+```
+
+## Rationale for Alpha Overrides
+
+`alpha_auto` is a useful geometric estimate for the specific generated slit
+model. It is not necessarily the experimental surface-to-total silicon fraction
+of the real material. The generated model has a finite wall thickness, a fixed
+template, and a selected slit width. Changing any of these can change the
+modeled ratio of surface Si to total Si even when the intended experimental
+surface chemistry is unchanged.
+
+An `alpha_override` is useful when the experimental fractions should be
+interpreted with a known or calibrated surface-to-total silicon fraction rather
+than with the geometric fraction of the current template. It lets the user
+preserve a chosen experimental interpretation while still recording the
+template-derived `alpha_auto` for transparency.
+
+In the `scripts/TEPS_example` systems, the overrides are modeling choices. The
+automatically estimated value (`alpha_auto = 0.16261682242990655`) is smaller
+than the experimental non-`Q4` fraction for every listed target. Using
+`alpha_auto` would therefore make the converted surface-only `Q4` fraction
+negative, which violates the conversion constraint. The overrides raise
+`alpha_effective` to values compatible with the requested `Q2/Q3/T2/T3`
+fractions and with a chemically realizable surface composition.
+
+Good practice is:
+
+- First compute or inspect `alpha_auto` for the actual slit geometry.
+- Choose `alpha_override` only when it represents an external experimental or
+  methodological assumption, not only to force a convenient integer target.
+- Confirm that `alpha_override` lies in `(0, 1]` and is not smaller than the
+  requested experimental non-`Q4` fraction.
+- Inspect `derived_surface_target` and `final_surface` in the generated
+  `*_report.json` file after the build.
+- Report both `alpha_auto` and `alpha_effective` in methods text.
+- Keep the same override across comparable systems unless the underlying
+  experimental material or intended surface-to-total interpretation changes.
+- Treat `used_surface_tolerance = true` as a flag that the exact rounded target
+  was not realized and should be checked before using the model in production
+  simulations.
+
+## Alpha Values in `scripts/TEPS_example`
+
+The TEPS example script defines all alpha overrides directly inside the
+`systems` dictionary by constructing
+`pms.ExperimentalSiliconStateTarget(alpha_override=...)`. During preparation,
+the builder still computes `alpha_auto`, but `_effective_alpha(...)` selects
+the supplied override as `alpha_effective`. The reports confirm that all five
+TEPS-example systems used their override values rather than the automatic
+`0.16261682242990655` conversion.
+
+The `N_M` part of each `msn_N_M` name is the silica:TEPS ratio. `msn_0_0` is
+the bare silica control, while `msn_9_1`, `msn_8_2`, `msn_7_3`, and `msn_6_4`
+represent 9:1, 8:2, 7:3, and 6:4 silica:TEPS ratios, respectively.
+
+| System | Silica:TEPS ratio | Experimental Q2 | Experimental Q3 | Experimental T2 | Experimental T3 | Non-Q4 fraction | alpha_auto | alpha_override = alpha_effective |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `msn_0_0` | Bare control | 0.0170 | 0.1675 | 0.0000 | 0.0000 | 0.1845 | 0.1626168224 | 0.52 |
+| `msn_9_1` | 9:1 | 0.0133 | 0.1735 | 0.0195 | 0.0367 | 0.2430 | 0.1626168224 | 0.51 |
+| `msn_8_2` | 8:2 | 0.0158 | 0.1637 | 0.0508 | 0.0818 | 0.3121 | 0.1626168224 | 0.50 |
+| `msn_7_3` | 7:3 | 0.0101 | 0.1275 | 0.0622 | 0.1144 | 0.3142 | 0.1626168224 | 0.43 |
+| `msn_6_4` | 6:4 | 0.0149 | 0.0976 | 0.0605 | 0.1836 | 0.3566 | 0.1626168224 | 0.38 |
+
+The corresponding converted surface-only targets and realized integer final
+surface compositions are:
+
+| System | Surface Q2 | Surface Q3 | Surface Q4 | Surface T2 | Surface T3 | Final Q2 | Final Q3 | Final Q4 | Final T2 | Final T3 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `msn_0_0` | 0.032692 | 0.322115 | 0.645192 | 0.000000 | 0.000000 | 31 | 308 | 618 | 0 | 0 |
+| `msn_9_1` | 0.026078 | 0.340196 | 0.523529 | 0.038235 | 0.071961 | 25 | 325 | 501 | 37 | 69 |
+| `msn_8_2` | 0.031600 | 0.327400 | 0.375800 | 0.101600 | 0.163600 | 30 | 313 | 360 | 97 | 157 |
+| `msn_7_3` | 0.023488 | 0.296512 | 0.269302 | 0.144651 | 0.266047 | 23 | 284 | 258 | 138 | 254 |
+| `msn_6_4` | 0.039211 | 0.256842 | 0.061579 | 0.159211 | 0.483158 | 38 | 246 | 59 | 152 | 462 |
+
+All final compositions are over `957` tracked surface silicon sites.
+
+## Related Script Note
+
+The more general `scripts/build_silica_slit.py` example also uses explicit
+alpha overrides in its `_surface_target(...)` helper. In that script, the bare
+example and the TMS/TEPS example target both use `alpha_override=0.328`. This
+is separate from the `scripts/TEPS_example/_0_create_slit.py` series above.

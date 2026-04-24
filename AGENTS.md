@@ -7,7 +7,8 @@
     - we don't need to keep legacy code / legacy API
     - we don't need to keep backward compatibility
     - refactors or changes that improve code/logic/usability are welcome
-- tests should test current logic/code/functionalities. If a test rely on old API/CLI, the test should be updated or removed.
+- tests should validate **current** (the one after the change you made) logic/code/functionalities
+    - if a test rely on old API/CLI, the test should be updated or removed
 - every plot must have a companion raw-data export that is easy to reuse outside Python. The companion plot-data file should be CSV.
 - you have to update the README file whenever some change in the behaviour here reported is made, or if new functionalities are added
 
