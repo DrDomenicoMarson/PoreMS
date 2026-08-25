@@ -487,6 +487,12 @@ class AmorphousSlitConfig:
     surface_fraction_tolerance : float, optional
         Allowed absolute fraction deviation per silicon state when the exact
         integer target cannot be realized on the current slit.
+    random_seed : int or None, optional
+        Optional seed used to randomize chemically equivalent surface-editing
+        and grafting choices. When omitted, the legacy deterministic ordering
+        is used. Supplying the same seed reproduces the same slit variant,
+        while different seeds can produce different arrangements with the same
+        requested silicon-state composition.
     template_split_pairs : tuple, optional
         Template-specific bond pairs that must be disconnected after
         reconstructing the amorphous connectivity matrix.
@@ -512,6 +518,7 @@ class AmorphousSlitConfig:
     amorph_bond_range_nm: tuple[float, float] = (0.160 - 0.02, 0.160 + 0.02)
     siloxane_distance_range_nm: tuple[float, float] = (0.40, 0.65)
     surface_fraction_tolerance: float = 0.005
+    random_seed: int | None = None
     template_split_pairs: tuple[tuple[int, int], ...] = ((57790, 2524),)
     silica_topology: SilicaTopologyModel | None = None
 
@@ -532,6 +539,8 @@ class AmorphousSlitConfig:
             raise ValueError("The temperature must be positive.")
         if self.surface_fraction_tolerance < 0:
             raise ValueError("The surface fraction tolerance must be non-negative.")
+        if self.random_seed is not None and self.random_seed < 0:
+            raise ValueError("The random seed must be non-negative.")
 
 
 @dataclass(frozen=True)
@@ -641,6 +650,9 @@ class SlitPreparationReport:
     surface_fraction_tolerance : float
         Allowed absolute fraction deviation per silicon state for fallback
         target selection.
+    random_seed : int or None
+        Seed used to randomize surface-editing and grafting choices, or
+        ``None`` when the deterministic ordering was used.
     alpha_auto : float
         Alpha value derived from the slit geometry.
     alpha_effective : float
@@ -682,6 +694,7 @@ class SlitPreparationReport:
     siloxane_bridges: int
     siloxane_distance_range_nm: tuple[float, float]
     surface_fraction_tolerance: float
+    random_seed: int | None
     alpha_auto: float
     alpha_effective: float
     used_surface_tolerance: bool
@@ -1530,6 +1543,46 @@ def _surface_fraction_errors(composition, target):
     )
 
 
+def _realization_rng(random_seed):
+    """Return a pseudorandom generator for one slit realization.
+
+    Parameters
+    ----------
+    random_seed : int or None
+        Optional seed from :class:`AmorphousSlitConfig`.
+
+    Returns
+    -------
+    rng : numpy.random.Generator or None
+        Seeded generator when ``random_seed`` is supplied, otherwise ``None``
+        to keep the deterministic legacy ordering.
+    """
+    return None if random_seed is None else np.random.default_rng(random_seed)
+
+
+def _ordered_candidates(candidates, rng):
+    """Return candidates in deterministic or seeded-random order.
+
+    Parameters
+    ----------
+    candidates : iterable
+        Candidate values to order.
+    rng : numpy.random.Generator or None
+        Optional generator used to shuffle the candidate order.
+
+    Returns
+    -------
+    ordered : list
+        Candidate values in their original order when ``rng`` is ``None``, or
+        in a seeded pseudorandom order otherwise.
+    """
+    ordered = list(candidates)
+    if rng is None or len(ordered) < 2:
+        return ordered
+
+    return [ordered[int(index)] for index in rng.permutation(len(ordered))]
+
+
 def _effective_alpha(total_surface_si, total_active_si, target):
     """Resolve the automatic and effective alpha values.
 
@@ -1943,7 +1996,7 @@ def _find_pair(sites, adjacency, first_count, second_count):
     return None
 
 
-def _find_placeable_pair(kit, sites, adjacency, first_count, second_count):
+def _find_placeable_pair(kit, sites, adjacency, first_count, second_count, rng=None):
     """Find the next eligible siloxane pair with a valid bridge placement.
 
     Parameters
@@ -1958,6 +2011,9 @@ def _find_placeable_pair(kit, sites, adjacency, first_count, second_count):
         Required number of free oxygen atoms on the first site.
     second_count : int
         Required number of free oxygen atoms on the second site.
+    rng : numpy.random.Generator or None, optional
+        Optional generator used to randomize the chemically equivalent site and
+        neighbor traversal order.
 
     Returns
     -------
@@ -1965,11 +2021,11 @@ def _find_placeable_pair(kit, sites, adjacency, first_count, second_count):
         Pair of silicon identifiers and the selected bridge position, or
         ``(None, None)`` when no currently placeable pair exists.
     """
-    for site_a in sorted(sites):
+    for site_a in _ordered_candidates(sorted(sites), rng):
         if sites[site_a].site_type != "in" or sites[site_a].oxygen_count != first_count:
             continue
 
-        for site_b, _distance in adjacency.get(site_a, []):
+        for site_b, _distance in _ordered_candidates(adjacency.get(site_a, []), rng):
             if site_b not in sites:
                 continue
             if sites[site_b].site_type != "in" or sites[site_b].oxygen_count != second_count:
@@ -2433,7 +2489,7 @@ def _refresh_single_slit_tracking(kit, total_surface_si, composition):
     kit._slit_total_surface_si = total_surface_si
 
 
-def _enforce_surface_target(kit, total_surface_si, target_surface, distance_range):
+def _enforce_surface_target(kit, total_surface_si, target_surface, distance_range, rng=None):
     """Condense the slit surface until the prepared ``Q`` counts are met.
 
     Parameters
@@ -2446,6 +2502,9 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
         Bare pre-grafting target surface composition. ``T2/T3`` must be zero.
     distance_range : tuple[float, float]
         Accepted ``Si-Si`` distance range for siloxane formation.
+    rng : numpy.random.Generator or None, optional
+        Optional generator used to randomize the selection of eligible
+        siloxane bridge pairs.
 
     Returns
     -------
@@ -2458,7 +2517,7 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
     current_surface = _surface_composition(total_surface_si, sites)
 
     while current_surface.q3_sites < target_surface.q3_sites:
-        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 2)
+        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 2, rng=rng)
         if pair is None:
             raise ValueError("No remaining Q2/Q2 siloxane pair is available to increase the Q3 population.")
 
@@ -2471,12 +2530,12 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
 
     while current_surface.q2_sites > target_surface.q2_sites:
         q2_delta = current_surface.q2_sites - target_surface.q2_sites
-        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 1)
+        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 1, rng=rng)
 
         if pair is None:
             if q2_delta < 2:
                 raise ValueError("The slit surface cannot reach the requested Q2 count with the available siloxane pairs.")
-            pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 2)
+            pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 2, 2, rng=rng)
             if pair is None:
                 raise ValueError("No remaining Q2/Q2 siloxane pair is available to reduce the Q2 population.")
 
@@ -2488,7 +2547,7 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
         if (current_surface.q3_sites - target_surface.q3_sites) < 2:
             raise ValueError("The requested Q3 count is incompatible with the siloxane editing parity constraints.")
 
-        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 1, 1)
+        pair, bridge_position = _find_placeable_pair(kit, sites, adjacency, 1, 1, rng=rng)
         if pair is None:
             raise ValueError("No remaining Q3/Q3 siloxane pair is available to reach the requested Q3 count.")
 
@@ -2652,6 +2711,7 @@ def _realize_surface_target(
     ligand=None,
     steric_settings=None,
     progress_tracker=None,
+    rng=None,
 ):
     """Select and realize a compatible final slit-surface composition.
 
@@ -2681,6 +2741,9 @@ def _realize_surface_target(
     progress_tracker : _FunctionalizedProgressTracker or None, optional
         Optional outer workflow progress tracker used to update live stage
         descriptions and inner attachment bars.
+    rng : numpy.random.Generator or None, optional
+        Optional generator used to randomize chemically equivalent siloxane
+        pair and graft-site choices.
 
     Returns
     -------
@@ -2725,6 +2788,7 @@ def _realize_surface_target(
                 total_surface_si,
                 prepared_target,
                 distance_range,
+                rng=rng,
             )
         except ValueError:
             continue
@@ -2735,7 +2799,10 @@ def _realize_surface_target(
         t3_attachment_s = 0.0
 
         if ligand is not None:
-            geminal_sites = _available_site_ids(trial_system, oxygen_count=2)
+            geminal_sites = _ordered_candidates(
+                _available_site_ids(trial_system, oxygen_count=2),
+                rng,
+            )
             if len(geminal_sites) < candidate_surface.t2_sites:
                 continue
             t2_bar = None
@@ -2771,7 +2838,10 @@ def _realize_surface_target(
             if len(attached_t2_molecules) < candidate_surface.t2_sites:
                 continue
 
-            single_sites = _available_site_ids(trial_system, oxygen_count=1)
+            single_sites = _ordered_candidates(
+                _available_site_ids(trial_system, oxygen_count=1),
+                rng,
+            )
             if len(single_sites) < candidate_surface.t3_sites:
                 continue
             t3_bar = None
@@ -2936,6 +3006,7 @@ def _build_report(
         siloxane_bridges=target_attempt.siloxane_bridges,
         siloxane_distance_range_nm=tuple(config.siloxane_distance_range_nm),
         surface_fraction_tolerance=config.surface_fraction_tolerance,
+        random_seed=config.random_seed,
         alpha_auto=alpha_auto,
         alpha_effective=alpha_effective,
         used_surface_tolerance=target_attempt.used_surface_tolerance,
@@ -3004,6 +3075,7 @@ def prepare_amorphous_slit_surface(config=None):
         alpha_effective,
     )
     exact_target = _nearest_integer_composition(build.total_surface_si, derived_surface_target)
+    rng = _realization_rng(config.random_seed)
     target_attempt = _realize_surface_target(
         build.system,
         build.total_surface_si,
@@ -3013,6 +3085,7 @@ def prepare_amorphous_slit_surface(config=None):
         config.surface_fraction_tolerance,
         tuple(config.siloxane_distance_range_nm),
         ligand=None,
+        rng=rng,
     )
     report = _build_report(
         config,
@@ -3118,6 +3191,7 @@ def _prepare_functionalized_amorphous_slit_surface(config, progress_tracker):
         alpha_effective,
     )
     exact_target = _nearest_integer_composition(build.total_surface_si, derived_surface_target)
+    rng = _realization_rng(slit_config.random_seed)
     target_attempt = _realize_surface_target(
         build.system,
         build.total_surface_si,
@@ -3129,6 +3203,7 @@ def _prepare_functionalized_amorphous_slit_surface(config, progress_tracker):
         ligand=config.ligand,
         steric_settings=config.steric_settings,
         progress_tracker=progress_tracker,
+        rng=rng,
     )
     progress_tracker.update_stage(3)
     timing_summary = replace(

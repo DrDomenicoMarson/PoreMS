@@ -838,6 +838,44 @@ class TestAmorphousSlitPreparation:
         assert alpha_auto == pytest.approx(0.1, abs=1e-7)
         assert alpha_effective == pytest.approx(0.2, abs=1e-7)
 
+    def test_random_seed_reproducibly_changes_bare_surface_realization(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=307 / 957,
+            q3_fraction=650 / 957,
+            q4_fraction=0.0,
+            alpha_override=1.0,
+        )
+
+        def bridge_pairs(seed):
+            """Return inserted bridge-neighbor pairs for one seeded variant."""
+            result = pms.prepare_amorphous_slit_surface(
+                pms.AmorphousSlitConfig(
+                    name=f"seeded_bare_{seed}",
+                    repeat_y=1,
+                    surface_target=target,
+                    random_seed=seed,
+                )
+            )
+            assert result.report.random_seed == seed
+            assert result.report.final_surface == pms.SiliconStateComposition(
+                957,
+                307,
+                650,
+                0,
+            )
+            return tuple(
+                record.neighbor_ids
+                for record in result.system._pore.get_surface_edit_history()
+                if record.reason == "inserted_bridge_oxygen"
+            )
+
+        seed_a_pairs = bridge_pairs(11)
+        repeated_seed_a_pairs = bridge_pairs(11)
+        seed_b_pairs = bridge_pairs(12)
+
+        assert seed_a_pairs == repeated_seed_a_pairs
+        assert seed_a_pairs != seed_b_pairs
+
     def test_q4_fraction_is_derived_when_omitted(self):
         target = pms.ExperimentalSiliconStateTarget(
             q2_fraction=0.02,
@@ -1062,6 +1100,7 @@ class TestAmorphousSlitPreparation:
         assert data["site_ex"] == 0
         assert data["siloxane_distance_range_nm"] == [0.4, 0.65]
         assert data["surface_fraction_tolerance"] == 0.005
+        assert data["random_seed"] is None
         assert not (data["used_surface_tolerance"])
         assert data["alpha_auto"] == pytest.approx(self.stored_report.alpha_auto, abs=10 ** (-(8)))
         assert data["alpha_effective"] == 1.0
@@ -1533,6 +1572,54 @@ class TestFunctionalizedAmorphousSlit:
             call["amount"] == 4 and call["sites_len"] >= 4 and not call["is_g"]
             for call in batched_calls
         )
+
+    def test_random_seed_reproducibly_changes_functionalized_graft_sites(self):
+        target = pms.ExperimentalSiliconStateTarget(
+            q2_fraction=308 / 957,
+            q3_fraction=648 / 957,
+            q4_fraction=0.0,
+            t2_fraction=1 / 957,
+            t3_fraction=0.0,
+            alpha_override=1.0,
+        )
+
+        def attachment_sites(seed):
+            """Return grafted site ids for one seeded functionalized variant."""
+            config = pms.FunctionalizedAmorphousSlitConfig(
+                slit_config=pms.AmorphousSlitConfig(
+                    name=f"seeded_functionalized_{seed}",
+                    repeat_y=1,
+                    surface_target=target,
+                    random_seed=seed,
+                ),
+                ligand=pms.SilaneAttachmentConfig(
+                    molecule=pms.gen.tms(),
+                    mount=0,
+                    axis=(0, 1),
+                    rotate_about_axis=False,
+                ),
+            )
+            result = pms.prepare_functionalized_amorphous_slit_surface(config)
+            assert result.report.random_seed == seed
+            assert result.report.final_surface == pms.SiliconStateComposition(
+                957,
+                308,
+                648,
+                0,
+                1,
+                0,
+            )
+            return tuple(
+                record.site_id
+                for record in result.system._pore.get_attachment_records()
+            )
+
+        seed_a_sites = attachment_sites(21)
+        repeated_seed_a_sites = attachment_sites(21)
+        seed_b_sites = attachment_sites(22)
+
+        assert seed_a_sites == repeated_seed_a_sites
+        assert seed_a_sites != seed_b_sites
 
     def test_attachment_progress_description_includes_candidate_context(self):
         context = slit_mod._AttachmentPhaseProgressContext(

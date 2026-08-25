@@ -57,6 +57,33 @@ print(result.bare_charge_diagnostics.is_neutral)
 `ExperimentalSiliconStateTarget.q4_fraction` can be omitted. When omitted, it
 is derived as the remaining fraction after `Q2`, `Q3`, `T2`, and `T3`.
 
+By default, slit surface realization is deterministic. To generate alternative
+slits with the same requested `Q2/Q3/Q4/T2/T3` composition, provide
+`AmorphousSlitConfig.random_seed`. The same seed reproduces the same variant,
+while different seeds randomize chemically equivalent siloxane-bridge and
+graft-site choices:
+
+```python
+variant_config = pms.AmorphousSlitConfig(
+    name="bare_amorphous_silica_slit_seed_1001",
+    slit_width_nm=7.0,
+    repeat_y=2,
+    surface_target=pms.ExperimentalSiliconStateTarget(
+        q2_fraction=66 / 40000,
+        q3_fraction=650 / 40000,
+    ),
+    random_seed=1001,
+)
+```
+
+The TEPS example series can be rebuilt with seeded variants from the example
+directory:
+
+```bash
+cd scripts/TEPS_example
+/Users/dm/miniforge3/envs/mda/bin/python3 _0_create_slit.py --seed-base 1000
+```
+
 `prepare_amorphous_slit_surface(...)` returns a `SlitPreparationResult` with an
 attach-ready `PoreKit`, a structured `SlitPreparationReport`, and the resolved
 editable silica topology model used by slit topology export. The finalized bare
