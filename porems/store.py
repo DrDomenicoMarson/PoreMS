@@ -2477,7 +2477,9 @@ class Store:
             legacy ``junction_parameters`` attributes. The supplied flat ITP
             is interpreted as one base post-condensation ``T3`` fragment
             whose total charge must already match the target derived from the
-            resolved silica model.
+            resolved silica model. Retained scaffold ``O-Si-O`` cross angles
+            use an explicit geminal-cross-term override when supplied and
+            otherwise fall back to the active silica topology model.
         silica_topology : SilicaTopologyModel or None, optional
             Resolved editable silica topology model used for scaffold and
             graft-junction terms. When omitted, the package defaults are used.
@@ -2895,7 +2897,14 @@ class Store:
                             geminal_cross_terms
                             .scaffold_oxygen_mount_ligand_angle
                         )
-                    elif outer_elements != ["O", "O"]:
+                    elif outer_elements == ["O", "O"]:
+                        angle_parameters = (
+                            silica_topology
+                            .angle_terms
+                            .graft_oxygen_mount_oxygen
+                            .to_gromacs_parameters()
+                        )
+                    else:
                         raise ValueError(
                             "Full slit topology export requires explicit "
                             "SilaneGeminalCrossTerms."
@@ -2952,6 +2961,13 @@ class Store:
                         "Unsupported angle environment for full slit topology "
                         f"export: {(record_a.residue_name, record_a.atom_name, record_b.residue_name, record_b.atom_name, record_c.residue_name, record_c.atom_name)!r}."
                     )
+
+            if angle_parameters is None:
+                raise ValueError(
+                    "Full slit topology export could not resolve angle "
+                    "parameters for "
+                    f"{(record_a.residue_name, record_a.atom_name, record_b.residue_name, record_b.atom_name, record_c.residue_name, record_c.atom_name)!r}."
+                )
 
             angles.append(
                 GromacsAngle(
