@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 version_ns = {}
 exec(
@@ -11,7 +11,7 @@ exec(
 setup(
     name="porems",
     version=version_ns["__version__"],
-    packages=["porems"],
+    packages=find_packages(include=("porems", "porems.*")),
     package_data={"porems": ["templates/*", "py.typed"]},
     install_requires=["numpy", "scipy", "numba", "matplotlib", "pandas", "seaborn", "pyyaml", "tqdm"],
     extras_require={"test": ["pytest", "pytest-cov"]},

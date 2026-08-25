@@ -16,7 +16,9 @@ Molecule
 
     molecule.Molecule
     atom.Atom
-    store.Store
+    writers.structure.StructureWriter
+    writers.gromacs.GromacsTopologyWriter
+    writers.antechamber.AntechamberWriter
     connectivity.GraphBond
     connectivity.GraphAngle
     connectivity.AttachmentRecord
@@ -25,25 +27,18 @@ Molecule
 
 .. _pore_api:
 
-Pore
-----
+Slit Domain
+-----------
 
 .. autosummary::
     :toctree: generated/
 
-    pore.BindingSite
+    slit_system.SilicaSlit
+    slit_system.SlitBindingSite
+    slit_system.SlitAttachmentRecord
+    slit_system.LigandAttachmentResult
+    pore.SurfaceEditRecord
     pore.SurfacePreparationDiagnostics
-    pore.Pore
-    system.ShapeAttachmentSummary
-    system.RoughnessProfile
-    system.SurfaceAreaSummary
-    system.SurfaceAllocationStats
-    system.AllocationSummary
-    system.PoreKit
-    system.PoreCylinder
-    system.PoreSlit
-    system.PoreCapsule
-    system.PoreAmorphCylinder
 
 
 .. _pattern_api:
@@ -104,19 +99,48 @@ Slit Preparation
     slit.SiliconStateFractions
     slit.ExperimentalSiliconStateTarget
     slit.AmorphousSlitConfig
+    slit.AmorphousSlitBuilder
     slit.SiliconStateComposition
     slit.SlitPreparationReport
     slit.SlitPreparationResult
+    slit.SlitTimingSummary
+    slit.SlitJunctionParameters
+    slit.GeminalMountDihedralSpec
+    slit.SilaneGeminalCrossTerms
+    slit.SilaneTopologyConfig
     slit.SilaneAttachmentConfig
+    slit.FunctionalizedSlitProgressConfig
+    slit.FunctionalizedSlitStericConfig
     slit.FunctionalizedAmorphousSlitConfig
     slit.FunctionalizedSlitResult
     slit.prepare_amorphous_slit_surface
     slit.write_bare_amorphous_slit
     slit.prepare_functionalized_amorphous_slit_surface
     slit.write_functionalized_amorphous_slit
+    topology.SilicaTopologyModel
+    topology.BareSilicaChargeDiagnostics
+    topology.FunctionalizedSlitChargeDiagnostics
+    topology.default_silica_topology
 
 
 .. _utils_api:
+
+Slit Filling / Density
+----------------------
+
+.. autosummary::
+    :toctree: generated/
+
+    slit_fill.SlitFillConfig
+    slit_fill.SurfacePlaneRegion
+    slit_fill.DensityProbeEstimate
+    slit_fill.DensityEstimate
+    slit_fill.SlitFillReport
+    slit_fill.SlitDensityConfig
+    slit_fill.SlitDensityReport
+    slit_fill.fill_slit
+    slit_fill.estimate_guest_density
+
 
 Utilities
 ---------

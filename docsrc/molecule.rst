@@ -71,13 +71,13 @@ Complete the ring structure of the benzene molecule.
 Save Structure
 --------------
 
-Using the storage class, the generated structure can be exported into various formats.
+Using ``StructureWriter``, the generated structure can be exported into various formats.
 
 .. code-block:: python
 
-  pms.Store(mol).gro()
-  pms.Store(mol).pdb()
-  pms.Store(mol).xyz()
+  pms.StructureWriter(mol).write_gro()
+  pms.StructureWriter(mol).write_pdb()
+  pms.StructureWriter(mol).write_xyz()
 
 
 .. raw:: html

@@ -19,10 +19,10 @@ Amorphous silica slit pores are generated from the packaged amorphous silica
 template (`porems/templates/amorph.gro`). The template is replicated along the
 `y` direction according to `AmorphousSlitConfig.repeat_y`, its connectivity is
 rebuilt from the configured Si-O bond-length interval, and template-specific
-split pairs are removed. The replicated silica block is then cut with
-`PoreKit.shape_slit(...)` at the requested slit width and prepared as an
-interior-only periodic slit. The current high-level slit preparation workflow
-requires zero exterior sites after preparation.
+split pairs are removed. `AmorphousSlitBuilder` then constructs a dedicated
+`SilicaSlit` at the requested width and prepares it as an interior-only periodic
+slit. The current high-level slit preparation workflow requires zero exterior
+sites after preparation.
 
 The initially hydroxylated surface is summarized as a set of tracked surface Si
 sites. These sites are classified into `Q2`, `Q3`, and `Q4` states according to

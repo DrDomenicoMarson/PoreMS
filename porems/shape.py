@@ -223,7 +223,7 @@ class ShapeSection:
 
 @dataclass(frozen=True)
 class ShapeSpec:
-    """Typed shape entry used by :class:`porems.system.PoreKit`.
+    """Typed shape entry for geometry-specific builders.
 
     Parameters
     ----------

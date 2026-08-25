@@ -9,8 +9,8 @@
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="_static/documentation_options.js?v=6c02275b"></script>
-    <script src="_static/doctools.js?v=9a2dae69"></script>
-    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
 <meta charset='utf-8'>
@@ -43,9 +43,7 @@
             
                 <li><a href="api.html">API</a></li>
                 <li><a href="molecule.html">Molecule</a></li>
-                <li><a href="pore.html">Pore</a></li>
                 <li><a href="slit.html">Slit Prep</a></li>
-                <li><a href="shape_examples.html">Pore shape examples</a></li>
             
             
               <li class="dropdown globaltoc-container">
@@ -128,14 +126,14 @@
 <a class="reference internal image-reference" href="_images/pore.svg"><img alt="_images/pore.svg" src="_images/pore.svg" style="width: 100%;" />
 </a>
 </figure>
-<p>This python package generates silica pore structures and surface-functionalized
-models for later analysis or simulation. For an overview of the programs
-operating principle, check out the corresponding publication
+<p>This Python package generates periodic amorphous silica slit structures and
+surface-functionalized models for later analysis or simulation. For the
+historical background, see the corresponding publication
 <strong>Kraus et al.</strong> (doi:<a class="reference external" href="https://doi.org/10.1080/08927022.2020.1871478">10.1080/08927022.2020.1871478</a>).
-Additionally, tutorials for generating
-<a class="reference external" href="molecule.html">molecules</a> and <a class="reference external" href="pore.html">pores</a> are provided.</p>
+Additionally, a tutorial for generating <a class="reference external" href="molecule.html">molecules</a> is
+provided.</p>
 <p>Check out the <a class="reference external" href="slit.html">slit preparation guide</a> for using the PoreMS
-package to create pore systems, control surface chemistry, and export the
+package to create slit systems, control surface chemistry, and export the
 resulting build artifacts.</p>
 <p>To see the code, report a bug or contribute, please visit the
 <a class="reference external" href="https://github.com/Ajax23/PoreMS">github repository</a>.</p>
@@ -147,11 +145,11 @@ resulting build artifacts.</p>
     </div>
     <div class="panel-body"><ul class="simple">
 <li><p>Molecule Generation <a class="reference internal" href="api.html#generation-api"><span class="std std-ref">API</span></a></p></li>
-<li><p>Pore Generation <a class="reference internal" href="api.html#pore-api"><span class="std std-ref">API</span></a></p>
+<li><p>Slit Preparation <a class="reference internal" href="api.html#slit-api"><span class="std std-ref">API</span></a></p>
 <ul>
-<li><p>Gridstructure Patterns <a class="reference internal" href="api.html#pattern-api"><span class="std std-ref">API</span></a></p></li>
+<li><p>Grid-structure Patterns <a class="reference internal" href="api.html#pattern-api"><span class="std std-ref">API</span></a></p></li>
 <li><p>Three-Dimensional Shapes <a class="reference internal" href="api.html#shape-api"><span class="std std-ref">API</span></a></p></li>
-<li><p>Runtime Optimization <a class="reference internal" href="api.html#optimization-api"><span class="std std-ref">API</span></a></p></li>
+<li><p>Connectivity Construction <a class="reference internal" href="api.html#optimization-api"><span class="std std-ref">API</span></a></p></li>
 </ul>
 </li>
 <li><p>Utilities <a class="reference internal" href="api.html#utils-api"><span class="std std-ref">API</span></a></p></li>
@@ -175,7 +173,7 @@ resulting build artifacts.</p>
     </p>
     <p>
         &copy; Copyright 2021, Hamzeh Kraus.<br/>
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 7.4.6.<br/>
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 9.1.0.<br/>
     </p>
   </div>
 </footer>

@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import pytest
 
 import porems as pms
-import porems.store as store_mod
+import porems.writers.common as store_mod
+from porems.pore import Pore
 
 
 pytestmark = pytest.mark.usefixtures("module_workspace")
@@ -174,7 +175,7 @@ class TestUserModel:
         mol = pms.Molecule(inp=pdb_path)
         assert mol.get_bonds() == [(0, 1), (1, 2)]
 
-        graph = pms.Store(mol, "output").assembled_graph(use_atom_names=True)
+        graph = pms.StructureWriter(mol, "output").assembled_graph(use_atom_names=True)
         assert len(graph.bonds) == 2
         assert all(bond.provenance == "ligand_explicit" for bond in graph.bonds)
 
@@ -354,7 +355,7 @@ class TestUserModel:
         mol.add("C", [0.0, 0.0, 0.0], name="C1")
         mol.add("C", [0.1, 0.0, 0.0], name="C2")
 
-        store = pms.Store(mol, "output")
+        store = pms.StructureWriter(mol, "output")
         atom_records = [
             store_mod._StructureAtomRecord(
                 serial=99999,
@@ -423,7 +424,7 @@ class TestUserModel:
             graph=graph,
         )
 
-        store.pdb("store_hybrid36_overflow.pdb", use_atom_names=True)
+        store.write_pdb("store_hybrid36_overflow.pdb", use_atom_names=True)
 
         with open("output/store_hybrid36_overflow.pdb", "r") as file_in:
             pdb_lines = [
@@ -446,14 +447,24 @@ class TestUserModel:
 
         mol.set_atom_residue(1, 1)
 
-        pms.Store(mol, "output").job("store_job", "store_master.job")
-        pms.Store(mol, "output").obj("store_obj.obj")
-        pms.Store(mol, "output").gro("store_gro.gro", True)
-        pms.Store(mol, "output").pdb("store_pdb.pdb", True)
-        pms.Store(mol, "output").cif("store_cif.cif", True)
-        pms.Store(mol, "output").xyz("store_xyz.xyz")
-        pms.Store(mol, "output").lmp("store_lmp.lmp")
-        pms.Store(mol, "output").grid("store_grid.itp")
+        pms.AntechamberWriter(mol, "output").write(
+            "store_job",
+            "store_master.job",
+        )
+        pms.StructureWriter(mol, "output").write_object("store_obj.obj")
+        pms.StructureWriter(mol, "output").write_gro("store_gro.gro", True)
+        pms.StructureWriter(mol, "output").write_pdb("store_pdb.pdb", True)
+        pms.StructureWriter(mol, "output").write_cif("store_cif.cif", True)
+        pms.StructureWriter(mol, "output").write_xyz("store_xyz.xyz")
+        pms.StructureWriter(mol, "output").write_lammps("store_lmp.lmp")
+        pms.GromacsTopologyWriter(mol, "output").write_grid_itp(
+            "store_grid.itp"
+        )
+
+        object_snapshot = pms.utils.load("output/store_obj.obj")
+        assert isinstance(object_snapshot, store_mod.StructureSnapshot)
+        assert object_snapshot.has_assembled_export
+        assert len(object_snapshot.atom_order) == mol.get_num()
 
         with open("output/store_cif.cif", "r") as file_in:
             cif_text = file_in.read()
@@ -464,21 +475,21 @@ class TestUserModel:
             pdb_text = file_in.read()
         assert "CONECT" in pdb_text
 
-        graph = pms.Store(mol, "output").assembled_graph(use_atom_names=True)
+        graph = pms.StructureWriter(mol, "output").assembled_graph(use_atom_names=True)
         assert isinstance(graph, pms.AssembledStructureGraph)
         assert len(graph.bonds) == 12
         assert all(bond.provenance == "ligand_inferred" for bond in graph.bonds)
         assert len(graph.angles) > 0
 
-        report = pms.Store(mol, "output").validate_connectivity(use_atom_names=True)
+        report = pms.StructureWriter(mol, "output").validate_connectivity(use_atom_names=True)
         assert isinstance(report, pms.ConnectivityValidationReport)
         assert report.is_valid
 
         print()
-        with pytest.raises(TypeError, match="Unsupported input type"):
-            pms.Store({})
-        with pytest.raises(TypeError, match="Unsupported input type for topology creation"):
-            pms.Store(mol).top()
+        with pytest.raises(TypeError, match="Molecule or StructureSnapshot"):
+            pms.StructureWriter({})
+        with pytest.raises(TypeError, match="silica-slit snapshot"):
+            pms.GromacsTopologyWriter(mol).write_legacy_topology()
 
     def test_connectivity_validation_reports_invalid_local_valence(self):
         mol = pms.Molecule("invalid_valence", "IVL")
@@ -487,7 +498,7 @@ class TestUserModel:
         mol.add("H", 0, r=0.098, theta=120, name="H2")
         mol.add("H", 0, r=0.098, theta=240, name="H3")
 
-        store = pms.Store(mol, "output")
+        store = pms.StructureWriter(mol, "output")
         report = store.validate_connectivity(use_atom_names=True)
 
         assert not (report.is_valid)
@@ -496,11 +507,11 @@ class TestUserModel:
 
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            store.gro("invalid_valence_warn.gro", use_atom_names=True, validate_connectivity="warn")
+            store.write_gro("invalid_valence_warn.gro", use_atom_names=True, validate_connectivity="warn")
         assert any("Connectivity validation found" in str(warning.message) for warning in caught)
 
         with pytest.raises(ValueError, match="Connectivity validation found"):
-            store.gro("invalid_valence_strict.gro", use_atom_names=True, validate_connectivity="strict")
+            store.write_gro("invalid_valence_strict.gro", use_atom_names=True, validate_connectivity="strict")
 
     def test_connectivity_validation_allows_stretched_but_element_sane_bonds(self):
         mol = pms.Molecule("stretched_silica_fragment", "SSF")
@@ -510,7 +521,7 @@ class TestUserModel:
         mol.add_bond(0, 1)
         mol.add_bond(1, 2)
 
-        report = pms.Store(mol, "output").validate_connectivity(use_atom_names=True)
+        report = pms.StructureWriter(mol, "output").validate_connectivity(use_atom_names=True)
 
         assert report.is_valid
         assert not any(
@@ -523,18 +534,18 @@ class TestUserModel:
         mol.set_box([1.0, 1.0, 1.0])
         mol.add("O", [0.0, 0.0, 0.0], name="OM1")
 
-        store = pms.Store(mol, "output")
-        store.gro(
+        store = pms.StructureWriter(mol, "output")
+        store.write_gro(
             "siloxane_bridge_probe.gro",
             use_atom_names=True,
             validate_connectivity="off",
         )
-        store.pdb(
+        store.write_pdb(
             "siloxane_bridge_probe.pdb",
             use_atom_names=True,
             validate_connectivity="off",
         )
-        store.cif(
+        store.write_cif(
             "siloxane_bridge_probe.cif",
             use_atom_names=True,
             validate_connectivity="off",
@@ -562,7 +573,7 @@ class TestUserModel:
         mol.add_bond(0, 1)
         mol.add_bond(0, 2)
 
-        report = pms.Store(mol, "output").validate_connectivity(use_atom_names=True)
+        report = pms.StructureWriter(mol, "output").validate_connectivity(use_atom_names=True)
 
         assert not report.is_valid
         assert any(
@@ -573,7 +584,7 @@ class TestUserModel:
     def test_pdb_uses_hybrid36_when_fixed_width_limits_are_exceeded(self):
         atom = pms.Molecule("single_atom", "SIN")
         atom.add("H", [0.0, 0.0, 0.0], name="H1")
-        store = pms.Store(atom, "output")
+        store = pms.StructureWriter(atom, "output")
         store._mols = [atom] * 100000
 
         cache = store._collect_structure_records(use_atom_names=True)
@@ -591,7 +602,7 @@ class TestUserModel:
         block.add("O", [0.26, 0.10, 0.10], name="OM1")
         block.add("Si", [0.42, 0.10, 0.10], name="SI2")
 
-        pore = pms.Pore(block, pms.Matrix([[0, [1]], [2, [1]]]))
+        pore = Pore(block, pms.Matrix([[0, [1]], [2, [1]]]))
 
         attached = pms.Molecule("attached_probe", "ATP")
         attached.set_box([1.0, 1.0, 1.0])
@@ -619,7 +630,7 @@ class TestUserModel:
         block = pms.Molecule("clearance_block", "CLB")
         block.set_box([1.0, 1.0, 1.0])
         block.add("O", [0.00, 0.00, 0.00], name="O1")
-        pore = pms.Pore(block, pms.Matrix([[0, []]]))
+        pore = Pore(block, pms.Matrix([[0, []]]))
 
         candidate = pms.Molecule("clearance_candidate", "CLC")
         candidate.set_box([1.0, 1.0, 1.0])
@@ -641,7 +652,7 @@ class TestUserModel:
         block = pms.Molecule("rotation_block", "RBL")
         block.set_box([1.0, 1.0, 1.0])
         block.add("O", [0.20, 0.00, 0.00], name="O1")
-        pore = pms.Pore(block, pms.Matrix([[0, []]]))
+        pore = Pore(block, pms.Matrix([[0, []]]))
 
         candidate = pms.Molecule("rotation_candidate", "RCD")
         candidate.set_box([1.0, 1.0, 1.0])
@@ -696,7 +707,7 @@ class TestUserModel:
         pattern = beta_cristobalit.pattern()
         pattern.set_name("pattern_beta_cbt_minimal")
         assert pattern.get_num() == 36
-        pms.Store(pattern, "output").gro()
+        pms.StructureWriter(pattern, "output").write_gro()
 
         # Generation and Orientation
         beta_cristobalit = pms.BetaCristobalit()
@@ -704,22 +715,22 @@ class TestUserModel:
         beta_cristobalit.get_block().set_name("pattern_beta_cbt_x")
         assert beta_cristobalit.get_size() == [2.480, 1.754, 2.024]
         assert [round(x, 3) for x in beta_cristobalit.get_block().get_box()] == [2.480, 1.754, 2.024]
-        pms.Store(beta_cristobalit.get_block(), "output").gro()
+        pms.StructureWriter(beta_cristobalit.get_block(), "output").write_gro()
 
         beta_cristobalit = pms.BetaCristobalit()
         beta_cristobalit.generate([2, 2, 2], "y")
         beta_cristobalit.get_block().set_name("pattern_beta_cbt_y")
         assert beta_cristobalit.get_size() == [2.024, 2.480, 1.754]
         assert [round(x, 3) for x in beta_cristobalit.get_block().get_box()] == [2.024, 2.480, 1.754]
-        pms.Store(beta_cristobalit.get_block(), "output").gro()
+        pms.StructureWriter(beta_cristobalit.get_block(), "output").write_gro()
 
         beta_cristobalit = pms.BetaCristobalit()
         beta_cristobalit.generate([2, 2, 2], "z")
         beta_cristobalit.get_block().set_name("pattern_beta_cbt_z")
         assert beta_cristobalit.get_size() == [2.024, 1.754, 2.480]
         assert [round(x, 3) for x in beta_cristobalit.get_block().get_box()] == [2.024, 1.754, 2.480]
-        pms.Store(beta_cristobalit.get_block(), "output").gro()
-        pms.Store(beta_cristobalit.get_block(), "output").lmp()
+        pms.StructureWriter(beta_cristobalit.get_block(), "output").write_gro()
+        pms.StructureWriter(beta_cristobalit.get_block(), "output").write_lammps()
 
         # Misc
         beta_cristobalit = pms.BetaCristobalit()
@@ -744,7 +755,7 @@ class TestUserModel:
         pattern = alpha_cristobalit.pattern()
         pattern.set_name("pattern_alpha_cbt_minimal")
         assert pattern.get_num() == 12
-        pms.Store(pattern, "output").gro()
+        pms.StructureWriter(pattern, "output").write_gro()
 
         # Generation and Orientation
         alpha_cristobalit = pms.AlphaCristobalit()
@@ -752,22 +763,22 @@ class TestUserModel:
         alpha_cristobalit.get_block().set_name("pattern_alpha_cbt_x")
         assert alpha_cristobalit.get_size() == [2.0844, 1.9912, 1.9912]
         assert [round(x, 3) for x in alpha_cristobalit.get_block().get_box()] == [2.084, 1.991, 1.991]
-        pms.Store(alpha_cristobalit.get_block(), "output").gro()
+        pms.StructureWriter(alpha_cristobalit.get_block(), "output").write_gro()
 
         alpha_cristobalit = pms.AlphaCristobalit()
         alpha_cristobalit.generate([2, 2, 2], "y")
         alpha_cristobalit.get_block().set_name("pattern_alpha_cbt_y")
         assert alpha_cristobalit.get_size() == [1.9912, 2.0844, 1.9912]
         assert [round(x, 3) for x in alpha_cristobalit.get_block().get_box()] == [1.991, 2.084, 1.991]
-        pms.Store(alpha_cristobalit.get_block(), "output").gro()
+        pms.StructureWriter(alpha_cristobalit.get_block(), "output").write_gro()
 
         alpha_cristobalit = pms.AlphaCristobalit()
         alpha_cristobalit.generate([2, 2, 2], "z")
         alpha_cristobalit.get_block().set_name("pattern_alpha_cbt_z")
         assert alpha_cristobalit.get_size() == [1.9912, 1.9912, 2.0844]
         assert [round(x, 3) for x in alpha_cristobalit.get_block().get_box()] == [1.991, 1.991, 2.084]
-        pms.Store(alpha_cristobalit.get_block(), "output").gro()
-        pms.Store(alpha_cristobalit.get_block(), "output").lmp()
+        pms.StructureWriter(alpha_cristobalit.get_block(), "output").write_gro()
+        pms.StructureWriter(alpha_cristobalit.get_block(), "output").write_lammps()
 
         # Misc
         alpha_cristobalit = pms.AlphaCristobalit()
@@ -790,7 +801,7 @@ class TestUserModel:
     def test_dice(self):
         block = pms.BetaCristobalit().generate([2, 2, 2], "z")
         block.set_name("dice")
-        pms.Store(block, "output").gro()
+        pms.StructureWriter(block, "output").write_gro()
         dice = pms.Dice(block, 0.4, True)
 
         # Splitting and filling
@@ -832,7 +843,7 @@ class TestUserModel:
         orient = "z"
         block = pms.BetaCristobalit().generate([1, 1, 1], orient)
         block.set_name("matrix")
-        pms.Store(block, "output").gro()
+        pms.StructureWriter(block, "output").write_gro()
         dice = pms.Dice(block, 0.2, True)
         bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
 
@@ -901,7 +912,7 @@ class TestUserModel:
         assert block.get_num() == 12650
 
         # Store molecule
-        pms.Store(block, "output").gro()
+        pms.StructureWriter(block, "output").write_gro()
 
         # Plot surface
         plt.figure()
@@ -944,7 +955,7 @@ class TestUserModel:
         assert block.get_num() == 12934
 
         # Store molecule
-        pms.Store(block, "output").gro()
+        pms.StructureWriter(block, "output").write_gro()
 
         # Plot surface
         sphere.plot(inp=3.14, vec=[1.08001048, 3.09687610, 1.72960828])
@@ -984,7 +995,7 @@ class TestUserModel:
         assert block.get_num() == 5160
 
         # Store molecule
-        pms.Store(block, "output").gro()
+        pms.StructureWriter(block, "output").write_gro()
 
         # Plot surface
         cuboid.plot()
@@ -1031,600 +1042,9 @@ class TestUserModel:
         assert block.get_num() == 12486
 
         # Store molecule
-        pms.Store(block, "output").gro()
+        pms.StructureWriter(block, "output").write_gro()
 
         # Plot surface
         plt.figure()
         cone.plot(vec=[3.17290646, 4.50630614, 0.22183271])
         # plt.show()
-
-
-    ########
-    # Pore #
-    ########
-    def test_pore(self):
-        # No exterior surface
-        orient = "z"
-        pattern = pms.BetaCristobalit()
-        pattern.generate([6, 6, 6], orient)
-
-        block = pattern.get_block()
-        block.set_name("pore_cylinder_block")
-
-        dice = pms.Dice(block, 0.4, True)
-        bond_list = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
-        matrix = pms.Matrix(bond_list)
-
-        pore = pms.Pore(block, matrix)
-
-        centroid = block.centroid()
-        central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
-        cylinder = pms.Cylinder(
-            pms.CylinderConfig(
-                centroid=tuple(centroid),
-                central=tuple(central),
-                length=6,
-                diameter=4,
-            )
-        )
-        del_list = [atom_id for atom_id, atom in enumerate(block.get_atom_list()) if cylinder.is_in(atom.get_pos())]
-        matrix.strip(del_list)
-
-        pore.prepare()
-        pore.sites()
-        assert len(pore.get_sites()) == 455
-
-        block.delete(matrix.bound(0))
-        pms.Store(block, "output").gro("pore_no_ex.gro")
-
-        # With exterior surface
-        orient = "z"
-        pattern = pms.BetaCristobalit()
-        pattern.generate([6, 6, 6], orient)
-
-        block = pattern.get_block()
-        block.set_name("pore_cylinder_block")
-
-        dice = pms.Dice(block, 0.4, True)
-        bond_list = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
-        matrix = pms.Matrix(bond_list)
-
-        pore = pms.Pore(block, matrix)
-        pore.exterior()
-
-        centroid = block.centroid()
-        central = pms.geom.unit(pms.geom.rotate([0, 0, 1], [1, 0, 0], 0, True))
-        cylinder = pms.Cylinder(
-            pms.CylinderConfig(
-                centroid=tuple(centroid),
-                central=tuple(central),
-                length=6,
-                diameter=4,
-            )
-        )
-        del_list = [atom_id for atom_id, atom in enumerate(block.get_atom_list()) if cylinder.is_in(atom.get_pos())]
-        matrix.strip(del_list)
-
-        pore.prepare()
-        pore.amorph()
-        assert len(matrix.bound(1)) == 710
-        pore.sites()
-        site_list = pore.get_sites()
-        assert isinstance(next(iter(site_list.values())), pms.BindingSite)
-        site_in = [site_key for site_key, site_val in site_list.items() if site_val.site_type == "in"]
-        site_ex = [site_key for site_key, site_val in site_list.items() if site_val.site_type == "ex"]
-        assert len(site_in) == 432
-        assert len(site_ex) == 201
-
-        si_pos_in = [block.pos(site_key) for site_key, site_val in site_list.items() if site_val.site_type == "in"]
-        si_pos_ex = [block.pos(site_key) for site_key, site_val in site_list.items() if site_val.site_type == "ex"]
-
-        if si_pos_in:
-            temp_mol = pms.Molecule()
-            for pos in si_pos_in:
-                temp_mol.add("Si", pos)
-            pms.Store(temp_mol).gro("output/pore_cylinder_si_in.gro")
-
-        if si_pos_ex:
-            temp_mol = pms.Molecule()
-            for pos in si_pos_ex:
-                temp_mol.add("Si", pos)
-            pms.Store(temp_mol).gro("output/pore_cylinder_si_ex.gro")
-
-        # Objectify grid
-        non_grid = matrix.bound(1)+list(site_list.keys())
-        bonded = matrix.bound(0, "gt")
-        grid_atoms = [atom for atom in bonded if not atom in non_grid]
-        mol_obj = pore.objectify(grid_atoms)
-        assert len(mol_obj) == 8279
-        pms.Store(pms.Molecule(name="pore_cylinder_grid", inp=mol_obj), "output").gro(use_atom_names=True)
-
-        # Attachment
-        mol = pms.gen.tms()
-
-        def normal(pos):
-            return [0, 0, -1] if pos[2] < centroid[2] else [0, 0, 1]
-
-        for site in site_in:
-            site_list[site].normal = cylinder.normal
-        for site in site_ex:
-            site_list[site].normal = normal
-
-        ## Siloxane
-        mols_siloxane = pore.siloxane(site_in, 100)
-        assert "SLX" in pore.get_mol_dict()
-        site_in = [site_key for site_key, site_val in site_list.items() if site_val.site_type == "in"]
-
-        ## Normal
-        mols_in = pore.attach(mol, 0, [0, 1], site_in, 100, site_type="in")
-        mols_ex = pore.attach(mol, 0, [0, 1], site_ex, 20, site_type="ex")
-
-        ## Filling
-        mols_in_fill = pore.fill_sites(site_in, site_type="in")
-        mols_ex_fill = pore.fill_sites(site_ex, site_type="ex")
-
-        ## Storage
-        pms.Store(pms.Molecule(name="pore_cylinder_siloxane", inp=mols_siloxane), "output").gro()
-        pms.Store(pms.Molecule(name="pore_cylinder_in", inp=mols_in), "output").gro()
-        pms.Store(pms.Molecule(name="pore_cylinder_ex", inp=mols_ex), "output").gro()
-        pms.Store(pms.Molecule(name="pore_cylinder_in_fill", inp=mols_in_fill), "output").gro()
-        pms.Store(pms.Molecule(name="pore_cylinder_ex_fill", inp=mols_ex_fill), "output").gro()
-
-        # Delete atoms
-        block.delete(matrix.bound(0))
-        pms.Store(block, "output").gro()
-
-        # Set reservoir
-        pore.reservoir(5)
-        assert [round(x) for x in pore.get_box()] == [6, 6, 17]
-
-        # Output
-        pore.set_name("pore_cylinder_full")
-        pms.Store(pore, "output").gro(use_atom_names=True)
-
-        pore.set_name("pore_cylinder_full_sort")
-        sort_list = ["OM", "SI", "SLX", "SL", "SLG", "TMS", "TMSG"]
-        store = pms.Store(pore, "output", sort_list=sort_list)
-        store.gro(use_atom_names=True)
-        store.pdb(use_atom_names=True)
-        store.cif(use_atom_names=True)
-        store.top()
-        store.grid("pore_cylinder_full_sort_grid.itp")
-
-        with open("output/pore_cylinder_full_sort.gro", "r") as file_in:
-            gro_text = file_in.read()
-        with open("output/pore_cylinder_full_sort.pdb", "r") as file_in:
-            pdb_text = file_in.read()
-        with open("output/pore_cylinder_full_sort.cif", "r") as file_in:
-            cif_text = file_in.read()
-        with open("output/pore_cylinder_full_sort.top", "r") as file_in:
-            top_text = file_in.read()
-        with open("output/pore_cylinder_full_sort_grid.itp", "r") as file_in:
-            grid_text = file_in.read()
-
-        molecules_lines = [
-            line.split()
-            for line in top_text.splitlines()
-            if line and not line.startswith("[") and not line.startswith("#") and " " in line
-        ]
-        molecules = {
-            tokens[0]: int(tokens[1])
-            for tokens in molecules_lines
-            if len(tokens) == 2 and tokens[0].isalpha() and tokens[1].isdigit()
-        }
-        expected_om_count = (
-            len(pore.get_mol_dict().get("OM", []))
-            + len(pore.get_mol_dict().get("SLX", []))
-        )
-
-        assert "SLX" not in gro_text
-        assert "SLX" not in pdb_text
-        assert "SLX" not in cif_text
-        assert "SLX" not in grid_text
-        assert "OM" in gro_text
-        assert " OM " in pdb_text
-        assert " OM " in cif_text
-        assert "SLX " not in top_text
-        assert molecules["OM"] == expected_om_count
-
-        # Store test
-        print()
-        with pytest.raises(ValueError, match="Sorting list does not contain all keys"):
-            pms.Store(pore, "output", sort_list=sort_list[:-1])
-
-        # Error test
-        with pytest.raises(ValueError, match="site_type"):
-            pore.attach(mol, 0, [0, 1], site_in, 0, cylinder.normal, site_type="DOTA")
-        with pytest.raises(ValueError, match="site_type"):
-            pore.siloxane(site_in, 0, cylinder.normal, site_type="DOTA")
-
-        # Getter and Setter
-        assert pore.get_block().get_name() == "pore_cylinder_block"
-        assert len(pore.get_site_dict()) == 3
-        assert pore.get_num_in_ex() == 23
-
-    def test_pore_exterior(self):
-        # x-axis
-        pattern = pms.BetaCristobalit()
-        block = pattern.generate([2, 2, 2], "x")
-        block.set_name("pattern_beta_cbt_ex_x")
-        dice = pms.Dice(block, 0.2, True)
-        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
-        matrix = pms.Matrix(bonds)
-        pore = pms.Pore(block, matrix)
-        pore.prepare()
-        pore.exterior()
-        pore.sites()
-        pms.Store(block, "output").gro()
-
-        # y-axis
-        pattern = pms.BetaCristobalit()
-        block = pattern.generate([2, 2, 2], "y")
-        block.set_name("pattern_beta_cbt_ex_y")
-        dice = pms.Dice(block, 0.2, True)
-        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
-        matrix = pms.Matrix(bonds)
-        pore = pms.Pore(block, matrix)
-        pore.prepare()
-        pore.exterior()
-        pore.sites()
-        pms.Store(block, "output").gro()
-
-        # z-axis
-        pattern = pms.BetaCristobalit()
-        block = pattern.generate([2, 2, 2], "z")
-        block.set_name("pattern_beta_cbt_ex_z")
-        dice = pms.Dice(block, 0.2, True)
-        bonds = dice.find(None, ["Si", "O"], [0.155-1e-2, 0.155+1e-2])
-        matrix = pms.Matrix(bonds)
-        pore = pms.Pore(block, matrix)
-        pore.prepare()
-        pore.exterior()
-        pore.sites()
-        pms.Store(block, "output").gro()
-
-        # Amorph
-        pattern = pms.BetaCristobalit()
-        pattern.generate([2, 2, 2], "z")
-
-        pattern._structure = pms.Molecule(inp="data/amorph.gro")
-        pattern._size = [2.014, 1.751, 2.468]
-
-        block = pattern.get_block()
-        block.set_name("pattern_beta_cbt_ex_amoprh")
-
-        dice = pms.Dice(block, 0.4, True)
-        matrix = pms.Matrix(dice.find(None, ["Si", "O"], [0.160-0.02, 0.160+0.02]))
-
-        connect = matrix.get_matrix()
-        matrix.split(57790, 2524)
-
-        pore = pms.Pore(block, matrix)
-        pore.prepare()
-        pore.exterior()
-        pore.sites()
-
-        pms.Store(block, "output").gro()
-
-    def test_pore_kit(self):
-        unassigned_warning = "Some interior silicon binding sites could not be assigned"
-
-        pore = pms.PoreKit()
-        pore.structure(pms.BetaCristobalit().generate([5, 5, 10], "z"))
-        pore.build()
-        pore.exterior(5, hydro=0.4)
-        invalid_shape = pms.ShapeSpec(
-            "DOTA",
-            pms.Cylinder(
-                pms.CylinderConfig(
-                    centroid=(3.5, 3.5, 5.0),
-                    central=(0.0, 0.0, 1.0),
-                    length=10,
-                    diameter=1.5,
-                )
-            ),
-        )
-        with pytest.raises(ValueError, match="shape type"):
-            pore.add_shape(invalid_shape, hydro=0.4)
-        assert isinstance(pore.shape_cylinder(2, 10, [3.5, 3.5, 5]), pms.ShapeSpec)
-        pore.add_shape(pore.shape_cylinder(2, 10, [3.5, 3.5, 5]), hydro=0.4)
-        pore.add_shape(pore.shape_cylinder(2, 10, [1.5, 1.5, 5]), hydro=0.4)
-        with pytest.warns(RuntimeWarning, match=unassigned_warning):
-            pore.prepare()
-        pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in")
-        pore.attach(pms.gen.tms(), 0, [0, 1], 20, "ex")
-        pore.finalize()
-        pore.store("output/kit_parallel/")
-        # pore.table()
-
-        pore = pms.PoreKit()
-        pore.structure(pms.BetaCristobalit().generate([7, 7, 10], "z"))
-        pore.build()
-        pore.exterior(5, hydro=0.4)
-        pore.add_shape(pore.shape_cylinder(6, 4, [3.5, 3.5, 2]), section=pms.ShapeSection(z=(0, 4)), hydro=0.4)
-        pore.add_shape(pore.shape_cone(4.5, 3, 2,  [3.5, 3.5, 5]), section=pms.ShapeSection(z=(4, 6)), hydro=0.4)
-        pore.add_shape(pore.shape_cylinder(4, 4, [3.5, 3.5, 8]), section=pms.ShapeSection(z=(6, 10)), hydro=0.4)
-        with pytest.warns(RuntimeWarning, match=unassigned_warning):
-            pore.prepare()
-        pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in")
-        pore.attach(pms.gen.tms(), 0, [0, 1], 20, "ex")
-        pore.finalize()
-        pore.store("output/kit_narrow/")
-
-    def test_porekit_percent_shape_specific(self):
-        pore = pms.PoreKit()
-        pore.structure(pms.BetaCristobalit().generate([7, 7, 10], "z"))
-        pore.build()
-        pore.add_shape(
-            pore.shape_cylinder(4, 5, [3.5, 3.5, 2.5]),
-            section=pms.ShapeSection(z=(0, 5)),
-        )
-        pore.add_shape(
-            pore.shape_cylinder(3, 5, [3.5, 3.5, 7.5]),
-            section=pms.ShapeSection(z=(5, 10)),
-        )
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter("always", RuntimeWarning)
-            pore.prepare()
-
-        site_lookup = pore._pore.get_sites()
-        sites_by_shape = pore._pore.sites_sl_shape
-        valid_shape_keys = sorted(
-            shape_key for shape_key in sites_by_shape
-            if shape_key < len(pore.shape())
-        )
-        assert valid_shape_keys == [0, 1]
-
-        global_geminal_count = sum(
-            1
-            for site in site_lookup.values()
-            if site.site_type == "in" and site.oxygen_count == 2
-        )
-
-        selected_shape = None
-        for shape_key in valid_shape_keys:
-            shape_sites = sites_by_shape[shape_key]
-            shape_oh_count = sum(site_lookup[site_id].oxygen_count for site_id in shape_sites)
-            buggy_oh_count = len(shape_sites) + global_geminal_count
-            for percent in range(10, 101, 5):
-                correct_amount = int(percent / 100 * shape_oh_count)
-                buggy_amount = int(percent / 100 * buggy_oh_count)
-                if (
-                    correct_amount > 0
-                    and correct_amount <= len(shape_sites)
-                    and correct_amount != buggy_amount
-                ):
-                    selected_shape = (
-                        shape_key,
-                        percent,
-                        correct_amount,
-                        buggy_amount,
-                    )
-                    break
-            if selected_shape is not None:
-                break
-
-        assert selected_shape is not None
-        shape_key, percent, expected_amount, buggy_amount = selected_shape
-        marker = pms.gen.tms()
-        marker.set_short("TMSP")
-        pore.attach(
-            marker,
-            0,
-            [0, 1],
-            percent,
-            "in",
-            inp="percent",
-            shape=f"shape_{shape_key}",
-            trials=2000,
-            is_proxi=False,
-        )
-
-        site_dict = pore._pore.get_site_dict()["in"]
-        attached_count = len(site_dict.get("TMSP", [])) + len(site_dict.get("TMSPG", []))
-        assert attached_count == expected_amount
-        assert attached_count != buggy_amount
-
-        table = pore.table()
-        shape_label = f"Pore {shape_key + 1}"
-        assert list(table.columns) == ["Interior", "Exterior"]
-        assert f"Surface chemistry - Before Functionalization ({shape_label})" in table.index
-        assert f"Surface chemistry - After Functionalization ({shape_label})" in table.index
-        assert any(
-                label.startswith(f"    {shape_label} Number of ")
-                for label in table.index
-            )
-
-    def test_pore_cylinder(self):
-        # Empty pore
-        pore = pms.PoreCylinder([4, 4, 4], 2, 0)
-        pore.finalize()
-
-        # Filled pore
-        pore = pms.PoreCylinder([6, 6, 6], 4, 5, [5, 5])
-
-        ## Attachment
-        # pore.attach_special(pms.gen.tms(),  0, [0, 1], 5)
-        # pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="mirror")
-
-        tms2 = pms.gen.tms()
-        tms2.set_short("TMS2")
-
-        pore.attach(tms2, 0, [0, 1], 10, "in", trials=10, inp="percent")
-        pore.attach(tms2, 0, [0, 1], 1, "in", trials=10, inp="molar")
-        pore.attach(tms2, 0, [0, 1], 0.1, "ex", trials=10, inp="molar")
-
-        # Special cases
-        print()
-        with pytest.raises(ValueError, match="site_type"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA")
-        with pytest.raises(ValueError, match="inp"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA")
-        with pytest.raises(ValueError, match="positions"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, pos_list=[[1, 3, 3], [7, 4, 2]])
-        with pytest.raises(ValueError, match="symmetry"):
-            pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA")
-
-        # Finalize
-        pore.finalize()
-        pore.store("output/cylinder/")
-        table = pore.table()
-        print(table)
-        assert list(table.columns) == ["Interior", "Exterior"]
-        assert "Surface area (nm^2)" in table.index
-        assert "Surface chemistry - Before Functionalization" in table.index
-        assert "Surface chemistry - After Functionalization" in table.index
-
-        ## Properties
-        roughness = pore.roughness()
-        surface = pore.surface()
-        allocation = pore.allocation()
-        assert isinstance(roughness, pms.RoughnessProfile)
-        assert isinstance(surface, pms.SurfaceAreaSummary)
-        assert isinstance(allocation["Hydro"], pms.AllocationSummary)
-        assert isinstance(allocation["Hydro"].interior, pms.SurfaceAllocationStats)
-        assert round(pore.diameter()[0]) == 4
-        assert [round(x, 4) for x in pore.centroid()] == [3.0147, 3.0572, 3.0569]
-        assert round(roughness.interior[0], 1) == 0.1
-        assert round(roughness.exterior, 1) == 0.0
-        assert pore.volume() == pytest.approx(77.8, abs=1.0)
-        assert surface.interior == pytest.approx(78.0, abs=1.0)
-        assert surface.exterior == pytest.approx(49.0, abs=1.0)
-
-    def test_pore_slit(self):
-        # Empty pore
-        pore = pms.PoreSlit([4, 4, 4], 2)
-        pore.finalize()
-
-        # Filled pore
-        pore = pms.PoreSlit([6, 6, 6], 3, 5, [5, 5])
-
-        ## Attachment
-        # pore.attach_special(pms.gen.tms(),  0, [0, 1], 5)
-        # pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="mirror")
-
-        tms2 = pms.gen.tms()
-        tms2.set_short("TMS2")
-
-        pore.attach(tms2, 0, [0, 1], 10, "in", trials=10, inp="percent")
-        pore.attach(tms2, 0, [0, 1], 1, "in", trials=10, inp="molar")
-        pore.attach(tms2, 0, [0, 1], 0.1, "ex", trials=10, inp="molar")
-
-        # Special cases
-        print()
-        with pytest.raises(ValueError, match="site_type"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA")
-        with pytest.raises(ValueError, match="inp"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA")
-        with pytest.raises(ValueError, match="symmetry"):
-            pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA")
-
-        # Finalize
-        pore.finalize()
-        pore.store("output/slit/")
-        print(pore.table())
-
-        ## Properties
-        roughness = pore.roughness()
-        surface = pore.surface()
-        assert round(pore.diameter()[0]) == 3
-        assert [round(x, 4) for x in pore.centroid()] == [3.0147, 3.0572, 3.0569]
-        assert round(roughness.interior[0], 1) == 0.1
-        assert round(roughness.exterior, 1) == 0.0
-        assert pore.volume() == pytest.approx(112.4, abs=1.0)
-        assert surface.interior == pytest.approx(74.3, abs=1.0)
-
-    def test_pore_capsule(self):
-        unassigned_warning = "Some interior silicon binding sites could not be assigned"
-
-        # Empty pore
-        pore = pms.PoreCapsule([3, 3, 6], 2, 1, 2.5)
-        pore.finalize()
-
-        # Filled pore
-        with pytest.warns(RuntimeWarning, match=unassigned_warning):
-            pore = pms.PoreCapsule([6, 6, 10], 4, 2, 5, [5, 5])
-
-        ## Attachment
-        # pore.attach_special(pms.gen.tms(),  0, [0, 1], 5)
-        # pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="mirror")
-
-        tms2 = pms.gen.tms()
-        tms2.set_short("TMS2")
-
-        pore.attach(tms2, 0, [0, 1], 10, "in", trials=10, inp="percent")
-        pore.attach(tms2, 0, [0, 1], 1, "in", trials=10, inp="molar")
-        pore.attach(tms2, 0, [0, 1], 0.1, "ex", trials=10, inp="molar")
-
-        # Special cases
-        print()
-        with pytest.raises(ValueError, match="site_type"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA")
-        with pytest.raises(ValueError, match="inp"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA")
-        # Finalize
-        pore.finalize()
-        #pore.store("output/capsule/")
-        print(pore.table())
-
-        # Properties
-        roughness = pore.roughness()
-        surface = pore.surface()
-        for actual, expected in zip(pore.diameter(), [4.234, 4.4864, 4.5656, 4.214]):
-            assert actual == pytest.approx(expected, abs=0.05)
-        assert [round(x, 4) for x in pore.centroid()] == [3.0147, 3.0572, 4.9169]
-        for actual, expected in zip(roughness.interior, [0.1287, 0.1065, 0.1439, 0.1226]):
-            assert actual == pytest.approx(expected, abs=0.05)
-        assert round(roughness.exterior, 1) == 0.0
-        assert pore.volume() == pytest.approx(153.2, abs=1.0) # not correct volume because sphere and cyclinder merged correct is 100
-        assert surface.interior == pytest.approx(182.0, abs=1.0) # not correct because whole sphere surface is take in to account, correct is 113
-        assert surface.exterior == pytest.approx(44.3, abs=1.0)
-
-    def test_pore_cylinder_amorph(self):
-        unassigned_warning = "Some interior silicon binding sites could not be assigned"
-
-        # Empty pore
-        pore = pms.PoreAmorphCylinder(2, 0)
-        pore.finalize()
-
-        # Filled pore
-        with pytest.warns(RuntimeWarning, match=unassigned_warning):
-            pore = pms.PoreAmorphCylinder(4, 5, [2, 2])
-
-        ## Attachment
-        # pore.attach_special(pms.gen.tms(),  0, [0, 1], 5)
-        # pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="mirror")
-
-        tms2 = pms.gen.tms()
-        tms2.set_short("TMS2")
-
-        pore.attach(tms2, 0, [0, 1], 10, "in", trials=10, inp="percent")
-        pore.attach(tms2, 0, [0, 1], 1, "in", trials=10, inp="molar")
-        pore.attach(tms2, 0, [0, 1], 0.1, "ex", trials=10, inp="molar")
-
-        # Special cases
-        print()
-        with pytest.raises(ValueError, match="site_type"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, site_type="DOTA")
-        with pytest.raises(ValueError, match="inp"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, "in", inp="DOTA")
-        with pytest.raises(ValueError, match="positions"):
-            pore.attach(pms.gen.tms(), 0, [0, 1], 100, pos_list=[[1, 3, 3], [7, 4, 2]])
-        with pytest.raises(ValueError, match="symmetry"):
-            pore.attach_special(pms.gen.tms(),  0, [0, 1], 3, symmetry="DOTA")
-
-        # Finalize
-        pore.finalize()
-        pore.store("output/cylinder_amorph/")
-        print(pore.table())
-
-        ## Properties
-        roughness = pore.roughness()
-        surface = pore.surface()
-        assert round(pore.diameter()[0]) == 4
-        assert [round(x, 4) for x in pore.centroid()] == [4.7958, 4.7978, 4.807]
-        assert round(roughness.interior[0], 1) == 0.1
-        assert round(roughness.exterior, 1) == 0.3
-        assert pore.volume() == pytest.approx(119.6, abs=1.0)
-        assert surface.interior == pytest.approx(120.1, abs=1.0)
-        assert surface.exterior == pytest.approx(159.8, abs=1.0)

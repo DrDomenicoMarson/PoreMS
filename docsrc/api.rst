@@ -16,7 +16,9 @@ Molecule
 
     molecule.Molecule
     atom.Atom
-    store.Store
+    writers.structure.StructureWriter
+    writers.gromacs.GromacsTopologyWriter
+    writers.antechamber.AntechamberWriter
     connectivity.GraphBond
     connectivity.GraphAngle
     connectivity.AttachmentRecord
@@ -25,25 +27,18 @@ Molecule
 
 .. _pore_api:
 
-Pore
-----
+Slit Domain
+-----------
 
 .. autosummary::
     :toctree: generated/
 
-    pore.BindingSite
+    slit_system.SilicaSlit
+    slit_system.SlitBindingSite
+    slit_system.SlitAttachmentRecord
+    slit_system.LigandAttachmentResult
+    pore.SurfaceEditRecord
     pore.SurfacePreparationDiagnostics
-    pore.Pore
-    system.ShapeAttachmentSummary
-    system.RoughnessProfile
-    system.SurfaceAreaSummary
-    system.SurfaceAllocationStats
-    system.AllocationSummary
-    system.PoreKit
-    system.PoreCylinder
-    system.PoreSlit
-    system.PoreCapsule
-    system.PoreAmorphCylinder
 
 
 .. _pattern_api:
@@ -104,6 +99,7 @@ Slit Preparation
     slit.SiliconStateFractions
     slit.ExperimentalSiliconStateTarget
     slit.AmorphousSlitConfig
+    slit.AmorphousSlitBuilder
     slit.SiliconStateComposition
     slit.SlitPreparationReport
     slit.SlitPreparationResult

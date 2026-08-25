@@ -12,7 +12,7 @@ from .dice import Dice
 from .matrix import Matrix
 from .molecule import Molecule
 from .pattern import BetaCristobalit, AlphaCristobalit
-from .pore import BindingSite, SurfacePreparationDiagnostics, Pore
+from .pore import SurfaceEditRecord, SurfacePreparationDiagnostics
 from .topology import (
     BareSilicaChargeContribution,
     BareSilicaChargeDiagnostics,
@@ -30,18 +30,6 @@ from .topology import (
     SilicaTopologyModel,
     default_silica_topology,
 )
-from .system import (
-    ShapeAttachmentSummary,
-    RoughnessProfile,
-    SurfaceAreaSummary,
-    SurfaceAllocationStats,
-    AllocationSummary,
-    PoreKit,
-    PoreCylinder,
-    PoreSlit,
-    PoreCapsule,
-    PoreAmorphCylinder,
-)
 from .shape import (
     ShapeConfig,
     CylinderConfig,
@@ -55,8 +43,15 @@ from .shape import (
     Cuboid,
     Cone,
 )
-from .store import Store
+from .slit_system import (
+    LigandAttachmentResult,
+    SilicaSlit,
+    SlitAttachmentRecord,
+    SlitBindingSite,
+)
+from .writers import AntechamberWriter, GromacsTopologyWriter, StructureWriter
 from .slit import (
+    AmorphousSlitBuilder,
     SiliconStateFractions,
     ExperimentalSiliconStateTarget,
     AmorphousSlitConfig,
@@ -87,10 +82,10 @@ import porems.utils as utils
 __all__ = [
     "__version__",
     "Atom", "GraphBond", "GraphAngle", "AttachmentRecord", "AssembledStructureGraph",
-    "ConnectivityValidationFinding", "ConnectivityValidationReport", "Molecule", "Store",
+    "ConnectivityValidationFinding", "ConnectivityValidationReport", "Molecule",
     "Dice", "Matrix",
     "BetaCristobalit", "AlphaCristobalit",
-    "BindingSite", "SurfacePreparationDiagnostics", "Pore",
+    "SurfaceEditRecord", "SurfacePreparationDiagnostics",
     "BareSilicaChargeContribution", "BareSilicaChargeDiagnostics", "FunctionalizedSlitChargeDiagnostics",
     "GromacsBondParameters", "GromacsAngleParameters",
     "SilicaAtomTypeModel", "SilicaAtomTypeSet",
@@ -98,11 +93,11 @@ __all__ = [
     "SilicaBondTerm", "SilicaBondTermSet",
     "SilicaAngleTerm", "SilicaAngleTermSet",
     "SilicaTopologyModel", "default_silica_topology",
-    "ShapeAttachmentSummary", "RoughnessProfile", "SurfaceAreaSummary", "SurfaceAllocationStats", "AllocationSummary",
-    "PoreKit", "PoreCylinder", "PoreSlit", "PoreCapsule", "PoreAmorphCylinder",
     "ShapeConfig", "CylinderConfig", "SphereConfig", "CuboidConfig", "ConeConfig",
     "ShapeSection", "ShapeSpec",
     "Cylinder", "Sphere", "Cuboid", "Cone",
+    "AmorphousSlitBuilder", "SilicaSlit", "SlitBindingSite", "SlitAttachmentRecord", "LigandAttachmentResult",
+    "StructureWriter", "GromacsTopologyWriter", "AntechamberWriter",
     "SiliconStateFractions", "ExperimentalSiliconStateTarget",
     "AmorphousSlitConfig", "SiliconStateComposition",
     "SlitPreparationReport", "SlitPreparationResult", "SlitTimingSummary",

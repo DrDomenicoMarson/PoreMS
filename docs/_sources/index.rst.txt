@@ -19,15 +19,15 @@ Pore Generator for Molecular Simulations
   :align: center
   :width: 100%
 
-This python package generates silica pore structures and surface-functionalized
-models for later analysis or simulation. For an overview of the programs
-operating principle, check out the corresponding publication
+This Python package generates periodic amorphous silica slit structures and
+surface-functionalized models for later analysis or simulation. For the
+historical background, see the corresponding publication
 **Kraus et al.** (doi:`10.1080/08927022.2020.1871478 <https://doi.org/10.1080/08927022.2020.1871478>`_).
-Additionally, tutorials for generating
-`molecules <molecule.html>`_ and `pores <pore.html>`_ are provided.
+Additionally, a tutorial for generating `molecules <molecule.html>`_ is
+provided.
 
 Check out the `slit preparation guide <slit.html>`_ for using the PoreMS
-package to create pore systems, control surface chemistry, and export the
+package to create slit systems, control surface chemistry, and export the
 resulting build artifacts.
 
 To see the code, report a bug or contribute, please visit the
@@ -45,11 +45,11 @@ To see the code, report a bug or contribute, please visit the
           <div class="panel-body">
 
 * Molecule Generation :ref:`API <generation_api>`
-* Pore Generation :ref:`API <pore_api>`
+* Slit Preparation :ref:`API <slit_api>`
 
-  * Gridstructure Patterns :ref:`API <pattern_api>`
+  * Grid-structure Patterns :ref:`API <pattern_api>`
   * Three-Dimensional Shapes :ref:`API <shape_api>`
-  * Runtime Optimization :ref:`API <optimization_api>`
+  * Connectivity Construction :ref:`API <optimization_api>`
 
 * Utilities :ref:`API <utils_api>`
 

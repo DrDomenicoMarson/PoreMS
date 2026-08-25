@@ -13,9 +13,11 @@ Online documentation is available at [porems.github.io/PoreMS](https://porems.gi
 
 <img src="https://github.com/porems/PoreMS/blob/main/docsrc/pics/pore.svg" width="60%">
 
-The docs include an example for generating [molecules](https://porems.github.io/PoreMS/molecule.html) and [pores](https://porems.github.io/PoreMS/pore.html), and an [API reference](https://porems.github.io/PoreMS/api.html). Visit [process](https://porems.github.io/PoreMS/process.html) for an overview of the programs operating principle.
+The docs include an example for generating [molecules](https://porems.github.io/PoreMS/molecule.html), the [slit preparation guide](https://porems.github.io/PoreMS/slit.html), and an [API reference](https://porems.github.io/PoreMS/api.html).
 
-The [slit preparation guide](https://porems.github.io/PoreMS/slit.html) shows how to build silica pore systems, control surface chemistry, and export the resulting structure and topology files.
+The package is now focused on periodic amorphous silica slits. Reusable molecule,
+connectivity, matrix, pattern, shape, and geometry primitives remain available
+for future geometry-specific builders.
 
 ## Dependencies
 
@@ -85,11 +87,32 @@ cd scripts/TEPS_example
 ```
 
 `prepare_amorphous_slit_surface(...)` returns a `SlitPreparationResult` with an
-attach-ready `PoreKit`, a structured `SlitPreparationReport`, and the resolved
+attach-ready `SilicaSlit`, a structured `SlitPreparationReport`, and the resolved
 editable silica topology model used by slit topology export. The finalized bare
 writer produces a self-contained `<name>.itp` + `<name>.top` pair together with
 `<name>.gro`, optional inspection-oriented `.pdb` / `.cif` files, `<name>.yml`,
 and `<name>_report.json`.
+
+`AmorphousSlitBuilder(config)` is the public builder behind the high-level
+helpers. Its `prepare()` method returns the same bare result, while
+`prepare_functionalized(...)` creates a functionalized result from an explicit
+ligand and steric/progress settings. `SilicaSlit` exposes immutable binding-site
+snapshots, filtered available-site queries, explicit ligand attachment, cloning,
+and idempotent finalization without exposing the underlying scaffold or
+connectivity implementation.
+
+Structure and topology output are deliberately separate:
+
+- `StructureWriter` writes GRO, PDB/CONECT, mmCIF bonds, XYZ, LAMMPS, object
+  snapshots, and validates assembled connectivity.
+- `GromacsTopologyWriter` writes slit ITP/TOP files, charge diagnostics, and
+  retained topology/grid helpers.
+- `AntechamberWriter` writes Antechamber and `tleap` helper inputs for standalone
+  molecules.
+
+The former `Store`, `PoreKit`, and geometry-specific pore convenience builders
+have been removed. New pore geometries can be added later as dedicated builders
+that reuse the retained primitives and the same snapshot/writer boundary.
 
 ### Inspecting or overriding the silica topology model
 

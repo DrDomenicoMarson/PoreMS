@@ -9,8 +9,8 @@
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
 <meta charset='utf-8'>
@@ -43,9 +43,7 @@
             
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
-                <li><a href="../pore.html">Pore</a></li>
                 <li><a href="../slit.html">Slit Prep</a></li>
-                <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
               <li class="dropdown globaltoc-container">
@@ -128,11 +126,13 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="porems.molecule.Molecule.get_atom_list">
 <span class="sig-prename descclassname"><span class="pre">Molecule.</span></span><span class="sig-name descname"><span class="pre">get_atom_list</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#porems.molecule.Molecule.get_atom_list" title="Link to this definition">¶</a></dt>
-<dd><p>Return the underlying atom list.</p>
+<dd><p>Return compatibility atom snapshots for the current molecule.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>atom_list</strong><span class="classifier">list</span></dt><dd><p>Internal list of <a class="reference internal" href="porems.atom.Atom.html#porems.atom.Atom" title="porems.atom.Atom"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.atom.Atom</span></code></a> objects.</p>
+<dt><strong>atom_list</strong><span class="classifier">list[Atom]</span></dt><dd><p>Detached <a class="reference internal" href="porems.atom.Atom.html#porems.atom.Atom" title="porems.atom.Atom"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.atom.Atom</span></code></a> snapshots materialized from the
+internal array storage. Mutating the returned atoms does not update
+the molecule itself.</p>
 </dd>
 </dl>
 </dd>
@@ -154,7 +154,7 @@
     </p>
     <p>
         &copy; Copyright 2021, Hamzeh Kraus.<br/>
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 7.4.6.<br/>
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 9.1.0.<br/>
     </p>
   </div>
 </footer>

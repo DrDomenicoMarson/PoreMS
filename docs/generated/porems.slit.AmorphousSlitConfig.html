@@ -9,8 +9,8 @@
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
 <meta charset='utf-8'>
@@ -43,9 +43,7 @@
             
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
-                <li><a href="../pore.html">Pore</a></li>
                 <li><a href="../slit.html">Slit Prep</a></li>
-                <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
               <li class="dropdown globaltoc-container">
@@ -127,7 +125,7 @@
 <h1>AmorphousSlitConfig<a class="headerlink" href="#amorphousslitconfig" title="Link to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="porems.slit.AmorphousSlitConfig">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">AmorphousSlitConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">name:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'bare_amorphous_silica_slit',</span> <span class="pre">slit_width_nm:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">7.0,</span> <span class="pre">repeat_y:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">2,</span> <span class="pre">temperature_k:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">300.0,</span> <span class="pre">surface_target:</span> <span class="pre">~porems.slit.ExperimentalSiliconStateTarget</span> <span class="pre">=</span> <span class="pre">&lt;factory&gt;,</span> <span class="pre">amorph_bond_range_nm:</span> <span class="pre">tuple[float,</span> <span class="pre">float]</span> <span class="pre">=</span> <span class="pre">(0.14,</span> <span class="pre">0.18),</span> <span class="pre">siloxane_distance_range_nm:</span> <span class="pre">tuple[float,</span> <span class="pre">float]</span> <span class="pre">=</span> <span class="pre">(0.4,</span> <span class="pre">0.65),</span> <span class="pre">surface_fraction_tolerance:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.005,</span> <span class="pre">template_split_pairs:</span> <span class="pre">tuple[tuple[int,</span> <span class="pre">int],</span> <span class="pre">...]</span> <span class="pre">=</span> <span class="pre">((57790,</span> <span class="pre">2524),)</span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.AmorphousSlitConfig" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">AmorphousSlitConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">name:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'bare_amorphous_silica_slit',</span> <span class="pre">slit_width_nm:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">7.0,</span> <span class="pre">repeat_y:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">2,</span> <span class="pre">temperature_k:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">300.0,</span> <span class="pre">surface_target:</span> <span class="pre">~porems.slit.ExperimentalSiliconStateTarget</span> <span class="pre">=</span> <span class="pre">&lt;factory&gt;,</span> <span class="pre">amorph_bond_range_nm:</span> <span class="pre">tuple[float,</span> <span class="pre">float]</span> <span class="pre">=</span> <span class="pre">(0.14,</span> <span class="pre">0.18),</span> <span class="pre">siloxane_distance_range_nm:</span> <span class="pre">tuple[float,</span> <span class="pre">float]</span> <span class="pre">=</span> <span class="pre">(0.4,</span> <span class="pre">0.65),</span> <span class="pre">surface_fraction_tolerance:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.005,</span> <span class="pre">random_seed:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">template_split_pairs:</span> <span class="pre">tuple[tuple[int,</span> <span class="pre">int],</span> <span class="pre">...]</span> <span class="pre">=</span> <span class="pre">((57790,</span> <span class="pre">2524),),</span> <span class="pre">silica_topology:</span> <span class="pre">~porems.topology.SilicaTopologyModel</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.AmorphousSlitConfig" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for a periodic bare amorphous silica slit.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -142,9 +140,10 @@ direction.</p>
 <dt><strong>temperature_k</strong><span class="classifier">float, optional</span></dt><dd><p>Target simulation temperature in Kelvin.</p>
 </dd>
 <dt><strong>surface_target</strong><span class="classifier">ExperimentalSiliconStateTarget, optional</span></dt><dd><p>Experimental silicon-state ratios used to derive the modeled slit
-surface target. The default target is expressed over all Si atoms for
-the default slit geometry and therefore relies on the automatically
-derived <code class="docutils literal notranslate"><span class="pre">alpha</span></code> value.</p>
+surface target. These fractions are always interpreted over all Si
+atoms in the sample, not only over surface sites. The default target
+is expressed over all Si atoms for the default slit geometry and
+therefore relies on the automatically derived <code class="docutils literal notranslate"><span class="pre">alpha</span></code> value.</p>
 </dd>
 <dt><strong>amorph_bond_range_nm</strong><span class="classifier">tuple, optional</span></dt><dd><p>Accepted <code class="docutils literal notranslate"><span class="pre">Si-O</span></code> bond-length range for the amorphous template.</p>
 </dd>
@@ -153,8 +152,21 @@ derived <code class="docutils literal notranslate"><span class="pre">alpha</span
 <dt><strong>surface_fraction_tolerance</strong><span class="classifier">float, optional</span></dt><dd><p>Allowed absolute fraction deviation per silicon state when the exact
 integer target cannot be realized on the current slit.</p>
 </dd>
+<dt><strong>random_seed</strong><span class="classifier">int or None, optional</span></dt><dd><p>Optional seed used to randomize chemically equivalent surface-editing
+and grafting choices. When omitted, the legacy deterministic ordering
+is used. Supplying the same seed reproduces the same slit variant,
+while different seeds can produce different arrangements with the same
+requested silicon-state composition.</p>
+</dd>
 <dt><strong>template_split_pairs</strong><span class="classifier">tuple, optional</span></dt><dd><p>Template-specific bond pairs that must be disconnected after
 reconstructing the amorphous connectivity matrix.</p>
+</dd>
+<dt><strong>silica_topology</strong><span class="classifier">SilicaTopologyModel or None, optional</span></dt><dd><p>Optional editable silica force-field model used by slit full-topology
+export. When omitted, the package defaults are used. Explicit models
+override any legacy junction-parameter values supplied through
+<a class="reference internal" href="porems.slit.SilaneTopologyConfig.html#porems.slit.SilaneTopologyConfig" title="porems.slit.SilaneTopologyConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">SilaneTopologyConfig</span></code></a>. Use
+<a class="reference internal" href="porems.topology.default_silica_topology.html#porems.topology.default_silica_topology" title="porems.topology.default_silica_topology"><code class="xref py py-func docutils literal notranslate"><span class="pre">porems.topology.default_silica_topology()</span></code></a> to inspect the active
+defaults and create one editable copy for local overrides.</p>
 </dd>
 </dl>
 </dd>
@@ -176,7 +188,7 @@ reconstructing the amorphous connectivity matrix.</p>
     </p>
     <p>
         &copy; Copyright 2021, Hamzeh Kraus.<br/>
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 7.4.6.<br/>
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 9.1.0.<br/>
     </p>
   </div>
 </footer>

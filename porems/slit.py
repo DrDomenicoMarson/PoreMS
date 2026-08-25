@@ -16,6 +16,7 @@ from time import perf_counter
 
 import numpy as np
 import porems as pms
+import yaml
 from tqdm.auto import tqdm as _tqdm_auto
 
 from porems.topology import (
@@ -28,6 +29,8 @@ from porems.topology import (
     SilicaTopologyModel,
     default_silica_topology,
 )
+from porems.slit_system import SilicaSlit
+from porems.writers import GromacsTopologyWriter, StructureWriter
 
 
 _BRIDGE_OFFSET_NM = 0.09
@@ -714,7 +717,7 @@ class SlitPreparationResult:
 
     Parameters
     ----------
-    system : PoreKit
+    system : SilicaSlit
         Bare slit system associated with the preparation report.
     report : SlitPreparationReport
         Summary of the generated slit geometry and surface composition.
@@ -728,7 +731,7 @@ class SlitPreparationResult:
         the returned result.
     """
 
-    system: pms.PoreKit
+    system: SilicaSlit
     report: SlitPreparationReport
     silica_topology: SilicaTopologyModel
     bare_charge_diagnostics: BareSilicaChargeDiagnostics | None = None
@@ -1011,7 +1014,7 @@ class SlitTimingSummary:
     t3_attachment_s : float, optional
         Seconds spent attaching the requested ``T3`` population.
     finalize_s : float, optional
-        Seconds spent in :meth:`porems.system.PoreKit.finalize`.
+        Seconds spent in :meth:`porems.slit_system.SilicaSlit.finalize`.
     store_export_s : float, optional
         Seconds spent writing the requested coordinate/topology export files.
     """
@@ -1092,7 +1095,7 @@ class FunctionalizedSlitResult:
 
     Parameters
     ----------
-    system : PoreKit
+    system : SilicaSlit
         Functionalized slit system associated with the preparation report.
     report : SlitPreparationReport
         Summary of the generated slit geometry and surface composition.
@@ -1108,7 +1111,7 @@ class FunctionalizedSlitResult:
         completed.
     """
 
-    system: pms.PoreKit
+    system: SilicaSlit
     report: SlitPreparationReport
     silica_topology: SilicaTopologyModel
     charge_diagnostics: FunctionalizedSlitChargeDiagnostics | None = None
@@ -1137,7 +1140,7 @@ class _SurfaceTargetAttempt:
 
     Parameters
     ----------
-    system : PoreKit
+    system : SilicaSlit
         Edited slit system that satisfies the selected final target.
     target_surface : SiliconStateComposition
         Selected integer final target.
@@ -1154,7 +1157,7 @@ class _SurfaceTargetAttempt:
         Wall-clock timings collected while realizing the selected target.
     """
 
-    system: pms.PoreKit
+    system: SilicaSlit
     target_surface: SiliconStateComposition
     prepared_surface: SiliconStateComposition
     final_surface: SiliconStateComposition
@@ -1169,7 +1172,7 @@ class _BaseSlitBuild:
 
     Parameters
     ----------
-    system : PoreKit
+    system : SilicaSlit
         Prepared slit system before custom siloxane formation.
     total_surface_si : int
         Number of tracked surface silicon sites.
@@ -1179,7 +1182,7 @@ class _BaseSlitBuild:
         Initial surface composition before custom siloxane formation.
     """
 
-    system: pms.PoreKit
+    system: SilicaSlit
     total_surface_si: int
     total_active_si: int
     initial_surface: SiliconStateComposition
@@ -1419,7 +1422,7 @@ def _active_silicon_count(system):
 
     Parameters
     ----------
-    system : PoreKit
+    system : SilicaSlit
         Slit system whose active connectivity matrix should be inspected.
 
     Returns
@@ -1427,11 +1430,7 @@ def _active_silicon_count(system):
     count : int
         Number of silicon atoms still present in the active slit model.
     """
-    return sum(
-        1
-        for atom_id in system._matrix.get_matrix()
-        if system._block.get_atom_type(atom_id) == "Si"
-    )
+    return system.active_silicon_count()
 
 
 def _attached_state_counts(system, ligand):
@@ -1439,7 +1438,7 @@ def _attached_state_counts(system, ligand):
 
     Parameters
     ----------
-    system : PoreKit
+    system : SilicaSlit
         Current slit system.
     ligand : SilaneAttachmentConfig or None
         Silane family tracked in the current build. ``None`` means no grafted
@@ -1453,9 +1452,8 @@ def _attached_state_counts(system, ligand):
     if ligand is None:
         return (0, 0)
 
-    site_dict = system._pore.get_site_dict()["in"]
     base_short = ligand.molecule.get_short()
-    return (len(site_dict.get(base_short + "G", [])), len(site_dict.get(base_short, [])))
+    return system.attached_state_counts(base_short)
 
 
 def _interior_attached_molecule_counts(system):
@@ -1463,7 +1461,7 @@ def _interior_attached_molecule_counts(system):
 
     Parameters
     ----------
-    system : PoreKit
+    system : SilicaSlit
         Current slit system.
 
     Returns
@@ -1471,12 +1469,7 @@ def _interior_attached_molecule_counts(system):
     counts : dict[str, int]
         Attached interior molecule counts keyed by residue short name.
     """
-    counts = {}
-    for short_name, mols in system._pore.get_site_dict()["in"].items():
-        if short_name in {"SL", "SLG", "SLX"}:
-            continue
-        counts[short_name] = len(mols)
-    return counts
+    return system.attached_molecule_counts()
 
 
 def _surface_composition(total_surface_si, sites, t2_sites=0, t3_sites=0):
@@ -1868,7 +1861,7 @@ def _build_slit_site_array_cache(kit, site_ids):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     site_ids : list[int]
         Surface silicon identifiers that should populate the cache.
@@ -1887,16 +1880,14 @@ def _build_slit_site_array_cache(kit, site_ids):
             direct_connection_mask=np.empty((0, 0), dtype=bool),
         )
 
-    block = kit._pore.get_block()
-    matrix = kit._matrix.get_matrix()
     site_index = {site_id: idx for idx, site_id in enumerate(site_ids)}
-    positions = block.positions_view()[np.asarray(site_ids, dtype=int)].copy()
+    positions = kit.atom_positions(site_ids)
     direct_connection_mask = np.zeros((len(site_ids), len(site_ids)), dtype=bool)
 
     oxygen_owners = {}
     for site_id in site_ids:
         row_index = site_index[site_id]
-        for oxygen_id in matrix[site_id]["atoms"]:
+        for oxygen_id in kit.atom_neighbors(site_id):
             oxygen_owners.setdefault(oxygen_id, []).append(row_index)
 
     for owners in oxygen_owners.values():
@@ -1919,7 +1910,7 @@ def _build_slit_site_adjacency(kit, site_ids, distance_range):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     site_ids : list[int]
         Surface silicon identifiers.
@@ -2001,7 +1992,7 @@ def _find_placeable_pair(kit, sites, adjacency, first_count, second_count, rng=N
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     sites : dict[int, pms.BindingSite]
         Current binding sites keyed by silicon identifier.
@@ -2046,7 +2037,7 @@ def _bridge_base_direction(kit, pair, center_pos, axis_unit):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
@@ -2061,9 +2052,8 @@ def _bridge_base_direction(kit, pair, center_pos, axis_unit):
         Unit vector perpendicular to the silicon-silicon axis, biased towards
         the local pore-facing surface normal.
     """
-    site_dict = kit._pore.get_sites()
-    normal_a = site_dict[pair[0]].normal(center_pos)
-    normal_b = site_dict[pair[1]].normal(center_pos)
+    normal_a = kit.site_normal(pair[0], center_pos)
+    normal_b = kit.site_normal(pair[1], center_pos)
     surface_axis = [normal_a[dim] + normal_b[dim] for dim in range(3)]
     axis_projection = pms.geom.dot_product(surface_axis, axis_unit)
     transverse = [
@@ -2083,7 +2073,7 @@ def _bridge_candidate_positions(kit, pair):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
@@ -2093,10 +2083,9 @@ def _bridge_candidate_positions(kit, pair):
     positions : list[list[float]]
         Box-wrapped candidate positions for the bridging oxygen.
     """
-    block = kit._pore.get_block()
-    box = block.get_box()
-    pos_a = block.pos(pair[0])
-    pos_b = block.pos(pair[1])
+    box = kit.box_nm
+    pos_a = kit.atom_position(pair[0])
+    pos_b = kit.atom_position(pair[1])
     pair_vector = _minimum_image_vector(pos_a, pos_b, box)
     center_pos = _wrap_position(
         [pos_a[dim] + 0.5 * pair_vector[dim] for dim in range(3)],
@@ -2140,13 +2129,13 @@ def _minimum_image_delta_array(reference_position, positions, box):
     return delta
 
 
-def _min_clearance_by_atom_ids(block, atom_ids):
+def _min_clearance_by_atom_ids(system, atom_ids):
     """Return per-atom steric cutoff distances for the selected atoms.
 
     Parameters
     ----------
-    block : Molecule
-        Active slit block.
+    system : SilicaSlit
+        Active slit system.
     atom_ids : np.ndarray
         Atom identifiers whose steric cutoff distances should be collected.
 
@@ -2155,10 +2144,9 @@ def _min_clearance_by_atom_ids(block, atom_ids):
     min_distances : np.ndarray
         Per-atom steric cutoffs in nanometers.
     """
-    atom_types = block.atom_types_view()
     return np.asarray(
         [
-            _BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(atom_types[atom_id], 0.18)
+            _BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(system.atom_type(atom_id), 0.18)
             for atom_id in atom_ids.tolist()
         ],
         dtype=float,
@@ -2170,7 +2158,7 @@ def _build_bridge_steric_cache(kit, pair):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
@@ -2180,11 +2168,8 @@ def _build_bridge_steric_cache(kit, pair):
     cache : _BridgeStericCache
         Cached local and global steric-search arrays for ``pair``.
     """
-    block = kit._pore.get_block()
-    box = np.asarray(block.get_box(), dtype=float)
-    positions = block.positions_view()
-    matrix = kit._matrix.get_matrix()
-    sites = kit._pore.get_sites()
+    box = np.asarray(kit.box_nm, dtype=float)
+    sites = kit.binding_sites
     consumed_oxygen_ids = {
         sites[pair[0]].oxygen_ids[0],
         sites[pair[1]].oxygen_ids[0],
@@ -2200,7 +2185,7 @@ def _build_bridge_steric_cache(kit, pair):
     for _depth in range(_BRIDGE_STERIC_GRAPH_DEPTH):
         next_frontier = []
         for atom_id in frontier:
-            for neighbor_id in matrix[atom_id]["atoms"]:
+            for neighbor_id in kit.atom_neighbors(atom_id):
                 if neighbor_id not in local_ids:
                     local_ids.add(neighbor_id)
                     next_frontier.append(neighbor_id)
@@ -2209,7 +2194,7 @@ def _build_bridge_steric_cache(kit, pair):
         frontier = next_frontier
 
     global_ids = np.asarray(
-        [atom_id for atom_id in matrix if atom_id not in excluded_ids],
+        [atom_id for atom_id in kit.active_atom_ids() if atom_id not in excluded_ids],
         dtype=int,
     )
     local_ids = np.asarray(
@@ -2218,12 +2203,12 @@ def _build_bridge_steric_cache(kit, pair):
     )
 
     global_positions = (
-        positions[global_ids].copy()
+        kit.atom_positions(global_ids)
         if global_ids.size
         else np.empty((0, 3), dtype=float)
     )
     local_positions = (
-        positions[local_ids].copy()
+        kit.atom_positions(local_ids)
         if local_ids.size
         else np.empty((0, 3), dtype=float)
     )
@@ -2231,9 +2216,9 @@ def _build_bridge_steric_cache(kit, pair):
     return _BridgeStericCache(
         box=box,
         local_positions=local_positions,
-        local_min_distances=_min_clearance_by_atom_ids(block, local_ids),
+        local_min_distances=_min_clearance_by_atom_ids(kit, local_ids),
         global_positions=global_positions,
-        global_min_distances=_min_clearance_by_atom_ids(block, global_ids),
+        global_min_distances=_min_clearance_by_atom_ids(kit, global_ids),
     )
 
 
@@ -2278,7 +2263,7 @@ def _bridge_steric_score(kit, pair, bridge_position, steric_cache=None):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
@@ -2312,7 +2297,7 @@ def _bridge_global_clearance(kit, pair, bridge_position, steric_cache=None):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
@@ -2344,7 +2329,7 @@ def _siloxane_bridge_position(kit, pair):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
@@ -2388,7 +2373,7 @@ def _bridge_pair(kit, pair, bridge_position=None):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     pair : tuple[int, int]
         Pair of silicon site identifiers.
@@ -2401,37 +2386,14 @@ def _bridge_pair(kit, pair, bridge_position=None):
     bridge_count : int
         Number of siloxane bridges created, always one on success.
     """
-    sites = kit._pore.get_sites()
+    sites = kit.binding_sites
     if pair[0] not in sites or pair[1] not in sites:
         raise ValueError("Cannot bridge a silicon pair that is no longer present in the site dictionary.")
 
     bridge_position = _siloxane_bridge_position(kit, pair) if bridge_position is None else bridge_position
     if bridge_position is None:
         raise ValueError("Cannot bridge a silicon pair without a sterically acceptable bridge-oxygen position.")
-    block = kit._pore.get_block()
-    bridge_atom_id = block.get_num()
-    kit._pore._invalidate_finalized_export_state()
-    block.add("O", bridge_position, name="OM1")
-    kit._matrix.add(pair[0], bridge_atom_id)
-    kit._matrix.add(pair[1], bridge_atom_id)
-    kit._matrix.get_matrix()[bridge_atom_id]["bonds"] = 2
-    kit._pore._record_surface_edit(bridge_atom_id, "inserted_bridge_oxygen")
-    kit._pore.objectify([bridge_atom_id])
-
-    newly_condensed_si = []
-    for site_id in pair:
-        oxygen_id = sites[site_id].oxygen_ids[0]
-        kit._matrix.remove(oxygen_id)
-        if sites[site_id].is_geminal:
-            sites[site_id].oxygen_ids.pop(0)
-        else:
-            newly_condensed_si.append(site_id)
-            del sites[site_id]
-
-    kit._pore._invalidate_scaffold_cache()
-    if newly_condensed_si:
-        kit._pore.objectify(newly_condensed_si)
-
+    kit.insert_siloxane_bridge(pair, bridge_position)
     return 1
 
 
@@ -2455,38 +2417,15 @@ def _refresh_single_slit_tracking(kit, total_surface_si, composition):
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     total_surface_si : int
         Total number of tracked surface silicon atoms.
     composition : SiliconStateComposition
         Current five-state slit surface composition.
     """
-    sites = kit._pore.get_sites()
-    kit._pore.refresh_surface_preparation_diagnostics()
-    available_site_in = sorted(
-        site for site, data in sites.items() if data.site_type == "in" and data.is_available
-    )
-
-    kit._site_in = available_site_in
-    kit._site_ex = []
-    kit._si_pos_in = [[kit._pore.get_block().pos(site) for site in available_site_in]]
-    kit._si_pos_ex = []
-    kit.sites_shape = {0: available_site_in}
-    kit._pore.sites_sl_shape = {0: available_site_in}
-
-    siloxane_num = kit._pore.get_surface_preparation_diagnostics().inserted_bridge_oxygen
-    kit._pore.sites_attach_mol = {
-        0: pms.ShapeAttachmentSummary(
-            single_silanol_sites=composition.q3_sites,
-            geminal_silanol_sites=composition.q2_sites,
-            siloxane_bridges=siloxane_num,
-            attached_molecules=_interior_attached_molecule_counts(kit),
-        )
-    }
-
-    # Keep the internal surface-silicon count available for downstream helpers.
-    kit._slit_total_surface_si = total_surface_si
+    del total_surface_si, composition
+    kit.refresh_site_tracking()
 
 
 def _enforce_surface_target(kit, total_surface_si, target_surface, distance_range, rng=None):
@@ -2494,7 +2433,7 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     total_surface_si : int
         Total number of tracked surface silicon atoms.
@@ -2511,9 +2450,9 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
     bridge_count : int
         Number of siloxane bridges introduced.
     """
-    adjacency = _build_slit_site_adjacency(kit, sorted(kit._site_in), distance_range)
+    adjacency = _build_slit_site_adjacency(kit, kit.interior_site_ids, distance_range)
     bridge_count = 0
-    sites = kit._pore.get_sites()
+    sites = kit.binding_sites
     current_surface = _surface_composition(total_surface_si, sites)
 
     while current_surface.q3_sites < target_surface.q3_sites:
@@ -2523,6 +2462,7 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
 
         bridge_count += _bridge_pair(kit, pair, bridge_position=bridge_position)
         _consume_pair(adjacency, pair)
+        sites = kit.binding_sites
         current_surface = _surface_composition(total_surface_si, sites)
 
     if current_surface.q2_sites < target_surface.q2_sites:
@@ -2541,6 +2481,7 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
 
         bridge_count += _bridge_pair(kit, pair, bridge_position=bridge_position)
         _consume_pair(adjacency, pair)
+        sites = kit.binding_sites
         current_surface = _surface_composition(total_surface_si, sites)
 
     while current_surface.q3_sites > target_surface.q3_sites:
@@ -2553,6 +2494,7 @@ def _enforce_surface_target(kit, total_surface_si, target_surface, distance_rang
 
         bridge_count += _bridge_pair(kit, pair, bridge_position=bridge_position)
         _consume_pair(adjacency, pair)
+        sites = kit.binding_sites
         current_surface = _surface_composition(total_surface_si, sites)
 
     if current_surface.q2_sites != target_surface.q2_sites or current_surface.q3_sites != target_surface.q3_sites:
@@ -2577,7 +2519,7 @@ def _attach_to_specific_sites(
 
     Parameters
     ----------
-    kit : PoreKit
+    kit : SilicaSlit
         Slit system under preparation.
     ligand : SilaneAttachmentConfig
         Silane attachment settings.
@@ -2651,30 +2593,23 @@ def _attach_to_specific_sites(
                 )
             )
 
-        mols = kit._pore.attach(
-            copy.deepcopy(ligand.molecule),
-            ligand.mount,
-            list(ligand.axis),
-            list(candidate_site_ids),
-            requested_count,
-            pos_list=[],
-            site_type="in",
-            is_proxi=False,
-            is_random=False,
-            is_rotate=ligand.rotate_about_axis,
+        attachment_result = kit.attach_ligands(
+            molecule=ligand.molecule,
+            mount=ligand.mount,
+            axis=ligand.axis,
+            site_ids=candidate_site_ids,
+            requested_count=requested_count,
+            allow_geminal=allow_geminal,
+            rotate_about_axis=ligand.rotate_about_axis,
             rotate_step_deg=ligand.rotate_step_deg,
-            is_g=allow_geminal,
             check_sterics=steric_settings.enabled,
             steric_clearance_scale=steric_settings.clearance_scale,
-            _progress_callback=_progress_callback,
+            progress_callback=_progress_callback,
         )
     finally:
         progress_bar.close()
 
-    for mol in mols:
-        if mol.get_short() not in kit._sort_list:
-            kit._sort_list.append(mol.get_short())
-    return mols
+    return list(attachment_result.molecules)
 
 
 def _available_site_ids(system, oxygen_count):
@@ -2682,7 +2617,7 @@ def _available_site_ids(system, oxygen_count):
 
     Parameters
     ----------
-    system : PoreKit
+    system : SilicaSlit
         Current slit system.
     oxygen_count : int
         Required number of oxygen handles on the surface site.
@@ -2693,11 +2628,7 @@ def _available_site_ids(system, oxygen_count):
         Sorted interior site ids matching the requested oxygen count and still
         available for attachment.
     """
-    return sorted(
-        site_id
-        for site_id, site in system._pore.get_sites().items()
-        if site.site_type == "in" and site.is_available and site.oxygen_count == oxygen_count
-    )
+    return list(system.available_site_ids(oxygen_count=oxygen_count))
 
 
 def _realize_surface_target(
@@ -2717,7 +2648,7 @@ def _realize_surface_target(
 
     Parameters
     ----------
-    base_system : PoreKit
+    base_system : SilicaSlit
         Prepared slit system before custom siloxane formation.
     total_surface_si : int
         Total number of tracked surface silicon atoms.
@@ -2774,7 +2705,7 @@ def _realize_surface_target(
         if not _prepared_target_is_compatible(initial_surface, prepared_target):
             continue
 
-        trial_system = copy.deepcopy(base_system)
+        trial_system = base_system.clone()
         _set_candidate_stage(
             progress_tracker,
             "Q-state preparation",
@@ -2794,7 +2725,10 @@ def _realize_surface_target(
             continue
         q_state_preparation_s = perf_counter() - q_state_start
 
-        prepared_surface = _surface_composition(total_surface_si, trial_system._pore.get_sites())
+        prepared_surface = _surface_composition(
+            total_surface_si,
+            trial_system.binding_sites,
+        )
         t2_attachment_s = 0.0
         t3_attachment_s = 0.0
 
@@ -2880,7 +2814,7 @@ def _realize_surface_target(
         attached_t2, attached_t3 = _attached_state_counts(trial_system, ligand)
         final_surface = _surface_composition(
             total_surface_si,
-            trial_system._pore.get_sites(),
+            trial_system.binding_sites,
             t2_sites=attached_t2,
             t3_sites=attached_t3,
         )
@@ -2928,20 +2862,26 @@ def _build_base_slit_system(config):
     base = pms.Molecule(inp=_amorphous_template_path())
     replicated = _replicate_along_y(base, config.repeat_y)
 
-    system = pms.PoreKit()
-    system.structure(replicated)
-    system.build(bonds=list(config.amorph_bond_range_nm))
-    _duplicate_template_splits(system._matrix, base.get_num(), config.repeat_y, config.template_split_pairs)
+    dice = pms.Dice(replicated, 0.4, True)
+    matrix = pms.Matrix(
+        dice.find(None, ["Si", "O"], list(config.amorph_bond_range_nm))
+    )
+    _duplicate_template_splits(
+        matrix,
+        base.get_num(),
+        config.repeat_y,
+        config.template_split_pairs,
+    )
+    system = SilicaSlit._from_block(
+        replicated,
+        matrix,
+        slit_width_nm=config.slit_width_nm,
+        name=config.name,
+    )
 
-    system.add_shape(system.shape_slit(config.slit_width_nm, centroid=system.centroid()), hydro=0)
-    system.prepare()
-
-    if system._site_ex:
-        raise ValueError("The periodic slit preparation requires zero exterior sites.")
-
-    total_surface_si = len(system._site_in)
+    total_surface_si = len(system.interior_site_ids)
     total_active_si = _active_silicon_count(system)
-    initial_surface = _surface_composition(total_surface_si, system._pore.get_sites())
+    initial_surface = _surface_composition(total_surface_si, system.binding_sites)
     _refresh_single_slit_tracking(system, total_surface_si, initial_surface)
 
     return _BaseSlitBuild(
@@ -2987,9 +2927,8 @@ def _build_report(
         Report summarizing the slit build.
     """
     system = target_attempt.system
-    system._pore.set_name(config.name)
-    wall_thickness = (system.box()[1] - config.slit_width_nm) / 2
-    diagnostics = system._pore.get_surface_preparation_diagnostics()
+    wall_thickness = (system.box_nm[1] - config.slit_width_nm) / 2
+    diagnostics = system.preparation_diagnostics
     timing_summary = (
         target_attempt.timing_summary
         if timing_summary is None
@@ -2999,10 +2938,10 @@ def _build_report(
     return SlitPreparationReport(
         name=config.name,
         temperature_k=config.temperature_k,
-        box_nm=system.box(),
+        box_nm=list(system.box_nm),
         slit_width_nm=config.slit_width_nm,
         wall_thickness_nm=wall_thickness,
-        site_ex=len(system._site_ex),
+        site_ex=0,
         siloxane_bridges=target_attempt.siloxane_bridges,
         siloxane_distance_range_nm=tuple(config.siloxane_distance_range_nm),
         surface_fraction_tolerance=config.surface_fraction_tolerance,
@@ -3021,7 +2960,96 @@ def _build_report(
     )
 
 
+@dataclass(frozen=True)
+class AmorphousSlitBuilder:
+    """Build bare or functionalized periodic amorphous silica slits.
+
+    Parameters
+    ----------
+    config : AmorphousSlitConfig, optional
+        Base slit geometry, surface target, and silica-topology settings.
+    """
+
+    config: AmorphousSlitConfig = field(default_factory=AmorphousSlitConfig)
+
+    def prepare(self):
+        """Prepare a bare attach-ready slit.
+
+        Returns
+        -------
+        result : SlitPreparationResult
+            Prepared bare slit, report, and resolved silica topology.
+        """
+        return _prepare_bare_amorphous_slit_surface(self.config)
+
+    def prepare_functionalized(
+        self,
+        ligand,
+        steric_settings=None,
+        progress_settings=None,
+    ):
+        """Prepare an exactly targeted functionalized slit.
+
+        Parameters
+        ----------
+        ligand : SilaneAttachmentConfig
+            Ligand geometry and optional topology bundle.
+        steric_settings : FunctionalizedSlitStericConfig or None, optional
+            Slit attachment steric settings. Defaults to the standard values.
+        progress_settings : FunctionalizedSlitProgressConfig or None, optional
+            Progress-display settings. Defaults to automatic display mode.
+
+        Returns
+        -------
+        result : FunctionalizedSlitResult
+            Prepared functionalized slit and associated report.
+        """
+        config = FunctionalizedAmorphousSlitConfig(
+            slit_config=self.config,
+            ligand=ligand,
+            steric_settings=(
+                FunctionalizedSlitStericConfig()
+                if steric_settings is None
+                else steric_settings
+            ),
+            progress_settings=(
+                FunctionalizedSlitProgressConfig()
+                if progress_settings is None
+                else progress_settings
+            ),
+        )
+        progress_tracker = _FunctionalizedProgressTracker(
+            total_stages=4,
+            progress_config=config.progress_settings,
+        )
+        try:
+            return _prepare_functionalized_amorphous_slit_surface(
+                config,
+                progress_tracker=progress_tracker,
+            )
+        finally:
+            progress_tracker.close()
+
+
 def prepare_amorphous_slit_surface(config=None):
+    """Prepare a bare amorphous slit through :class:`AmorphousSlitBuilder`.
+
+    Parameters
+    ----------
+    config : AmorphousSlitConfig or None, optional
+        Bare slit configuration. Defaults to :class:`AmorphousSlitConfig`.
+
+    Returns
+    -------
+    result : SlitPreparationResult
+        Prepared attach-ready bare slit and report.
+    """
+    return AmorphousSlitBuilder(
+        AmorphousSlitConfig() if config is None else config
+    ).prepare()
+
+
+def _prepare_bare_amorphous_slit_surface(config):
     """Prepare a bare amorphous slit surface from alpha-aware experimental data.
 
     Parameters
@@ -3059,7 +3087,6 @@ def prepare_amorphous_slit_surface(config=None):
     >>> _ = result.report.final_surface
     >>> _ = result.silica_topology.to_yaml()
     """
-    config = config if config is not None else AmorphousSlitConfig()
     silica_topology = resolve_silica_topology(config)
     if config.surface_target.t2_fraction or config.surface_target.t3_fraction:
         raise ValueError("Bare slit preparation requires t2_fraction == 0 and t3_fraction == 0.")
@@ -3142,17 +3169,11 @@ def prepare_functionalized_amorphous_slit_surface(config):
     >>> result = pms.prepare_functionalized_amorphous_slit_surface(config)
     >>> _ = result.report.final_surface
     """
-    progress_tracker = _FunctionalizedProgressTracker(
-        total_stages=4,
-        progress_config=config.progress_settings,
+    return AmorphousSlitBuilder(config.slit_config).prepare_functionalized(
+        ligand=config.ligand,
+        steric_settings=config.steric_settings,
+        progress_settings=config.progress_settings,
     )
-    try:
-        return _prepare_functionalized_amorphous_slit_surface(
-            config,
-            progress_tracker=progress_tracker,
-        )
-    finally:
-        progress_tracker.close()
 
 
 def _prepare_functionalized_amorphous_slit_surface(config, progress_tracker):
@@ -3226,6 +3247,74 @@ def _prepare_functionalized_amorphous_slit_surface(config, progress_tracker):
     )
 
 
+def _write_slit_structure_outputs(
+    system,
+    output_dir,
+    write_object_files,
+    write_pdb,
+    write_pdb_conect,
+    write_cif,
+    write_cif_bonds,
+    validate_connectivity,
+):
+    """Write shared finalized coordinate, metadata, and object outputs.
+
+    Parameters
+    ----------
+    system : SilicaSlit
+        Finalized slit domain model.
+    output_dir : str or os.PathLike
+        Output directory.
+    write_object_files : bool
+        Whether to serialize the shared snapshot and full slit state.
+    write_pdb : bool
+        Whether to write PDB coordinates.
+    write_pdb_conect : bool
+        Whether PDB output should contain ``CONECT`` records.
+    write_cif : bool
+        Whether to write mmCIF coordinates.
+    write_cif_bonds : bool
+        Whether mmCIF output should contain ``_struct_conn`` rows.
+    validate_connectivity : str
+        Connectivity-validation mode for coordinate writers.
+
+    Returns
+    -------
+    snapshot : StructureSnapshot
+        Immutable snapshot shared with the topology writer.
+    """
+    pms.utils.mkdirp(output_dir)
+    snapshot = system.export_snapshot()
+    writer = StructureWriter(snapshot, output_dir)
+    writer.write_gro(
+        use_atom_names=True,
+        validate_connectivity=validate_connectivity,
+    )
+    if write_pdb:
+        writer.write_pdb(
+            use_atom_names=True,
+            write_conect=write_pdb_conect,
+            validate_connectivity=validate_connectivity,
+        )
+    if write_cif:
+        writer.write_cif(
+            use_atom_names=True,
+            write_bonds=write_cif_bonds,
+            validate_connectivity=validate_connectivity,
+        )
+    if write_object_files:
+        writer.write_object()
+        pms.utils.save(
+            system,
+            os.path.join(output_dir, f"{system.name}_system.obj"),
+        )
+
+    metadata_path = os.path.join(output_dir, f"{system.name}.yml")
+    with open(metadata_path, "w", encoding="utf-8") as file_out:
+        yaml.safe_dump(system.metadata(), file_out, sort_keys=False)
+    return snapshot
+
+
 def write_bare_amorphous_slit(
     output_dir,
     config=None,
@@ -3245,9 +3334,9 @@ def write_bare_amorphous_slit(
     config : AmorphousSlitConfig, optional
         Bare slit preparation configuration.
     write_object_files : bool, optional
-        When ``True``, also serialize the finalized pore structure and full
-        :class:`porems.system.PoreKit` state as ``.obj`` files. The default is
-        ``False`` so object exports remain an explicit opt-in.
+        When ``True``, also serialize the finalized structural snapshot and
+        full :class:`porems.slit_system.SilicaSlit` state as ``.obj`` files.
+        The default is ``False`` so object exports remain an explicit opt-in.
     write_pdb : bool, optional
         When ``True``, also write a PDB structure file for inspection.
     write_pdb_conect : bool, optional
@@ -3281,28 +3370,22 @@ def write_bare_amorphous_slit(
     >>> _ = result.bare_charge_diagnostics.is_neutral
     """
     result = prepare_amorphous_slit_surface(config=config)
-    pms.utils.mkdirp(output_dir)
-
     result.system.finalize()
-    result.system.store(
+    snapshot = _write_slit_structure_outputs(
+        result.system,
         output_dir,
-        write_object_files=write_object_files,
-        write_pdb=write_pdb,
-        write_pdb_conect=write_pdb_conect,
-        write_cif=write_cif,
-        write_cif_bonds=write_cif_bonds,
-        write_legacy_topology_helpers=False,
-        validate_connectivity=validate_connectivity,
+        write_object_files,
+        write_pdb,
+        write_pdb_conect,
+        write_cif,
+        write_cif_bonds,
+        validate_connectivity,
     )
-    topology_store = pms.Store(
-        result.system._pore,
-        output_dir,
-        sort_list=result.system._sort_list,
-    )
-    result.bare_charge_diagnostics = topology_store.bare_slit_charge_diagnostics(
+    topology_writer = GromacsTopologyWriter(snapshot, output_dir)
+    result.bare_charge_diagnostics = topology_writer.bare_charge_diagnostics(
         silica_topology=result.silica_topology,
     )
-    topology_store.full_slit_topology(
+    topology_writer.write_full_slit(
         silica_topology=result.silica_topology,
     )
 
@@ -3332,9 +3415,9 @@ def write_functionalized_amorphous_slit(
     config : FunctionalizedAmorphousSlitConfig
         Functionalized slit preparation configuration.
     write_object_files : bool, optional
-        When ``True``, also serialize the finalized pore structure and full
-        :class:`porems.system.PoreKit` state as ``.obj`` files. The default is
-        ``False`` so object exports remain an explicit opt-in.
+        When ``True``, also serialize the finalized structural snapshot and
+        full :class:`porems.slit_system.SilicaSlit` state as ``.obj`` files.
+        The default is ``False`` so object exports remain an explicit opt-in.
     write_pdb : bool, optional
         When ``True``, also write a PDB structure file for inspection.
     write_pdb_conect : bool, optional
@@ -3460,22 +3543,21 @@ def write_functionalized_amorphous_slit(
 
         progress_tracker.set_stage("Store/export")
         store_start = perf_counter()
-        result.system.store(
+        snapshot = _write_slit_structure_outputs(
+            result.system,
             output_dir,
-            write_object_files=write_object_files,
-            write_pdb=write_pdb,
-            write_pdb_conect=write_pdb_conect,
-            write_cif=write_cif,
-            write_cif_bonds=write_cif_bonds,
-            write_legacy_topology_helpers=False,
-            validate_connectivity=validate_connectivity,
+            write_object_files,
+            write_pdb,
+            write_pdb_conect,
+            write_cif,
+            write_cif_bonds,
+            validate_connectivity,
         )
         if topology_config is not None:
-            result.charge_diagnostics = pms.Store(
-                result.system._pore,
+            result.charge_diagnostics = GromacsTopologyWriter(
+                snapshot,
                 output_dir,
-                sort_list=result.system._sort_list,
-            ).full_slit_topology(
+            ).write_full_slit(
                 base_ligand_short=config.ligand.molecule.get_short(),
                 silane_topology_config=topology_config,
                 silica_topology=result.silica_topology,

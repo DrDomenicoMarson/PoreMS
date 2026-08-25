@@ -9,8 +9,8 @@
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="../_static/documentation_options.js?v=6c02275b"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
 <meta charset='utf-8'>
@@ -43,9 +43,7 @@
             
                 <li><a href="../api.html">API</a></li>
                 <li><a href="../molecule.html">Molecule</a></li>
-                <li><a href="../pore.html">Pore</a></li>
                 <li><a href="../slit.html">Slit Prep</a></li>
-                <li><a href="../shape_examples.html">Pore shape examples</a></li>
             
             
               <li class="dropdown globaltoc-container">
@@ -127,7 +125,7 @@
 <h1>write_bare_amorphous_slit<a class="headerlink" href="#write-bare-amorphous-slit" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="porems.slit.write_bare_amorphous_slit">
-<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">write_bare_amorphous_slit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_object_files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_pdb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_pdb_conect</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_cif</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_cif_bonds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.write_bare_amorphous_slit" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">porems.slit.</span></span><span class="sig-name descname"><span class="pre">write_bare_amorphous_slit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_object_files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_pdb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_pdb_conect</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_cif</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_cif_bonds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validate_connectivity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'warn'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#porems.slit.write_bare_amorphous_slit" title="Link to this definition">¶</a></dt>
 <dd><p>Prepare, finalize, and store a bare amorphous silica slit.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -136,9 +134,9 @@
 </dd>
 <dt><strong>config</strong><span class="classifier">AmorphousSlitConfig, optional</span></dt><dd><p>Bare slit preparation configuration.</p>
 </dd>
-<dt><strong>write_object_files</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also serialize the finalized pore structure and full
-<a class="reference internal" href="porems.system.PoreKit.html#porems.system.PoreKit" title="porems.system.PoreKit"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.system.PoreKit</span></code></a> state as <code class="docutils literal notranslate"><span class="pre">.obj</span></code> files. The default is
-<code class="docutils literal notranslate"><span class="pre">False</span></code> so object exports remain an explicit opt-in.</p>
+<dt><strong>write_object_files</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also serialize the finalized structural snapshot and
+full <a class="reference internal" href="porems.slit_system.SilicaSlit.html#porems.slit_system.SilicaSlit" title="porems.slit_system.SilicaSlit"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.slit_system.SilicaSlit</span></code></a> state as <code class="docutils literal notranslate"><span class="pre">.obj</span></code> files.
+The default is <code class="docutils literal notranslate"><span class="pre">False</span></code> so object exports remain an explicit opt-in.</p>
 </dd>
 <dt><strong>write_pdb</strong><span class="classifier">bool, optional</span></dt><dd><p>When <code class="docutils literal notranslate"><span class="pre">True</span></code>, also write a PDB structure file for inspection.</p>
 </dd>
@@ -151,15 +149,30 @@ records in the written PDB file whenever PDB output is requested.</p>
 <code class="docutils literal notranslate"><span class="pre">_struct_conn</span></code> loop in the written mmCIF file whenever mmCIF output
 is requested.</p>
 </dd>
+<dt><strong>validate_connectivity</strong><span class="classifier">str, optional</span></dt><dd><p>Connectivity validation mode forwarded to structure writers.
+Supported values are <code class="docutils literal notranslate"><span class="pre">&quot;off&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;warn&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;strict&quot;</span></code>.</p>
+</dd>
 </dl>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>result</strong><span class="classifier">SlitPreparationResult</span></dt><dd><p>Finalized bare slit system and its preparation report.</p>
+<dt><strong>result</strong><span class="classifier">SlitPreparationResult</span></dt><dd><p>Finalized bare slit system and its preparation report. The export
+writes a self-contained full-slab <code class="docutils literal notranslate"><span class="pre">.itp</span></code> / <code class="docutils literal notranslate"><span class="pre">.top</span></code> pair and
+exposes the resolved silica topology model plus finalized bare-slit
+charge-neutrality diagnostics on <code class="docutils literal notranslate"><span class="pre">result</span></code>.</p>
 </dd>
 </dl>
 </dd>
 </dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">porems</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pms</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">pms</span><span class="o">.</span><span class="n">write_bare_amorphous_slit</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="s2">&quot;output/bare_amorphous_slit&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">pms</span><span class="o">.</span><span class="n">AmorphousSlitConfig</span><span class="p">(),</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">bare_charge_diagnostics</span><span class="o">.</span><span class="n">is_neutral</span>
+</pre></div>
+</div>
 </dd></dl>
 
 </section>
@@ -177,7 +190,7 @@ is requested.</p>
     </p>
     <p>
         &copy; Copyright 2021, Hamzeh Kraus.<br/>
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 7.4.6.<br/>
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 9.1.0.<br/>
     </p>
   </div>
 </footer>

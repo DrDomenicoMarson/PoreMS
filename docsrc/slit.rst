@@ -10,7 +10,7 @@
 Slit Preparation Guide
 ======================
 
-This page collects build-oriented examples for creating silica pore models and
+This page collects build-oriented examples for creating silica slit models and
 surface functionalizations with PoreMS. Downstream simulation protocols are
 left to the user so that the package documentation stays focused on structure
 generation and surface chemistry.
@@ -77,7 +77,7 @@ directory:
   /Users/dm/miniforge3/envs/mda/bin/python3 _0_create_slit.py --seed-base 1000
 
 ``prepare_amorphous_slit_surface(...)`` returns a
-``SlitPreparationResult`` containing an attach-ready ``PoreKit`` system and a
+``SlitPreparationResult`` containing an attach-ready ``SilicaSlit`` system and a
 ``SlitPreparationReport`` with the converted alpha-aware target, the prepared
 bare surface, the final surface composition, and surface-preparation
 diagnostics such as stripped silicon counts, removed orphan oxygens, inserted
@@ -103,6 +103,13 @@ The slit-preparation API is designed for the periodic bare-silica slit builder:
 * surface-state targeting through alpha-aware ``Q2/Q3/Q4/T2/T3`` fractions
 * bare-slit exports written in one call through
   ``write_bare_amorphous_slit(...)``
+
+The underlying builder is also public. ``AmorphousSlitBuilder(config).prepare()``
+returns the bare result, while ``prepare_functionalized(...)`` accepts an
+explicit ligand plus steric and progress settings. The returned ``SilicaSlit``
+provides read-only binding-site snapshots, filtered available-site ids,
+``attach_ligands(...)``, ``clone()``, and idempotent ``finalize()`` operations.
+Its mutable scaffold and connectivity engine remain private.
 
 
 Inspecting or Overriding the Active Silica Topology
@@ -343,19 +350,25 @@ Both commands write human-readable text reports with fixed sections for
 selection, surface planes, clash filters, ring checks, density, and per-probe
 details, while the Python API returns dataclass reports for programmatic use.
 
-Stored outputs
---------------
+Writers and stored outputs
+--------------------------
 
-The ``store()`` helpers write the generated structure together with the
-companion files needed to keep the silica model reproducible:
+The high-level write helpers finalize once and share one immutable export
+snapshot between focused writers:
 
-* structure files such as ``.gro`` for coordinates and periodic box lengths
-* slit exports: self-contained ``.top`` / ``.itp`` files for the finalized slit
-* generic pore exports: legacy helper ``.top`` and ``grid.itp`` files
-* YAML or JSON metadata summaries for the generated geometry and surface state
+* ``StructureWriter`` writes coordinates, structural objects, assembled graphs,
+  and connectivity validation results.
+* ``GromacsTopologyWriter`` writes self-contained slit ``.top`` / ``.itp``
+  files, charge diagnostics, and retained helper topology/grid files.
+* ``AntechamberWriter`` writes Antechamber and ``tleap`` helper files for a
+  standalone molecule.
+* High-level slit workflows retain YAML and JSON summaries for the generated
+  geometry and surface state.
 
 Serialized ``.obj`` backups remain available as an explicit opt-in through
-``write_object_files=True`` when calling the storage helpers.
+``write_object_files=True`` when calling the high-level write helpers. This
+writes ``<name>.obj`` for the structural snapshot and ``<name>_system.obj`` for
+the complete ``SilicaSlit`` state.
 
 PoreMS intentionally stops at generating the silica model and its companion
 build artifacts. Any downstream simulation setup should be defined separately

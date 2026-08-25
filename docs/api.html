@@ -9,9 +9,9 @@
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="_static/bootstrap-sphinx.css?v=cab96e3b" />
     <script src="_static/documentation_options.js?v=6c02275b"></script>
-    <script src="_static/doctools.js?v=9a2dae69"></script>
-    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
 <meta charset='utf-8'>
@@ -44,9 +44,7 @@
             
                 <li><a href="#">API</a></li>
                 <li><a href="molecule.html">Molecule</a></li>
-                <li><a href="pore.html">Pore</a></li>
                 <li><a href="slit.html">Slit Prep</a></li>
-                <li><a href="shape_examples.html">Pore shape examples</a></li>
             
             
               <li class="dropdown globaltoc-container">
@@ -71,13 +69,14 @@
       aria-labelledby="dLabelLocalToc"><ul>
 <li><a class="reference internal" href="#">API reference</a><ul>
 <li><a class="reference internal" href="#molecule">Molecule</a></li>
-<li><a class="reference internal" href="#pore">Pore</a><ul>
+<li><a class="reference internal" href="#slit-domain">Slit Domain</a><ul>
 <li><a class="reference internal" href="#pattern">Pattern</a></li>
 <li><a class="reference internal" href="#shape">Shape</a></li>
 <li><a class="reference internal" href="#optimization">Optimization</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#slit-preparation">Slit Preparation</a></li>
+<li><a class="reference internal" href="#slit-filling-density">Slit Filling / Density</a></li>
 <li><a class="reference internal" href="#utilities">Utilities</a></li>
 </ul>
 </li>
@@ -112,13 +111,14 @@
         <div id="sidebar" class="bs-sidenav" role="complementary"><ul>
 <li><a class="reference internal" href="#">API reference</a><ul>
 <li><a class="reference internal" href="#molecule">Molecule</a></li>
-<li><a class="reference internal" href="#pore">Pore</a><ul>
+<li><a class="reference internal" href="#slit-domain">Slit Domain</a><ul>
 <li><a class="reference internal" href="#pattern">Pattern</a></li>
 <li><a class="reference internal" href="#shape">Shape</a></li>
 <li><a class="reference internal" href="#optimization">Optimization</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#slit-preparation">Slit Preparation</a></li>
+<li><a class="reference internal" href="#slit-filling-density">Slit Filling / Density</a></li>
 <li><a class="reference internal" href="#utilities">Utilities</a></li>
 </ul>
 </li>
@@ -146,71 +146,56 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.molecule.Molecule.html#porems.molecule.Molecule" title="porems.molecule.Molecule"><code class="xref py py-obj docutils literal notranslate"><span class="pre">molecule.Molecule</span></code></a>([name, short, inp])</p></td>
-<td><p>Mutable collection of <a class="reference internal" href="generated/porems.atom.Atom.html#porems.atom.Atom" title="porems.atom.Atom"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.atom.Atom</span></code></a> objects.</p></td>
+<td><p>Mutable molecule with array-backed atomic coordinates and metadata.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/porems.atom.Atom.html#porems.atom.Atom" title="porems.atom.Atom"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atom.Atom</span></code></a>(pos, atom_type[, name, residue, ...])</p></td>
 <td><p>Represent a single atom with coordinates and lightweight metadata.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.store.Store.html#porems.store.Store" title="porems.store.Store"><code class="xref py py-obj docutils literal notranslate"><span class="pre">store.Store</span></code></a>(inp[, link, sort_list])</p></td>
-<td><p>Write molecule and pore objects to simulation input files.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.writers.structure.StructureWriter.html#porems.writers.structure.StructureWriter" title="porems.writers.structure.StructureWriter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">writers.structure.StructureWriter</span></code></a>(inp[, link])</p></td>
+<td><p>Write coordinates and connectivity for molecules or structure snapshots.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">connectivity.GraphBond</span></code>(atom_a, atom_b, ...)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.writers.gromacs.GromacsTopologyWriter.html#porems.writers.gromacs.GromacsTopologyWriter" title="porems.writers.gromacs.GromacsTopologyWriter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">writers.gromacs.GromacsTopologyWriter</span></code></a>(inp[, ...])</p></td>
+<td><p>Write GROMACS helper or full-slit topology files.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.writers.antechamber.AntechamberWriter.html#porems.writers.antechamber.AntechamberWriter" title="porems.writers.antechamber.AntechamberWriter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">writers.antechamber.AntechamberWriter</span></code></a>(molecule)</p></td>
+<td><p>Write Antechamber helper files for one standalone molecule.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.connectivity.GraphBond.html#porems.connectivity.GraphBond" title="porems.connectivity.GraphBond"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connectivity.GraphBond</span></code></a>(atom_a, atom_b, ...)</p></td>
 <td><p>One bonded pair in an assembled structure graph.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">connectivity.GraphAngle</span></code>(atom_a, atom_b, atom_c)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.connectivity.GraphAngle.html#porems.connectivity.GraphAngle" title="porems.connectivity.GraphAngle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connectivity.GraphAngle</span></code></a>(atom_a, atom_b, atom_c)</p></td>
 <td><p>One angle triplet derived from an assembled structure graph.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">connectivity.AttachmentRecord</span></code>(site_id, ...)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.connectivity.AttachmentRecord.html#porems.connectivity.AttachmentRecord" title="porems.connectivity.AttachmentRecord"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connectivity.AttachmentRecord</span></code></a>(site_id, ...)</p></td>
 <td><p>Metadata describing one grafted molecule placement.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">connectivity.AssembledStructureGraph</span></code>(...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.connectivity.AssembledStructureGraph.html#porems.connectivity.AssembledStructureGraph" title="porems.connectivity.AssembledStructureGraph"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connectivity.AssembledStructureGraph</span></code></a>(...)</p></td>
 <td><p>Bond graph assembled in the same atom order as structure export.</p></td>
 </tr>
 </tbody>
 </table>
 </section>
-<section id="pore">
-<span id="pore-api"></span><h2>Pore<a class="headerlink" href="#pore" title="Link to this heading">¶</a></h2>
+<section id="slit-domain">
+<span id="pore-api"></span><h2>Slit Domain<a class="headerlink" href="#slit-domain" title="Link to this heading">¶</a></h2>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.pore.BindingSite.html#porems.pore.BindingSite" title="porems.pore.BindingSite"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pore.BindingSite</span></code></a>(oxygen_ids, site_type, ...)</p></td>
-<td><p>Surface silicon binding site with its remaining oxygen handles.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit_system.SilicaSlit.html#porems.slit_system.SilicaSlit" title="porems.slit_system.SilicaSlit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_system.SilicaSlit</span></code></a>(surface, ...)</p></td>
+<td><p>Mutable, attach-ready periodic amorphous silica slit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit_system.SlitBindingSite.html#porems.slit_system.SlitBindingSite" title="porems.slit_system.SlitBindingSite"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_system.SlitBindingSite</span></code></a>(site_id, ...)</p></td>
+<td><p>Read-only snapshot of one silica-slit binding site.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit_system.SlitAttachmentRecord.html#porems.slit_system.SlitAttachmentRecord" title="porems.slit_system.SlitAttachmentRecord"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_system.SlitAttachmentRecord</span></code></a>(site_id, ...)</p></td>
+<td><p>Read-only snapshot of one graft attachment.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit_system.LigandAttachmentResult.html#porems.slit_system.LigandAttachmentResult" title="porems.slit_system.LigandAttachmentResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_system.LigandAttachmentResult</span></code></a>(...)</p></td>
+<td><p>Outcome of one explicit slit-ligand attachment batch.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.pore.SurfaceEditRecord.html#porems.pore.SurfaceEditRecord" title="porems.pore.SurfaceEditRecord"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pore.SurfaceEditRecord</span></code></a>(atom_id, atom_type, ...)</p></td>
+<td><p>One tracked surface-edit event recorded during preparation.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/porems.pore.SurfacePreparationDiagnostics.html#porems.pore.SurfacePreparationDiagnostics" title="porems.pore.SurfacePreparationDiagnostics"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pore.SurfacePreparationDiagnostics</span></code></a>([...])</p></td>
 <td><p>Surface-cleanup and scaffold-validation counters.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.pore.Pore.html#porems.pore.Pore" title="porems.pore.Pore"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pore.Pore</span></code></a>(block, matrix)</p></td>
-<td><p>Prepared pore block with editable binding sites.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.system.ShapeAttachmentSummary.html#porems.system.ShapeAttachmentSummary" title="porems.system.ShapeAttachmentSummary"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.ShapeAttachmentSummary</span></code></a>(...)</p></td>
-<td><p>Per-shape counts of residual surface groups and attached molecules.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.system.RoughnessProfile.html#porems.system.RoughnessProfile" title="porems.system.RoughnessProfile"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.RoughnessProfile</span></code></a>(interior, exterior)</p></td>
-<td><p>Surface roughness values for interior and exterior pore surfaces.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.system.SurfaceAreaSummary.html#porems.system.SurfaceAreaSummary" title="porems.system.SurfaceAreaSummary"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.SurfaceAreaSummary</span></code></a>(interior, exterior)</p></td>
-<td><p>Surface areas for interior and exterior pore surfaces.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.system.SurfaceAllocationStats.html#porems.system.SurfaceAllocationStats" title="porems.system.SurfaceAllocationStats"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.SurfaceAllocationStats</span></code></a>(count, ...)</p></td>
-<td><p>Allocation statistics for one surface family.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.system.AllocationSummary.html#porems.system.AllocationSummary" title="porems.system.AllocationSummary"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.AllocationSummary</span></code></a>(interior, exterior)</p></td>
-<td><p>Allocation statistics for interior and exterior surfaces.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.system.PoreKit.html#porems.system.PoreKit" title="porems.system.PoreKit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.PoreKit</span></code></a>()</p></td>
-<td><p>Composable builder for pore systems carved from silica blocks.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.system.PoreCylinder.html#porems.system.PoreCylinder" title="porems.system.PoreCylinder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.PoreCylinder</span></code></a>(size, diam[, res, hydro])</p></td>
-<td><p>Convenience builder for a cylindrical pore in <span class="math notranslate nohighlight">\(\beta\)</span>-cristobalite.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.system.PoreSlit.html#porems.system.PoreSlit" title="porems.system.PoreSlit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.PoreSlit</span></code></a>(size, height[, res, hydro])</p></td>
-<td><p>Convenience builder for a slit pore in <span class="math notranslate nohighlight">\(\beta\)</span>-cristobalite.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.system.PoreCapsule.html#porems.system.PoreCapsule" title="porems.system.PoreCapsule"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.PoreCapsule</span></code></a>(size, diam, sep[, res, hydro])</p></td>
-<td><p>Convenience builder for a capsule-shaped pore system.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.system.PoreAmorphCylinder.html#porems.system.PoreAmorphCylinder" title="porems.system.PoreAmorphCylinder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">system.PoreAmorphCylinder</span></code></a>(diam[, res, hydro])</p></td>
-<td><p>Convenience builder for a cylindrical pore in the amorphous template from <a class="reference external" href="http://doi.org/10.1103/PhysRevB.67.245201">Vink et al.</a>.</p></td>
 </tr>
 </tbody>
 </table>
@@ -241,7 +226,7 @@
 <td><p>Optional coordinate windows used to assign sites to one shape.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.shape.ShapeSpec.html#porems.shape.ShapeSpec" title="porems.shape.ShapeSpec"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shape.ShapeSpec</span></code></a>(shape_type, shape, section)</p></td>
-<td><p>Typed shape entry used by <a class="reference internal" href="generated/porems.system.PoreKit.html#porems.system.PoreKit" title="porems.system.PoreKit"><code class="xref py py-class docutils literal notranslate"><span class="pre">porems.system.PoreKit</span></code></a>.</p></td>
+<td><p>Typed shape entry for geometry-specific builders.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/porems.shape.CylinderConfig.html#porems.shape.CylinderConfig" title="porems.shape.CylinderConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shape.CylinderConfig</span></code></a>(centroid, central, ...)</p></td>
 <td><p>Configuration for <code class="xref py py-class docutils literal notranslate"><span class="pre">Cylinder</span></code>.</p></td>
@@ -300,26 +285,50 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.AmorphousSlitConfig.html#porems.slit.AmorphousSlitConfig" title="porems.slit.AmorphousSlitConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.AmorphousSlitConfig</span></code></a>(name, ...)</p></td>
 <td><p>Configuration for a periodic bare amorphous silica slit.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.SiliconStateComposition.html#porems.slit.SiliconStateComposition" title="porems.slit.SiliconStateComposition"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SiliconStateComposition</span></code></a>(...[, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.AmorphousSlitBuilder.html#porems.slit.AmorphousSlitBuilder" title="porems.slit.AmorphousSlitBuilder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.AmorphousSlitBuilder</span></code></a>(config)</p></td>
+<td><p>Build bare or functionalized periodic amorphous silica slits.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SiliconStateComposition.html#porems.slit.SiliconStateComposition" title="porems.slit.SiliconStateComposition"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SiliconStateComposition</span></code></a>(...[, ...])</p></td>
 <td><p>Integer five-state silicon surface composition.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SlitPreparationReport.html#porems.slit.SlitPreparationReport" title="porems.slit.SlitPreparationReport"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitPreparationReport</span></code></a>(name, ...)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.SlitPreparationReport.html#porems.slit.SlitPreparationReport" title="porems.slit.SlitPreparationReport"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitPreparationReport</span></code></a>(name, ...)</p></td>
 <td><p>Summary of a prepared or functionalized amorphous slit.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.SlitPreparationResult.html#porems.slit.SlitPreparationResult" title="porems.slit.SlitPreparationResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitPreparationResult</span></code></a>(system, report)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SlitPreparationResult.html#porems.slit.SlitPreparationResult" title="porems.slit.SlitPreparationResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitPreparationResult</span></code></a>(system, report, ...)</p></td>
 <td><p>Prepared bare slit system together with its report.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.SlitTimingSummary.html#porems.slit.SlitTimingSummary" title="porems.slit.SlitTimingSummary"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitTimingSummary</span></code></a>([base_slit_build_s, ...])</p></td>
+<td><p>Lightweight wall-clock timings for major slit-preparation stages.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SlitJunctionParameters.html#porems.slit.SlitJunctionParameters" title="porems.slit.SlitJunctionParameters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SlitJunctionParameters</span></code></a>(...)</p></td>
+<td><p>Silica-ligand junction parameters for full slit topology export.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.GeminalMountDihedralSpec.html#porems.slit.GeminalMountDihedralSpec" title="porems.slit.GeminalMountDihedralSpec"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.GeminalMountDihedralSpec</span></code></a>(...[, parameters])</p></td>
+<td><p>One optional generated geminal dihedral around the mount silicon.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SilaneGeminalCrossTerms.html#porems.slit.SilaneGeminalCrossTerms" title="porems.slit.SilaneGeminalCrossTerms"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SilaneGeminalCrossTerms</span></code></a>(...[, ...])</p></td>
+<td><p>Explicit bonded cross terms around the ligand mount silicon.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.SilaneTopologyConfig.html#porems.slit.SilaneTopologyConfig" title="porems.slit.SilaneTopologyConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SilaneTopologyConfig</span></code></a>(itp_path, ...)</p></td>
+<td><p>Flat ligand-topology input used by the slit full-topology exporter.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.SilaneAttachmentConfig.html#porems.slit.SilaneAttachmentConfig" title="porems.slit.SilaneAttachmentConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.SilaneAttachmentConfig</span></code></a>(molecule, mount, ...)</p></td>
 <td><p>Attachment settings for one silane family.</p></td>
 </tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.FunctionalizedSlitProgressConfig.html#porems.slit.FunctionalizedSlitProgressConfig" title="porems.slit.FunctionalizedSlitProgressConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.FunctionalizedSlitProgressConfig</span></code></a>([...])</p></td>
+<td><p>Progress-bar settings for functionalized slit preparation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.FunctionalizedSlitStericConfig.html#porems.slit.FunctionalizedSlitStericConfig" title="porems.slit.FunctionalizedSlitStericConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.FunctionalizedSlitStericConfig</span></code></a>([...])</p></td>
+<td><p>Slit-only steric acceptance settings for exact silane placement.</p></td>
+</tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.FunctionalizedAmorphousSlitConfig.html#porems.slit.FunctionalizedAmorphousSlitConfig" title="porems.slit.FunctionalizedAmorphousSlitConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.FunctionalizedAmorphousSlitConfig</span></code></a>(...)</p></td>
 <td><p>Configuration for an exactly targeted functionalized amorphous slit.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.FunctionalizedSlitResult.html#porems.slit.FunctionalizedSlitResult" title="porems.slit.FunctionalizedSlitResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.FunctionalizedSlitResult</span></code></a>(system, report)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.FunctionalizedSlitResult.html#porems.slit.FunctionalizedSlitResult" title="porems.slit.FunctionalizedSlitResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.FunctionalizedSlitResult</span></code></a>(system, ...[, ...])</p></td>
 <td><p>Prepared functionalized slit system together with its report.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit.prepare_amorphous_slit_surface.html#porems.slit.prepare_amorphous_slit_surface" title="porems.slit.prepare_amorphous_slit_surface"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.prepare_amorphous_slit_surface</span></code></a>([config])</p></td>
-<td><p>Prepare a bare amorphous slit surface from alpha-aware experimental data.</p></td>
+<td><p>Prepare a bare amorphous slit through <code class="xref py py-class docutils literal notranslate"><span class="pre">AmorphousSlitBuilder</span></code>.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.write_bare_amorphous_slit.html#porems.slit.write_bare_amorphous_slit" title="porems.slit.write_bare_amorphous_slit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.write_bare_amorphous_slit</span></code></a>(output_dir[, ...])</p></td>
 <td><p>Prepare, finalize, and store a bare amorphous silica slit.</p></td>
@@ -330,11 +339,57 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit.write_functionalized_amorphous_slit.html#porems.slit.write_functionalized_amorphous_slit" title="porems.slit.write_functionalized_amorphous_slit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit.write_functionalized_amorphous_slit</span></code></a>(...)</p></td>
 <td><p>Prepare, finalize, and store a functionalized amorphous silica slit.</p></td>
 </tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.topology.SilicaTopologyModel.html#porems.topology.SilicaTopologyModel" title="porems.topology.SilicaTopologyModel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">topology.SilicaTopologyModel</span></code></a>(atomtypes, ...)</p></td>
+<td><p>Editable silica force-field model used by slit topology export.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.topology.BareSilicaChargeDiagnostics.html#porems.topology.BareSilicaChargeDiagnostics" title="porems.topology.BareSilicaChargeDiagnostics"><code class="xref py py-obj docutils literal notranslate"><span class="pre">topology.BareSilicaChargeDiagnostics</span></code></a>(...)</p></td>
+<td><p>Charge-neutrality diagnostics for one finalized bare silica slit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.topology.FunctionalizedSlitChargeDiagnostics.html#porems.topology.FunctionalizedSlitChargeDiagnostics" title="porems.topology.FunctionalizedSlitChargeDiagnostics"><code class="xref py py-obj docutils literal notranslate"><span class="pre">topology.FunctionalizedSlitChargeDiagnostics</span></code></a>(...)</p></td>
+<td><p>Charge audit for one functionalized full-slit topology export.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.topology.default_silica_topology.html#porems.topology.default_silica_topology" title="porems.topology.default_silica_topology"><code class="xref py py-obj docutils literal notranslate"><span class="pre">topology.default_silica_topology</span></code></a>()</p></td>
+<td><p>Return a fresh editable copy of the package-default silica model.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="slit-filling-density">
+<span id="utils-api"></span><h2>Slit Filling / Density<a class="headerlink" href="#slit-filling-density" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit_fill.SlitFillConfig.html#porems.slit_fill.SlitFillConfig" title="porems.slit_fill.SlitFillConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.SlitFillConfig</span></code></a>([guest_path, ...])</p></td>
+<td><p>Configuration for the slit guest-filling workflow.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit_fill.SurfacePlaneRegion.html#porems.slit_fill.SurfacePlaneRegion" title="porems.slit_fill.SurfacePlaneRegion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.SurfacePlaneRegion</span></code></a>(axis_index, ...)</p></td>
+<td><p>Detected slit interval normal to the confining silica surfaces.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit_fill.DensityProbeEstimate.html#porems.slit_fill.DensityProbeEstimate" title="porems.slit_fill.DensityProbeEstimate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.DensityProbeEstimate</span></code></a>(...)</p></td>
+<td><p>Accessible-volume density summary for one probe radius.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit_fill.DensityEstimate.html#porems.slit_fill.DensityEstimate" title="porems.slit_fill.DensityEstimate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.DensityEstimate</span></code></a>(...)</p></td>
+<td><p>Density metrics derived for the retained guest population.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit_fill.SlitFillReport.html#porems.slit_fill.SlitFillReport" title="porems.slit_fill.SlitFillReport"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.SlitFillReport</span></code></a>(...)</p></td>
+<td><p>Summary of one slit guest-filling workflow.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit_fill.SlitDensityConfig.html#porems.slit_fill.SlitDensityConfig" title="porems.slit_fill.SlitDensityConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.SlitDensityConfig</span></code></a>([input_path, ...])</p></td>
+<td><p>Configuration for merged-slit guest-density analysis.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit_fill.SlitDensityReport.html#porems.slit_fill.SlitDensityReport" title="porems.slit_fill.SlitDensityReport"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.SlitDensityReport</span></code></a>(...)</p></td>
+<td><p>Summary of density analysis for one merged slit system.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/porems.slit_fill.fill_slit.html#porems.slit_fill.fill_slit" title="porems.slit_fill.fill_slit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.fill_slit</span></code></a>(config)</p></td>
+<td><p>Run the full slit guest-filling workflow.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.slit_fill.estimate_guest_density.html#porems.slit_fill.estimate_guest_density" title="porems.slit_fill.estimate_guest_density"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slit_fill.estimate_guest_density</span></code></a>(config)</p></td>
+<td><p>Estimate guest density inside an already merged slit system.</p></td>
+</tr>
 </tbody>
 </table>
 </section>
 <section id="utilities">
-<span id="utils-api"></span><h2>Utilities<a class="headerlink" href="#utilities" title="Link to this heading">¶</a></h2>
+<h2>Utilities<a class="headerlink" href="#utilities" title="Link to this heading">¶</a></h2>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/porems.utils.html#module-porems.utils" title="porems.utils"><code class="xref py py-obj docutils literal notranslate"><span class="pre">utils</span></code></a></p></td>
@@ -367,7 +422,7 @@
     </p>
     <p>
         &copy; Copyright 2021, Hamzeh Kraus.<br/>
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 7.4.6.<br/>
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 9.1.0.<br/>
     </p>
   </div>
 </footer>

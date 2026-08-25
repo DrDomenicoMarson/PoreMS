@@ -2,8 +2,6 @@ import json
 import os
 import subprocess
 import sys
-import warnings
-
 import numpy as np
 import pytest
 
@@ -168,20 +166,24 @@ print(json.dumps({
         assert payload["length"] == len(self.expected)
         assert payload["warnings"] == []
 
-    def test_porekit_build_has_no_entrypoint_warning_for_python_dash_c(self):
+    def test_matrix_build_has_no_entrypoint_warning_for_python_dash_c(self):
         code = """
 import json
 import warnings
 import porems as pms
 
 block = pms.BetaCristobalit().generate([2, 2, 2], "z")
-kit = pms.PoreKit()
-kit.structure(block)
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    kit.build()
+    matrix = pms.Matrix(
+        pms.Dice(block, 0.4, True).find(
+            None,
+            ["Si", "O"],
+            [0.155 - 1e-2, 0.155 + 1e-2],
+        )
+    )
 print(json.dumps({
-    "matrix_size": len(kit._matrix.get_matrix()),
+    "matrix_size": len(matrix.get_matrix()),
     "warnings": [str(item.message) for item in caught],
 }))
 """

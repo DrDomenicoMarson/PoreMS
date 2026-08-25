@@ -3,13 +3,14 @@ import inspect
 import json
 import os
 from pathlib import Path
-import numpy as np
+
 import pytest
 import yaml
 
 import porems as pms
 import porems.slit as slit_mod
-import porems.store as store_mod
+import porems.writers.common as store_mod
+from porems.pore import Pore
 import porems.topology as topo_mod
 from porems._version import __version__ as EXPECTED_VERSION
 
@@ -45,6 +46,30 @@ def experimental_target_from_surface(surface_target, alpha, alpha_override=None)
 def test_topology_parameter_helpers_are_exported_from_package_root():
     assert pms.GromacsAngleParameters is topo_mod.GromacsAngleParameters
     assert pms.GromacsBondParameters is topo_mod.GromacsBondParameters
+
+
+@pytest.mark.parametrize(
+    "symbol",
+    (
+        "Store",
+        "Pore",
+        "PoreKit",
+        "PoreCylinder",
+        "PoreSlit",
+        "PoreCapsule",
+        "PoreAmorphCylinder",
+    ),
+)
+def test_legacy_domain_and_writer_symbols_are_not_public(symbol):
+    assert not hasattr(pms, symbol)
+
+
+def test_legacy_modules_and_generated_documentation_are_absent():
+    assert not Path("porems/system.py").exists()
+    assert not Path("porems/store.py").exists()
+    assert not Path("docsrc/pore.rst").exists()
+    assert not list(Path("docsrc/generated").glob("porems.system.*"))
+    assert not list(Path("docsrc/generated").glob("porems.store.*"))
 
 
 @dataclass(frozen=True)
@@ -290,11 +315,11 @@ def naive_slit_adjacency(kit, site_ids, distance_range):
     """Return the original loop-based slit adjacency reference."""
 
     adjacency = {site: [] for site in site_ids}
-    positions = {site: kit._pore.get_block().pos(site) for site in site_ids}
+    positions = {site: kit.atom_position(site) for site in site_ids}
 
     for site_index, site_a in enumerate(site_ids):
         for site_b in site_ids[site_index + 1 :]:
-            if slit_mod._are_sites_directly_connected(kit._matrix, site_a, site_b):
+            if set(kit.atom_neighbors(site_a)) & set(kit.atom_neighbors(site_b)):
                 continue
 
             distance = slit_mod._site_distance(positions[site_a], positions[site_b])
@@ -311,13 +336,12 @@ def naive_slit_adjacency(kit, site_ids, distance_range):
 def naive_bridge_local_ids(kit, pair):
     """Return the local steric graph used by the original bridge scorer."""
 
-    matrix = kit._matrix.get_matrix()
     frontier = list(pair)
     local_ids = set(pair)
     for _depth in range(slit_mod._BRIDGE_STERIC_GRAPH_DEPTH):
         next_frontier = []
         for atom_id in frontier:
-            for neighbor_id in matrix[atom_id]["atoms"]:
+            for neighbor_id in kit.atom_neighbors(atom_id):
                 if neighbor_id not in local_ids:
                     local_ids.add(neighbor_id)
                     next_frontier.append(neighbor_id)
@@ -330,10 +354,8 @@ def naive_bridge_local_ids(kit, pair):
 def naive_bridge_clearance(kit, pair, bridge_position, local_only):
     """Return the original loop-based bridge clearance reference."""
 
-    block = kit._pore.get_block()
-    box = block.get_box()
-    matrix = kit._matrix.get_matrix()
-    sites = kit._pore.get_sites()
+    box = kit.box_nm
+    sites = kit.binding_sites
     consumed_oxygen_ids = {
         sites[pair[0]].oxygen_ids[0],
         sites[pair[1]].oxygen_ids[0],
@@ -344,15 +366,19 @@ def naive_bridge_clearance(kit, pair, bridge_position, local_only):
         *consumed_oxygen_ids,
     }
 
-    atom_ids = naive_bridge_local_ids(kit, pair) if local_only else matrix.keys()
+    atom_ids = naive_bridge_local_ids(kit, pair) if local_only else kit.active_atom_ids()
     min_clearance = float("inf")
     for atom_id in atom_ids:
         if atom_id in excluded_ids:
             continue
 
-        atom_type = block.get_atom_type(atom_id)
+        atom_type = kit.atom_type(atom_id)
         min_distance = slit_mod._BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(atom_type, 0.18)
-        delta = slit_mod._minimum_image_vector(bridge_position, block.pos(atom_id), box)
+        delta = slit_mod._minimum_image_vector(
+            bridge_position,
+            kit.atom_position(atom_id),
+            box,
+        )
 
         if any(abs(component) > slit_mod._BRIDGE_STERIC_DISTANCE_CUTOFF_NM for component in delta):
             continue
@@ -415,7 +441,7 @@ class TestSurfacePreparationValidation:
         mol = pms.Molecule("orphan_oxygen")
         mol.add("O", [0.0, 0.0, 0.0], name="OM1")
         matrix = pms.Matrix([[0, []]])
-        pore = pms.Pore(mol, matrix)
+        pore = Pore(mol, matrix)
 
         pore.prepare()
 
@@ -427,7 +453,7 @@ class TestSurfacePreparationValidation:
         mol.add("O", [0.0, 0.0, 0.0], name="OM1")
         mol.add("H", [0.1, 0.0, 0.0], name="H1")
         matrix = pms.Matrix([[0, [1]]])
-        pore = pms.Pore(mol, matrix)
+        pore = Pore(mol, matrix)
 
         pore.prepare()
 
@@ -440,7 +466,7 @@ class TestSurfacePreparationValidation:
         valid.add("Si", [0.16, 0.0, 0.0], name="SI1")
         valid.add("Si", [-0.16, 0.0, 0.0], name="SI2")
         valid_matrix = pms.Matrix([[0, [1, 2]]])
-        valid_pore = pms.Pore(valid, valid_matrix)
+        valid_pore = Pore(valid, valid_matrix)
 
         mols = valid_pore.objectify([0])
 
@@ -451,7 +477,7 @@ class TestSurfacePreparationValidation:
         invalid.add("O", [0.0, 0.0, 0.0], name="OM1")
         invalid.add("Si", [0.16, 0.0, 0.0], name="SI1")
         invalid_matrix = pms.Matrix([[0, [1]]])
-        invalid_pore = pms.Pore(invalid, invalid_matrix)
+        invalid_pore = Pore(invalid, invalid_matrix)
 
         with pytest.raises(ValueError):
             invalid_pore.objectify([0])
@@ -470,34 +496,18 @@ class TestAmorphousSlitPreparation:
 
         Returns
         -------
-        system : PoreKit
+        system : SilicaSlit
             Prepared slit system with the raw silanol surface still intact.
         """
-        base = pms.Molecule(inp=slit_mod._amorphous_template_path())
-        replicated = slit_mod._replicate_along_y(base, config.repeat_y)
-
-        system = pms.PoreKit()
-        system.structure(replicated)
-        system.build(bonds=list(config.amorph_bond_range_nm))
-        slit_mod._duplicate_template_splits(
-            system._matrix,
-            base.get_num(),
-            config.repeat_y,
-            config.template_split_pairs,
-        )
-
-        system.add_shape(
-            system.shape_slit(config.slit_width_nm, centroid=system.centroid()),
-            hydro=0,
-        )
-        system.prepare()
-        return system
+        return slit_mod._build_base_slit_system(config).system
 
     def test_periodic_slit_geometry(self):
         assert self.prepared_report.site_ex == 0
-        assert self.prepared_result.system._site_ex == []
-        assert self.prepared_result.system._pore.get_site_dict()["ex"] == {}
-        assert isinstance(next(iter(self.prepared_result.system._pore.get_sites().values())), pms.BindingSite)
+        assert isinstance(self.prepared_result.system, pms.SilicaSlit)
+        assert isinstance(
+            next(iter(self.prepared_result.system.binding_sites.values())),
+            pms.SlitBindingSite,
+        )
 
         expected_box = [9.605, 19.210, 9.605]
         for actual, expected in zip(self.prepared_report.box_nm, expected_box):
@@ -506,7 +516,6 @@ class TestAmorphousSlitPreparation:
         assert self.prepared_report.slit_width_nm == pytest.approx(7.0, abs=10 ** (-(3)))
         assert self.prepared_report.wall_thickness_nm == pytest.approx(6.105, abs=10 ** (-(3)))
         assert self.prepared_report.siloxane_distance_range_nm == (0.4, 0.65)
-        assert sorted(self.prepared_result.system._pore.sites_sl_shape) == [0]
 
     def test_default_silica_topology_returns_independent_copies_with_provenance(self):
         model_a = pms.default_silica_topology()
@@ -576,11 +585,10 @@ class TestAmorphousSlitPreparation:
         assert diagnostics.geminal_oxygen.atom_count == 2 * self.stored_report.final_surface.q2_sites
         assert diagnostics.geminal_hydrogen.atom_count == 2 * self.stored_report.final_surface.q2_sites
 
-    def test_store_bare_charge_diagnostics_matches_stored_result(self):
-        diagnostics = pms.Store(
-            self.stored_result.system._pore,
-            sort_list=self.stored_result.system._sort_list,
-        ).bare_slit_charge_diagnostics(
+    def test_gromacs_writer_bare_charge_diagnostics_matches_stored_result(self):
+        diagnostics = pms.GromacsTopologyWriter(
+            self.stored_result.system.export_snapshot(),
+        ).bare_charge_diagnostics(
             silica_topology=self.stored_result.silica_topology,
         )
 
@@ -623,34 +631,36 @@ class TestAmorphousSlitPreparation:
             == self.prepared_report.final_surface.q3_sites
             + 2 * self.prepared_report.final_surface.q2_sites
         )
-        assert self.prepared_report.preparation_diagnostics.final_framework_oxygen == len(self.prepared_result.system._pore.get_mol_dict()["OM"])
+        assert (
+            self.prepared_report.preparation_diagnostics.final_framework_oxygen
+            == self.prepared_result.system.molecule_counts["OM"]
+        )
         assert self.prepared_report.preparation_diagnostics.stripped_silicon_total > 0
         assert self.prepared_report.preparation_diagnostics.removed_orphan_oxygen > 0
         assert self.prepared_report.preparation_diagnostics.inserted_bridge_oxygen == 235
-        assert "SLX" not in self.prepared_result.system._pore.get_mol_dict()
+        assert "SLX" not in self.prepared_result.system.molecule_counts
 
     def test_inserted_bridge_oxygen_respects_local_clearance_threshold(self):
-        history = self.prepared_result.system._pore.get_surface_edit_history()
+        history = self.prepared_result.system.surface_edit_history
         bridge_ids = [
             record.atom_id
             for record in history
             if record.reason == "inserted_bridge_oxygen"
         ]
-        matrix = self.prepared_result.system._matrix.get_matrix()
-        block = self.prepared_result.system._pore.get_block()
-        box = block.get_box()
+        system = self.prepared_result.system
+        box = system.box_nm
 
         assert len(bridge_ids) == self.prepared_report.preparation_diagnostics.inserted_bridge_oxygen
 
         for bridge_id in bridge_ids:
-            bonded_ids = set(matrix[bridge_id]["atoms"]) | {bridge_id}
-            for atom_id in matrix:
+            bonded_ids = set(system.atom_neighbors(bridge_id)) | {bridge_id}
+            for atom_id in system.active_atom_ids():
                 if atom_id in bonded_ids:
                     continue
 
                 delta = slit_mod._minimum_image_vector(
-                    block.pos(bridge_id),
-                    block.pos(atom_id),
+                    system.atom_position(bridge_id),
+                    system.atom_position(atom_id),
                     box,
                 )
                 if any(
@@ -660,14 +670,14 @@ class TestAmorphousSlitPreparation:
                     continue
 
                 min_distance = slit_mod._BRIDGE_MIN_CLEARANCE_BY_TYPE_NM.get(
-                    block.get_atom_type(atom_id),
+                    system.atom_type(atom_id),
                     0.18,
                 )
                 clearance = pms.geom.length(delta) - min_distance
                 assert clearance >= -1e-9, f"Bridge oxygen {bridge_id} is too close to atom {atom_id}."
 
     def test_slit_adjacency_matches_naive_reference(self):
-        site_ids = sorted(self.prepared_result.system._site_in)
+        site_ids = sorted(self.prepared_result.system.interior_site_ids)
         adjacency = slit_mod._build_slit_site_adjacency(
             self.prepared_result.system,
             site_ids,
@@ -695,7 +705,7 @@ class TestAmorphousSlitPreparation:
         system = self.prepared_result.system
         adjacency = slit_mod._build_slit_site_adjacency(
             system,
-            sorted(system._site_in),
+            sorted(system.interior_site_ids),
             self.config.siloxane_distance_range_nm,
         )
 
@@ -727,7 +737,7 @@ class TestAmorphousSlitPreparation:
         system = self.prepared_result.system
         adjacency = slit_mod._build_slit_site_adjacency(
             system,
-            sorted(system._site_in),
+            sorted(system.interior_site_ids),
             self.config.siloxane_distance_range_nm,
         )
 
@@ -738,8 +748,7 @@ class TestAmorphousSlitPreparation:
                 break
 
         assert pair is not None
-        block = system._pore.get_block()
-        sites = system._pore.get_sites()
+        sites = system.binding_sites
         excluded_ids = {
             pair[0],
             pair[1],
@@ -752,7 +761,7 @@ class TestAmorphousSlitPreparation:
             for atom_id in sorted(local_ids)
             if atom_id not in excluded_ids
         )
-        invalid_position = block.pos(reference_atom_id)
+        invalid_position = system.atom_position(reference_atom_id)
 
         local_score = slit_mod._bridge_steric_score(system, pair, invalid_position)
         global_score = slit_mod._bridge_global_clearance(system, pair, invalid_position)
@@ -768,13 +777,13 @@ class TestAmorphousSlitPreparation:
         )
 
     def test_repeat_y_one_reaches_requested_surface_target(self):
-        result = pms.prepare_amorphous_slit_surface(
-            config=pms.AmorphousSlitConfig(
+        result = pms.AmorphousSlitBuilder(
+            pms.AmorphousSlitConfig(
                 name="thin_bare_amorphous_slit",
                 repeat_y=1,
                 surface_target=self.surface_target,
             )
-        )
+        ).prepare()
 
         assert result.report.site_ex == 0
         assert result.report.wall_thickness_nm == pytest.approx(1.3025, abs=10 ** (-(4)))
@@ -865,7 +874,7 @@ class TestAmorphousSlitPreparation:
             )
             return tuple(
                 record.neighbor_ids
-                for record in result.system._pore.get_surface_edit_history()
+                for record in result.system.surface_edit_history
                 if record.reason == "inserted_bridge_oxygen"
             )
 
@@ -925,12 +934,12 @@ class TestAmorphousSlitPreparation:
                 surface_target=self.surface_target,
             )
             system = self._build_uncondensed_slit(config)
-            total_surface_si = len(system._site_in)
-            sites = system._pore.get_sites()
+            total_surface_si = len(system.interior_site_ids)
+            sites = system.binding_sites
             before = slit_mod._surface_composition(total_surface_si, sites)
             adjacency = slit_mod._build_slit_site_adjacency(
                 system,
-                sorted(system._site_in),
+                sorted(system.interior_site_ids),
                 config.siloxane_distance_range_nm,
             )
             pair, bridge_position = slit_mod._find_placeable_pair(
@@ -942,21 +951,21 @@ class TestAmorphousSlitPreparation:
 
             assert pair is not None, pair_counts
             assert bridge_position is not None, pair_counts
-            om_before = len(system._pore.get_mol_dict().get("OM", []))
-            si_before = len(system._pore.get_mol_dict().get("SI", []))
+            om_before = system.molecule_counts.get("OM", 0)
+            si_before = system.molecule_counts.get("SI", 0)
             slit_mod._bridge_pair(system, pair, bridge_position=bridge_position)
             slit_mod._consume_pair(adjacency, pair)
 
             after = slit_mod._surface_composition(
                 total_surface_si,
-                system._pore.get_sites(),
+                system.binding_sites,
             )
             assert after.q2_sites - before.q2_sites == expected_delta[0], pair_counts
             assert after.q3_sites - before.q3_sites == expected_delta[1], pair_counts
             assert after.q4_sites - before.q4_sites == expected_delta[2], pair_counts
-            assert len(system._pore.get_mol_dict().get("OM", [])) - om_before == expected_objectified[0], pair_counts
-            assert len(system._pore.get_mol_dict().get("SI", [])) - si_before == expected_objectified[1], pair_counts
-            assert "SLX" not in system._pore.get_mol_dict()
+            assert system.molecule_counts.get("OM", 0) - om_before == expected_objectified[0], pair_counts
+            assert system.molecule_counts.get("SI", 0) - si_before == expected_objectified[1], pair_counts
+            assert "SLX" not in system.molecule_counts
 
     def test_tolerance_fallback_selects_nearest_realizable_target(self):
         config = pms.AmorphousSlitConfig(
@@ -965,10 +974,10 @@ class TestAmorphousSlitPreparation:
             surface_target=self.surface_target,
         )
         system = self._build_uncondensed_slit(config)
-        total_surface_si = len(system._site_in)
+        total_surface_si = len(system.interior_site_ids)
         initial_surface = slit_mod._surface_composition(
             total_surface_si,
-            system._pore.get_sites(),
+            system.binding_sites,
         )
         requested_target = pms.SiliconStateFractions(66 / 957, 653 / 957, 238 / 957)
         exact_target = pms.SiliconStateComposition(
@@ -1012,19 +1021,78 @@ class TestAmorphousSlitPreparation:
             )
         )
 
-        result.system.attach(
-            pms.gen.tms(),
-            0,
-            [0, 1],
-            1,
-            site_type="in",
-            is_proxi=False,
-            is_g=False,
+        attachment = result.system.attach_ligands(
+            molecule=pms.gen.tms(),
+            mount=0,
+            axis=[0, 1],
+            site_ids=result.system.available_site_ids(oxygen_count=1)[:1],
+            requested_count=1,
+            allow_geminal=False,
+            check_sterics=False,
         )
 
-        mol_dict = result.system._pore.get_mol_dict()
-        assert "TMS" in mol_dict
-        assert len(mol_dict["TMS"]) == 1
+        assert len(attachment.attached_site_ids) == 1
+        assert result.system.molecule_counts["TMS"] == 1
+
+    def test_slit_clone_is_independent_and_binding_sites_are_read_only(self):
+        original = self.prepared_result.system
+        cloned = original.clone()
+        site_id = cloned.available_site_ids(oxygen_count=1)[0]
+
+        attachment = cloned.attach_ligands(
+            molecule=pms.gen.tms(),
+            mount=0,
+            axis=(0, 1),
+            site_ids=(site_id,),
+            check_sterics=False,
+        )
+
+        assert attachment.attached_site_ids == (site_id,)
+        assert cloned.molecule_counts["TMS"] == 1
+        assert "TMS" not in original.molecule_counts
+        assert site_id in original.available_site_ids(oxygen_count=1)
+        with pytest.raises(TypeError):
+            original.binding_sites[site_id] = None
+
+    def test_slit_attachment_reports_rejected_sites(self):
+        system = self.prepared_result.system.clone()
+        site_id = system.available_site_ids(oxygen_count=1)[0]
+
+        attachment = system.attach_ligands(
+            molecule=pms.gen.tms(),
+            mount=0,
+            axis=(0, 1),
+            site_ids=(site_id,),
+            rotate_about_axis=False,
+            steric_clearance_scale=1000.0,
+        )
+
+        assert attachment.attached_site_ids == ()
+        assert attachment.rejected_site_ids == (site_id,)
+        assert attachment.molecules == ()
+
+    def test_slit_finalization_is_idempotent_and_blocks_mutation(self):
+        system = self.prepared_result.system.clone()
+        system.finalize()
+        first_snapshot = system.export_snapshot()
+        first_counts = dict(system.molecule_counts)
+
+        system.finalize()
+        second_snapshot = system.export_snapshot()
+
+        assert system.is_finalized
+        assert dict(system.molecule_counts) == first_counts
+        assert first_snapshot.name == second_snapshot.name
+        assert len(first_snapshot.molecules) == len(second_snapshot.molecules)
+        with pytest.raises(ValueError, match="finalized slit"):
+            system.attach_ligands(
+                molecule=pms.gen.tms(),
+                mount=0,
+                axis=(0, 1),
+                site_ids=(),
+            )
+        with pytest.raises(ValueError, match="finalized slit"):
+            system.insert_siloxane_bridge((0, 1), (0.0, 0.0, 0.0))
 
     def test_bare_builder_rejects_non_zero_t_states(self):
         with pytest.raises(ValueError):
@@ -1113,16 +1181,40 @@ class TestAmorphousSlitPreparation:
             ))
 
     def test_finalized_bare_slit_connectivity_is_valid(self):
-        report = pms.Store(self.stored_result.system._pore).validate_connectivity(
+        snapshot = self.stored_result.system.export_snapshot()
+        report = pms.StructureWriter(snapshot).validate_connectivity(
             use_atom_names=True
         )
 
         assert report.is_valid
 
+    def test_shared_snapshot_contains_final_ordering_and_connectivity(self):
+        snapshot = self.stored_result.system.export_snapshot()
+        graph = pms.StructureWriter(snapshot).assembled_graph(use_atom_names=True)
+
+        assert snapshot.has_assembled_export
+        assert tuple(atom.serial for atom in snapshot.atom_order) == tuple(
+            range(1, len(snapshot.atom_order) + 1)
+        )
+        assert tuple(
+            serial
+            for molecule_serials in snapshot.molecule_serials
+            for serial in molecule_serials
+        ) == tuple(range(1, len(snapshot.atom_order) + 1))
+        assert snapshot.assembled_graph == graph
+        assert snapshot.assembled_bonds == graph.bonds
+        assert snapshot.assembled_angles == graph.angles
+        assert any(
+            bond.provenance == "siloxane_bridge"
+            for bond in snapshot.assembled_bonds
+        )
+        assert dict(snapshot.residue_counts) == dict(
+            self.stored_result.system.molecule_counts
+        )
+
     def test_validation_flags_broken_silanol_silicon_environment(self):
-        store = pms.Store(
-            self.stored_result.system._pore,
-            sort_list=self.stored_result.system._sort_list,
+        store = pms.StructureWriter(
+            self.stored_result.system.export_snapshot(),
         )
         cache = store._collect_structure_records(use_atom_names=True)
         graph = store.assembled_graph(use_atom_names=True)
@@ -1152,9 +1244,8 @@ class TestAmorphousSlitPreparation:
         )
 
     def test_validation_flags_broken_geminal_silicon_environment(self):
-        store = pms.Store(
-            self.stored_result.system._pore,
-            sort_list=self.stored_result.system._sort_list,
+        store = pms.StructureWriter(
+            self.stored_result.system.export_snapshot(),
         )
         cache = store._collect_structure_records(use_atom_names=True)
         graph = store.assembled_graph(use_atom_names=True)
@@ -1184,9 +1275,8 @@ class TestAmorphousSlitPreparation:
         )
 
     def test_validation_flags_broken_silanol_hydroxyl_environment(self):
-        store = pms.Store(
-            self.stored_result.system._pore,
-            sort_list=self.stored_result.system._sort_list,
+        store = pms.StructureWriter(
+            self.stored_result.system.export_snapshot(),
         )
         cache = store._collect_structure_records(use_atom_names=True)
         graph = store.assembled_graph(use_atom_names=True)
@@ -1228,6 +1318,19 @@ class TestAmorphousSlitPreparation:
 
         assert (output_dir / "test_bare_amorphous_slit_with_objects.obj").is_file()
         assert (output_dir / "test_bare_amorphous_slit_with_objects_system.obj").is_file()
+        snapshot = pms.utils.load(
+            output_dir / "test_bare_amorphous_slit_with_objects.obj"
+        )
+        system = pms.utils.load(
+            output_dir / "test_bare_amorphous_slit_with_objects_system.obj"
+        )
+        assert isinstance(snapshot, store_mod.StructureSnapshot)
+        assert isinstance(system, pms.SilicaSlit)
+        restored_snapshot = system.export_snapshot()
+        assert snapshot.name == restored_snapshot.name
+        assert snapshot.atom_order == restored_snapshot.atom_order
+        assert snapshot.assembled_bonds == restored_snapshot.assembled_bonds
+        assert snapshot.residue_counts == restored_snapshot.residue_counts
 
     def test_bare_slit_pdb_writes_conect_by_default(self, tmp_path):
         output_dir = tmp_path / "bare_amorphous_slit_preparation_with_pdb"
@@ -1476,20 +1579,22 @@ class TestFunctionalizedAmorphousSlit:
         assert created[0].leave
         assert created[0].total == 4
 
-    def test_generic_attach_default_steric_scale_is_unchanged(self):
-        steric_parameter = inspect.signature(pms.Pore.attach).parameters["steric_clearance_scale"]
+    def test_slit_attachment_default_steric_scale_matches_workflow_default(self):
+        steric_parameter = inspect.signature(
+            pms.SilicaSlit.attach_ligands
+        ).parameters["steric_clearance_scale"]
 
-        assert steric_parameter.default == pytest.approx(0.85)
+        assert steric_parameter.default == pytest.approx(0.60)
 
     def test_functionalized_path_uses_configured_steric_clearance_scale(self, monkeypatch):
         recorded_scales = []
-        original_attach = pms.Pore.attach
+        original_attach = pms.SilicaSlit.attach_ligands
 
         def recording_attach(self, *args, **kwargs):
             recorded_scales.append(kwargs.get("steric_clearance_scale"))
             return original_attach(self, *args, **kwargs)
 
-        monkeypatch.setattr(pms.Pore, "attach", recording_attach)
+        monkeypatch.setattr(pms.SilicaSlit, "attach_ligands", recording_attach)
 
         target = pms.ExperimentalSiliconStateTarget(
             q2_fraction=65 / 957,
@@ -1521,20 +1626,20 @@ class TestFunctionalizedAmorphousSlit:
 
     def test_functionalized_path_batches_attachment_slots(self, monkeypatch):
         recorded_calls = []
-        original_attach = pms.Pore.attach
+        original_attach = pms.SilicaSlit.attach_ligands
 
         def recording_attach(self, *args, **kwargs):
             recorded_calls.append(
                 {
-                    "amount": args[4],
-                    "sites_len": len(args[3]),
-                    "is_g": kwargs.get("is_g"),
-                    "progress_callback": kwargs.get("_progress_callback") is not None,
+                    "amount": kwargs.get("requested_count"),
+                    "sites_len": len(kwargs["site_ids"]),
+                    "is_g": kwargs.get("allow_geminal"),
+                    "progress_callback": kwargs.get("progress_callback") is not None,
                 }
             )
             return original_attach(self, *args, **kwargs)
 
-        monkeypatch.setattr(pms.Pore, "attach", recording_attach)
+        monkeypatch.setattr(pms.SilicaSlit, "attach_ligands", recording_attach)
 
         target = pms.ExperimentalSiliconStateTarget(
             q2_fraction=63 / 957,
@@ -1611,7 +1716,7 @@ class TestFunctionalizedAmorphousSlit:
             )
             return tuple(
                 record.site_id
-                for record in result.system._pore.get_attachment_records()
+                for record in result.system.attachment_records
             )
 
         seed_a_sites = attachment_sites(21)
@@ -1668,7 +1773,13 @@ class TestFunctionalizedAmorphousSlit:
             progress_settings=pms.FunctionalizedSlitProgressConfig(enabled=True),
         )
 
-        result = pms.prepare_functionalized_amorphous_slit_surface(config)
+        result = pms.AmorphousSlitBuilder(
+            config.slit_config
+        ).prepare_functionalized(
+            ligand=config.ligand,
+            steric_settings=config.steric_settings,
+            progress_settings=config.progress_settings,
+        )
 
         assert result.report.final_surface == pms.SiliconStateComposition(957, 65, 651, 239, 1, 1)
         stage_bars = [bar for bar in created if bar.unit == "stage"]
@@ -1769,9 +1880,8 @@ class TestFunctionalizedAmorphousSlit:
         assert result.report.timing_summary.q_state_preparation_s > 0
         assert result.report.timing_summary.t2_attachment_s > 0
         assert result.report.timing_summary.t3_attachment_s > 0
-        assert len(result.system._pore.get_site_dict()["in"]["TMSG"]) == 3
-        assert len(result.system._pore.get_site_dict()["in"]["TMS"]) == 4
-        assert "SLX" not in result.system._pore.get_mol_dict()
+        assert result.system.attached_state_counts("TMS") == (3, 4)
+        assert "SLX" not in result.system.molecule_counts
 
     def test_functionalized_tolerance_fallback_selects_nearest_realizable_target(self):
         target = pms.ExperimentalSiliconStateTarget(
@@ -1828,16 +1938,15 @@ class TestFunctionalizedAmorphousSlit:
         )
 
         result = pms.prepare_functionalized_amorphous_slit_surface(config)
-        store = pms.Store(result.system._pore)
+        finalized_system = result.system.clone()
+        finalized_system.finalize()
+        snapshot = finalized_system.export_snapshot()
+        store = pms.StructureWriter(snapshot)
         graph = store.assembled_graph(use_atom_names=True)
         report = store.validate_connectivity(use_atom_names=True)
         cache = store._collect_structure_records(use_atom_names=True)
         atom_records = cache.atom_records
         molecule_serials = cache.molecule_serials
-        serials_by_molecule = {
-            id(molecule): serials
-            for molecule, serials in zip(store._mols, molecule_serials)
-        }
 
         assert isinstance(graph, pms.AssembledStructureGraph)
         assert isinstance(report, pms.ConnectivityValidationReport)
@@ -1846,11 +1955,16 @@ class TestFunctionalizedAmorphousSlit:
                 for finding in report.findings
             ))
         assert any(bond.provenance == "graft_junction" for bond in graph.bonds)
+        assert snapshot.graft_junction_serials == tuple(
+            (bond.atom_a, bond.atom_b)
+            for bond in graph.bonds
+            if bond.provenance == "graft_junction"
+        )
         assert any(bond.provenance == "ligand_explicit" for bond in graph.bonds)
         assert not (any(bond.provenance == "ligand_inferred" for bond in graph.bonds))
 
-        attachment_record = result.system._pore.get_attachment_records()[0]
-        mount_serial = serials_by_molecule[id(attachment_record.molecule)][
+        attachment_record = snapshot.attachments[0]
+        mount_serial = molecule_serials[attachment_record.molecule_index][
             attachment_record.mount_atom_local_id
         ]
         assert any(
@@ -1893,7 +2007,9 @@ class TestFunctionalizedAmorphousSlit:
 
         result = pms.prepare_functionalized_amorphous_slit_surface(config)
         result.system.finalize()
-        report = pms.Store(result.system._pore).validate_connectivity(use_atom_names=True)
+        report = pms.StructureWriter(
+            result.system.export_snapshot()
+        ).validate_connectivity(use_atom_names=True)
 
         assert report.is_valid
 

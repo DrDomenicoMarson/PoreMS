@@ -657,6 +657,158 @@ class Pore():
         self._matrix.remove(atoms)
         self._invalidate_scaffold_cache()
 
+    def active_atom_ids(self):
+        """Return active scaffold atom identifiers in connectivity order.
+
+        Returns
+        -------
+        atom_ids : tuple[int, ...]
+            Atom identifiers currently present in the live connectivity
+            matrix.
+        """
+        return tuple(self._matrix.get_matrix())
+
+    def atom_neighbors(self, atom_id):
+        """Return active neighbors for one scaffold atom.
+
+        Parameters
+        ----------
+        atom_id : int
+            Scaffold atom identifier.
+
+        Returns
+        -------
+        neighbors : tuple[int, ...]
+            Neighbor identifiers in connectivity order.
+        """
+        return tuple(self._matrix.get_matrix()[atom_id]["atoms"])
+
+    def atom_position(self, atom_id):
+        """Return a copy of one scaffold atom position.
+
+        Parameters
+        ----------
+        atom_id : int
+            Scaffold atom identifier.
+
+        Returns
+        -------
+        position : list[float]
+            Cartesian position in nanometers.
+        """
+        return list(self._block.pos(atom_id))
+
+    def atom_positions(self, atom_ids):
+        """Return positions for selected scaffold atoms.
+
+        Parameters
+        ----------
+        atom_ids : iterable[int]
+            Scaffold atom identifiers.
+
+        Returns
+        -------
+        positions : numpy.ndarray
+            Cartesian positions with shape ``(n, 3)``.
+        """
+        atom_ids = np.asarray(tuple(atom_ids), dtype=int)
+        if atom_ids.size == 0:
+            return np.empty((0, self._dim), dtype=float)
+        return self._block.positions_view()[atom_ids].copy()
+
+    def atom_type(self, atom_id):
+        """Return the element/type label for one scaffold atom.
+
+        Parameters
+        ----------
+        atom_id : int
+            Scaffold atom identifier.
+
+        Returns
+        -------
+        atom_type : str
+            Stored atom type.
+        """
+        return self._block.get_atom_type(atom_id)
+
+    def surface_handle_oxygen_ids(self):
+        """Return exposed oxygen identifiers available for surface chemistry.
+
+        Returns
+        -------
+        oxygen_ids : tuple[int, ...]
+            Active one-coordinate surface oxygen identifiers.
+        """
+        return tuple(self._surface_handle_oxygen_ids())
+
+    def connectivity_bonds(self):
+        """Return active scaffold bonds as source-identifier pairs.
+
+        Returns
+        -------
+        bonds : tuple[tuple[int, int], ...]
+            Sorted unique atom-id pairs from the live connectivity matrix.
+        """
+        bonds = set()
+        for atom_id, props in self._matrix.get_matrix().items():
+            for neighbor_id in props["atoms"]:
+                bonds.add(tuple(sorted((atom_id, neighbor_id))))
+        return tuple(sorted(bonds))
+
+    def insert_siloxane_bridge(self, site_pair, position):
+        """Insert one deterministic bridge oxygen between two surface sites.
+
+        Parameters
+        ----------
+        site_pair : tuple[int, int]
+            Silicon surface-site identifiers to condense.
+        position : sequence[float]
+            Cartesian position of the new bridge oxygen in nanometers.
+
+        Returns
+        -------
+        bridge_atom_id : int
+            Source identifier assigned to the inserted oxygen atom.
+
+        Raises
+        ------
+        ValueError
+            Raised when either surface site is absent or no longer has an
+            oxygen handle that can be consumed.
+        """
+        site_a, site_b = site_pair
+        if site_a not in self._sites or site_b not in self._sites:
+            raise ValueError(
+                "Cannot bridge a silicon pair that is no longer present in "
+                "the site registry."
+            )
+        if not self._sites[site_a].oxygen_ids or not self._sites[site_b].oxygen_ids:
+            raise ValueError("Both silicon sites require an oxygen handle for condensation.")
+
+        self._invalidate_finalized_export_state()
+        bridge_atom_id = self._block.get_num()
+        self._block.add("O", list(position), name="OM1")
+        self._matrix.add(site_a, bridge_atom_id)
+        self._matrix.add(site_b, bridge_atom_id)
+        self._matrix.get_matrix()[bridge_atom_id]["bonds"] = 2
+        self._record_surface_edit(bridge_atom_id, "inserted_bridge_oxygen")
+        self.objectify([bridge_atom_id])
+
+        newly_condensed_si = []
+        for site_id in site_pair:
+            oxygen_id = self._sites[site_id].oxygen_ids[0]
+            self._matrix.remove(oxygen_id)
+            if self._sites[site_id].is_geminal:
+                self._sites[site_id].oxygen_ids.pop(0)
+            else:
+                newly_condensed_si.append(site_id)
+                del self._sites[site_id]
+
+        self._invalidate_scaffold_cache()
+        if newly_condensed_si:
+            self.objectify(newly_condensed_si)
+        return bridge_atom_id
+
     def _retained_scaffold_oxygen_ids(self, site_id, oxygen_ids):
         """Return scaffold oxygens that stay bonded to an attached mount atom.
 
@@ -1697,6 +1849,7 @@ class Pore():
         steric_clearance_scale=_STERIC_CLEARANCE_SCALE,
         _steric_grid=None,
         _progress_callback=None,
+        _site_attempt_callback=None,
     ):
         """Attach molecules to available pore surface sites.
 
@@ -1747,6 +1900,10 @@ class Pore():
             Internal callback invoked once per requested attachment slot with
             keyword arguments ``requested_count``, ``attached_count``, and
             ``success``. External callers should keep the default ``None``.
+        _site_attempt_callback : callable or None, optional
+            Internal callback invoked for every sterically evaluated candidate
+            site with ``site_id`` and ``success`` keyword arguments. External
+            callers should keep the default ``None``.
 
         Returns
         -------
@@ -1859,6 +2016,8 @@ class Pore():
                     )
                     if mol_temp is None:
                         self._sites[si].is_available = True
+                        if _site_attempt_callback is not None:
+                            _site_attempt_callback(site_id=si, success=False)
                         continue
 
                 # Add molecule to molecule list and global dictionary
@@ -1916,6 +2075,8 @@ class Pore():
                         )
                 attached_count += 1
                 slot_succeeded = True
+                if _site_attempt_callback is not None:
+                    _site_attempt_callback(site_id=si, success=True)
                 break
 
             if _progress_callback is not None:
