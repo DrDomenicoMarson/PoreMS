@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> This PoreMS fork is archived. Active development continues in
+> [SilicaMS](https://github.com/DrDomenicoMarson/SilicaMS), an independently
+> maintained project focused on periodic amorphous and functionalized silica
+> slits. SilicaMS is not an official continuation endorsed by the original
+> PoreMS maintainers.
+
 <img src="https://github.com/porems/PoreMS/blob/main/docsrc/pics/logo_text_sub.svg" width="60%">
 
 --------------------------------------
